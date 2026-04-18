@@ -34,6 +34,7 @@ export const baseTemplate = ({
     <link rel="icon" type="image/svg+xml" href="${assetPrefix}favicon.svg">
     
     <!-- Open Graph / Social Sharing -->
+    <meta property="og:site_name" content="OceanViewFlats">
     <meta property="og:type" content="website">
     <meta property="og:title" content="${title}">
     <meta property="og:description" content="${description}">
