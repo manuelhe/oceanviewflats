@@ -30,7 +30,7 @@ export const Navigation = ({ isScrolled, lang, showBookButton = true }: Navigati
           {showBookButton && (
             <a 
               href="#booking"
-              className="bg-[#FF5A5F] hover:bg-[#FF424D] text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg transition-transform hover:scale-105"
+              className="hidden md:inline-flex bg-[#FF5A5F] hover:bg-[#FF424D] text-white px-5 py-2 rounded-full text-sm font-bold shadow-lg transition-transform hover:scale-105"
             >
               {t.navBook}
             </a>

@@ -5,7 +5,7 @@ import path from 'path';
 import { dict } from './src/i18n/dict';
 import { IMAGES } from './src/constants/config';
 import { baseTemplate } from './src/templates/base';
-import { pages, BASE_URL, LANGUAGES, getHrefLangTags } from './src/config/pages';
+import { pages, BASE_URL, LANGUAGES, getHrefLangTags, PageConfig } from './src/config/pages';
 
 const distDir = path.join(process.cwd(), 'dist');
 const publicDir = path.join(process.cwd(), 'public');
@@ -21,6 +21,29 @@ if (fs.existsSync(publicDir)) {
     fs.cpSync(publicDir, distDir, { recursive: true });
     console.log('Copied public assets to dist/');
 }
+
+const generateSitemap = (pages: PageConfig[], baseUrl: string, languages: string[]) => {
+    const urls: string[] = [];
+    const now = new Date().toISOString().split('T')[0];
+
+    pages.forEach(page => {
+        languages.forEach(lang => {
+            const basePath = page.path ? `${baseUrl}/${page.path}` : baseUrl;
+            const url = lang === 'en' ? basePath : `${basePath}/${lang}.html`;
+            urls.push(`  <url>
+    <loc>${url}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>${page.path === '' ? '1.0' : '0.8'}</priority>
+  </url>`);
+        });
+    });
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.join('\n')}
+</urlset>`;
+};
 
 pages.forEach(page => {
     const hrefLangTags = getHrefLangTags(BASE_URL, page.path, LANGUAGES);
@@ -64,3 +87,8 @@ pages.forEach(page => {
         console.log(`Generated [${page.id}] -> ${outputPath}`);
     });
 });
+
+// Generate and save sitemap
+const sitemap = generateSitemap(pages, BASE_URL, LANGUAGES);
+fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemap);
+console.log('Generated sitemap.xml');
