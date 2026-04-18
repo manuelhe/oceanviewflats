@@ -39,6 +39,13 @@ export const baseTemplate = ({
     <meta property="og:description" content="${description}">
     <meta property="og:image" content="${ogImage}">
     <meta property="og:url" content="${url}">
+    <link rel="canonical" href="${url}">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${title}">
+    <meta name="twitter:description" content="${description}">
+    <meta name="twitter:image" content="${ogImage}">
 
     <!-- Multilingual SEO -->
 ${hrefLangTags}

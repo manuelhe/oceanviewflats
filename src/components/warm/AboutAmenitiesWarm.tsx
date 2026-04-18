@@ -42,6 +42,23 @@ export const AboutAmenitiesWarm = ({ lang, assetPrefix = './' }: { lang: Lang, a
           </div>
         </div>
       </div>
+
+      <div className="mt-20 p-8 md:p-12 bg-stone-900 rounded-3xl text-white flex flex-col md:flex-row items-center gap-10">
+        <div className="w-32 h-32 md:w-48 md:h-48 rounded-full overflow-hidden flex-shrink-0 border-4 border-stone-700">
+           <img 
+              src={`${assetPrefix}${IMAGES['general'].host}`} 
+              alt={t.hostName} 
+              className="w-full h-full object-cover"
+           />
+        </div>
+        <div>
+           <h2 className="text-sm font-bold uppercase tracking-widest text-rose-400 mb-2">{t.hostTitle}</h2>
+           <h3 className="text-3xl font-bold mb-4 text-stone-50">{t.hostName}</h3>
+           <p className="text-lg text-stone-300 leading-relaxed max-w-2xl">
+              {t.hostBio}
+           </p>
+        </div>
+      </div>
     </section>
   );
 };

@@ -4,7 +4,7 @@ import Oceanview1606 from '../pages/Oceanview1606';
 import { IMAGES } from '../constants/config';
 import { Lang } from '../types';
 
-export const BASE_URL = 'https://oceanview1707.com';
+export const BASE_URL = 'https://www.oceanviewflats.com';
 export const LANGUAGES: Lang[] = ['en', 'es', 'fr', 'it', 'de', 'ja'];
 
 export const getHrefLangTags = (baseUrl: string, path: string, languages: Lang[]) => {
@@ -33,21 +33,22 @@ export const pages: PageConfig[] = [
         path: '',
         component: Home,
         filename: (lang: Lang) => lang === 'en' ? 'index.html' : `${lang}.html`,
-        seoTitle: (t: any) => "Vacation Rentals | Santa Marta",
-        seoDescription: (t: any) => "Explore our beautiful beachfront properties in Santa Marta, Colombia. Book your next stay with us.",
+        seoTitle: (t: any) => "Vacation Rentals | Santa Marta | OceanViewFlats",
+        seoDescription: (t: any) => "Explore our beautiful beachfront properties in Santa Marta, Colombia. Book your direct stay at OceanViewFlats 1707 or 1606.",
         ogImage: IMAGES['1707'].hero,
         getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
             const url = lang === 'en' ? baseUrl : `${baseUrl}/${lang}.html`;
             return JSON.stringify({
                 "@context": "https://schema.org",
                 "@type": "WebSite",
-                "name": "Santa Marta Vacation Rentals",
-                "url": url
+                "name": "OceanViewFlats",
+                "url": url,
+                "description": "Premium beachfront vacation rentals in Santa Marta, Colombia."
             });
         },
         scripts: ['js/main.js']
-        },
-        {
+    },
+    {
         id: 'Oceanview1707',
         path: 'Oceanview1707',
         component: Oceanview1707,
@@ -60,7 +61,7 @@ export const pages: PageConfig[] = [
             return JSON.stringify({
                 "@context": "https://schema.org",
                 "@type": "VacationRental",
-                "name": "Oceanview Flat 1707",
+                "name": "OceanViewFlats 1707",
                 "description": t.seoDescription,
                 "image": `${baseUrl}/${IMAGES['1707'].hero}`,
                 "url": url,
@@ -68,9 +69,14 @@ export const pages: PageConfig[] = [
                     "@type": "PostalAddress",
                     "addressLocality": "Santa Marta",
                     "addressRegion": "Magdalena",
-                    "addressCountry": "CO"
+                    "addressCountry": "CO",
+                    "streetAddress": "Playa Salguero"
                 },
                 "numberOfRooms": 2,
+                "occupancy": {
+                    "@type": "QuantitativeValue",
+                    "value": 6
+                },
                 "petsAllowed": false,
                 "amenityFeature": [
                     { "@type": "LocationFeatureSpecification", "name": t.amWifi, "value": true },
@@ -94,7 +100,7 @@ export const pages: PageConfig[] = [
             return JSON.stringify({
                 "@context": "https://schema.org",
                 "@type": "VacationRental",
-                "name": "Oceanview Flat 1606",
+                "name": "OceanViewFlats 1606",
                 "description": t.seo1606Description,
                 "image": `${baseUrl}/${IMAGES['1606'].hero}`,
                 "url": url,
@@ -102,9 +108,14 @@ export const pages: PageConfig[] = [
                     "@type": "PostalAddress",
                     "addressLocality": "Santa Marta",
                     "addressRegion": "Magdalena",
-                    "addressCountry": "CO"
+                    "addressCountry": "CO",
+                    "streetAddress": "Playa Salguero"
                 },
                 "numberOfRooms": 2,
+                "occupancy": {
+                    "@type": "QuantitativeValue",
+                    "value": 6
+                },
                 "petsAllowed": false,
                 "amenityFeature": [
                     { "@type": "LocationFeatureSpecification", "name": t.amWifi, "value": true },

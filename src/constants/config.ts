@@ -15,5 +15,11 @@ export const IMAGES = {
     romantic: "images/1606-romantic-experiences.webp",
     bedroom: "images/1606-living.webp",
     pool: "images/1606-pool.webp",
+  },
+  'home': {
+    hero: "images/home-hero.webp"
+  },
+  'general': {
+    host: 'images/host-image.webp'
   }
 };
