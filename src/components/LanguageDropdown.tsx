@@ -34,7 +34,7 @@ export const LanguageDropdown = ({ currentLang, isScrolled }: LanguageDropdownPr
       </div>
       
       {/* Dropdown Menu */}
-      <div className="absolute right-0 top-full pt-2 w-32 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+      <div className="absolute right-0 top-full pt-2 w-32 opacity-0 invisible transition-all duration-200 z-50">
         <div className="bg-white rounded-xl shadow-lg border border-slate-100">
           <ul className="py-2">
             {otherLangs.map((lang) => (

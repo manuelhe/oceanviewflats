@@ -22,6 +22,37 @@ window.addEventListener('scroll', () => {
     }
 });
 
+// Language Dropdown Mobile Toggle
+document.addEventListener('DOMContentLoaded', () => {
+    const langToggleGroup = document.getElementById('lang-toggle-group');
+    if (!langToggleGroup) return;
+    
+    // Select the dropdown menu inside the group
+    const dropdownMenu = langToggleGroup.querySelector('.absolute.right-0.top-full');
+    if (!dropdownMenu) return;
+
+    langToggleGroup.addEventListener('click', (e) => {
+        // Toggle the opacity and visibility classes
+        const isVisible = dropdownMenu.classList.contains('opacity-100');
+        
+        if (isVisible) {
+            dropdownMenu.classList.remove('opacity-100', 'visible');
+            dropdownMenu.classList.add('opacity-0', 'invisible');
+        } else {
+            dropdownMenu.classList.remove('opacity-0', 'invisible');
+            dropdownMenu.classList.add('opacity-100', 'visible');
+        }
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!langToggleGroup.contains(e.target)) {
+            dropdownMenu.classList.remove('opacity-100', 'visible');
+            dropdownMenu.classList.add('opacity-0', 'invisible');
+        }
+    });
+});
+
 // Calendar Logic
 document.addEventListener('DOMContentLoaded', () => {
     const widget = document.getElementById('calendar-widget');
