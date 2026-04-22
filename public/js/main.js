@@ -24,9 +24,28 @@ window.addEventListener('scroll', () => {
 
 // Language Dropdown Mobile Toggle
 document.addEventListener('DOMContentLoaded', () => {
+    // Save language preference if we are on a localized page
+    const currentLang = document.documentElement.lang;
+    if (currentLang) {
+        localStorage.setItem('lang-pref', currentLang);
+    }
+
     const langToggleGroup = document.getElementById('lang-toggle-group');
     if (!langToggleGroup) return;
     
+    // Select all language links to save preference on click
+    const langLinks = langToggleGroup.querySelectorAll('a');
+    langLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            const href = link.getAttribute('href');
+            let clickedLang = 'en';
+            if (href.includes('.html')) {
+                clickedLang = href.replace('.html', '');
+            }
+            localStorage.setItem('lang-pref', clickedLang);
+        });
+    });
+
     // Select the dropdown menu inside the group
     const dropdownMenu = langToggleGroup.querySelector('.absolute.right-0.top-full');
     if (!dropdownMenu) return;

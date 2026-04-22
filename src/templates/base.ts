@@ -48,6 +48,8 @@ export const baseTemplate = ({
     <meta name="twitter:description" content="${description}">
     <meta name="twitter:image" content="${ogImage}">
 
+    <script src="${assetPrefix}js/lang-detect.js"></script>
+
     <!-- Multilingual SEO -->
 ${hrefLangTags}
 

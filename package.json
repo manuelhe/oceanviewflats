@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsx render.tsx && vite build"
+    "build": "tsx render.tsx && vite build && npx terser public/js/main.js -o dist/js/main.js -c -m && npx terser public/js/lang-detect.js -o dist/js/lang-detect.js -c -m"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +23,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "tailwindcss": "^4.2.2",
+    "terser": "^5.46.1",
     "vite": "^8.0.8"
   }
 }
