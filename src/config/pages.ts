@@ -61,7 +61,6 @@ export const pages: PageConfig[] = [
             return JSON.stringify({
                 "@context": "https://schema.org",
                 "@type": "VacationRental",
-                "additionalType": "http://www.productontology.org/id/Vacation_rental",
                 "identifier": "1500108514798091235",
                 "name": "OceanViewFlats 1707",
                 "description": t.seoDescription,
@@ -90,8 +89,31 @@ export const pages: PageConfig[] = [
                     "longitude": -74.2313921
                 },
                 "containsPlace": [
-                    { "@type": "Room", "name": "Master Bedroom" },
-                    { "@type": "Room", "name": "Guest Bedroom" }
+                    {
+                        "@type": "Room",
+                        "name": "Master Bedroom",
+                        "additionalType": "http://schema.googleapis.com/BedRoom",
+                        "occupancy": { "@type": "QuantitativeValue", "value": 2 },
+                        "numberOfBedrooms": 1,
+                        "numberOfBathroomsTotal": 1,
+                        "bed": [{ "@type": "BedDetails", "typeOfBed": "Queen", "numberOfBeds": 1 }],
+                        "amenityFeature": [
+                            { "@type": "LocationFeatureSpecification", "name": "Air conditioning", "value": true },
+                            { "@type": "LocationFeatureSpecification", "name": "TV", "value": true }
+                        ]
+                    },
+                    {
+                        "@type": "Room",
+                        "name": "Guest Bedroom",
+                        "additionalType": "http://schema.googleapis.com/BedRoom",
+                        "occupancy": { "@type": "QuantitativeValue", "value": 4 },
+                        "numberOfBedrooms": 1,
+                        "numberOfBathroomsTotal": 1,
+                        "bed": [{ "@type": "BedDetails", "typeOfBed": "Double", "numberOfBeds": 2 }],
+                        "amenityFeature": [
+                            { "@type": "LocationFeatureSpecification", "name": "Air conditioning", "value": true }
+                        ]
+                    }
                 ],
                 "numberOfRooms": 2,
                 "occupancy": {
@@ -135,8 +157,7 @@ export const pages: PageConfig[] = [
             return JSON.stringify({
                 "@context": "https://schema.org",
                 "@type": "VacationRental",
-                "additionalType": "http://www.productontology.org/id/Vacation_rental",
-                "identifier": "1500108514798091235",
+                "identifier": "1584825560087571592",
                 "name": "OceanViewFlats 1606",
                 "description": t.seo1606Description,
                 "image": [
@@ -164,9 +185,33 @@ export const pages: PageConfig[] = [
                     "longitude": -74.2313921
                 },
                 "containsPlace": [
-                    { "@type": "Room", "name": "Master Bedroom" },
-                    { "@type": "Room", "name": "Guest Bedroom" }
-                ],                "numberOfRooms": 2,
+                    {
+                        "@type": "Room",
+                        "name": "Master Bedroom",
+                        "additionalType": "http://schema.googleapis.com/BedRoom",
+                        "occupancy": { "@type": "QuantitativeValue", "value": 2 },
+                        "numberOfBedrooms": 1,
+                        "numberOfBathroomsTotal": 1,
+                        "bed": [{ "@type": "BedDetails", "typeOfBed": "Queen", "numberOfBeds": 1 }],
+                        "amenityFeature": [
+                            { "@type": "LocationFeatureSpecification", "name": "Air conditioning", "value": true },
+                            { "@type": "LocationFeatureSpecification", "name": "TV", "value": true }
+                        ]
+                    },
+                    {
+                        "@type": "Room",
+                        "name": "Guest Bedroom",
+                        "additionalType": "http://schema.googleapis.com/BedRoom",
+                        "occupancy": { "@type": "QuantitativeValue", "value": 4 },
+                        "numberOfBedrooms": 1,
+                        "numberOfBathroomsTotal": 1,
+                        "bed": [{ "@type": "BedDetails", "typeOfBed": "Double", "numberOfBeds": 2 }],
+                        "amenityFeature": [
+                            { "@type": "LocationFeatureSpecification", "name": "Air conditioning", "value": true }
+                        ]
+                    }
+                ],
+                "numberOfRooms": 2,
                 "occupancy": {
                     "@type": "QuantitativeValue",
                     "value": 6
