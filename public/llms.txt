@@ -1,6 +1,6 @@
 # OceanViewFlats
 
-OceanViewFlats offers premium beachfront vacation rentals in the exclusive Playa Salguero area of Santa Marta, Magdalena, Colombia. 
+OceanViewFlats offers premium beachfront vacation rentals in the exclusive Playa Salguero area of Santa Marta, Magdalena, Colombia.
 
 ## Our Properties
 
@@ -8,28 +8,42 @@ We currently offer two distinct, highly-optimized flats for your stay:
 
 ### [OceanViewFlats 1707](https://www.oceanviewflats.com/Oceanview1707)
 * **Target Audience:** Digital Nomads and Remote Workers
-* **Capacity:** 2 Bedrooms, 2 Bathrooms, up to 6 Guests
-* **Key Features:** High-speed Wi-Fi, laptop-friendly workspace, fully equipped kitchen, air conditioning, and a private balcony with stunning Caribbean sea sunsets.
+* **Total Occupancy:** Up to 6 Guests
+* **Layout:** 2 Bedrooms, 2 Bathrooms
+  * **Master Bedroom:** 1 Queen Bed, Air conditioning, TV
+  * **Guest Bedroom:** 2 Double Beds, Air conditioning
+* **Key Features:** High-speed Wi-Fi, laptop-friendly workspace, fully equipped kitchen, and a private balcony with stunning Caribbean sea sunsets.
+* **Rating:** 4.9/5 stars based on 24 reviews.
 
 ### [OceanViewFlats 1606](https://www.oceanviewflats.com/Oceanview1606)
 * **Target Audience:** Families and Romantic Escapes
-* **Capacity:** 2 Bedrooms, 2 Bathrooms, up to 6 Guests
+* **Total Occupancy:** Up to 6 Guests
+* **Layout:** 2 Bedrooms, 2 Bathrooms
+  * **Master Bedroom:** 1 Queen Bed, Air conditioning, TV
+  * **Guest Bedroom:** 2 Double Beds, Air conditioning
 * **Key Features:** Spacious layout, private terrace, resort-style amenities, fully equipped kitchen, and a cozy atmosphere for unforgettable moments.
+* **Rating:** 5.0/5 stars based on 12 reviews.
 
 ## Common Amenities
 All of our flats include:
 - High-speed Wi-Fi
 - Fully equipped kitchens
 - Air conditioning
+- Flat-screen TVs in Master Bedrooms
 - Access to the building's swimming pool (open daily, closed Tuesdays)
 - Free on-site parking
 - Stunning ocean views just one block from the beach
 
-## Location
-Playa Salguero, Santa Marta, Magdalena, Colombia (CO).
+## Location Details
+*   **Street Address:** Calle 26 # 2-80. Playa Salguero
+*   **City:** Santa Marta
+*   **Region:** Magdalena
+*   **Postal Code:** 470006
+*   **Country:** Colombia (CO)
+*   **Coordinates:** Latitude 11.1876481, Longitude -74.2313921
 
 ## Your Host
-Manuel Enrique - With years of experience in hospitality, dedicated to providing a premium, seamless stay.
+**Manuel Enrique** - With years of experience in hospitality, I am dedicated to providing a premium, seamless stay for all my guests in beautiful Santa Marta.
 
 ## Frequently Asked Questions
 **Q: Where is OceanViewFlats located?**
