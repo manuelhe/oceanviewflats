@@ -136,3 +136,7 @@ dist
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Other tools
+.antigravitycli
+tasks
