@@ -12,12 +12,12 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -39,6 +39,6 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: 2223
-          local_path: './dist/*'
+          local_path: './dist/'
           remote_path: ${{ secrets.FTP_REMOTE_PATH }}
           sftpArgs: '-o ConnectTimeout=5'
