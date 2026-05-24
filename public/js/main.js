@@ -370,6 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
         msgBox.className = isSuccess 
             ? 'p-4 rounded-2xl text-sm font-medium mb-6 bg-emerald-50 text-emerald-800 border border-emerald-100' 
             : 'p-4 rounded-2xl text-sm font-medium mb-6 bg-rose-50 text-rose-800 border border-rose-100';
-        msgBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 });

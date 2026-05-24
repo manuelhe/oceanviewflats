@@ -39,6 +39,6 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: 2223
-          local_path: './dist/'
+          local_path: './dist/.'
           remote_path: ${{ secrets.FTP_REMOTE_PATH }}
           sftpArgs: '-o ConnectTimeout=5'
