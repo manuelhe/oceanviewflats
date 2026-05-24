@@ -19,7 +19,7 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
   
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800 scroll-smooth">
-      <Navigation isScrolled={isScrolled} lang={lang} showBookButton={false} />
+      <Navigation isScrolled={isScrolled} lang={lang} showBookButton={false} assetPrefix={assetPrefix} />
       
       {/* Hero Section */}
       <header className="relative pt-28 pb-12 px-6 text-center overflow-hidden">

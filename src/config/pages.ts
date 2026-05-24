@@ -1,6 +1,7 @@
 import Home from '../pages/Home';
 import Oceanview1707 from '../pages/Oceanview1707';
 import Oceanview1606 from '../pages/Oceanview1606';
+import Contact from '../pages/Contact';
 import { IMAGES } from '../constants/config';
 import { Lang } from '../types';
 
@@ -243,6 +244,26 @@ export const pages: PageConfig[] = [
                         "reviewBody": t.review2Text
                     }
                 ]
+            });
+        },
+        scripts: ['js/main.js']
+    },
+    {
+        id: 'contact',
+        path: 'contact',
+        component: Contact,
+        filename: (lang: Lang) => lang === 'en' ? 'contact/index.html' : `contact/${lang}.html`,
+        seoTitle: (t: any) => t.seoContactTitle,
+        seoDescription: (t: any) => t.seoContactDescription,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/contact` : `${baseUrl}/contact/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "ContactPage",
+                "name": "Contact OceanViewFlats",
+                "description": t.seoContactDescription,
+                "url": url
             });
         },
         scripts: ['js/main.js']

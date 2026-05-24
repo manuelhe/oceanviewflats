@@ -3,6 +3,7 @@ window.addEventListener('scroll', () => {
     const nav = document.getElementById('navbar');
     const logo = document.getElementById('nav-logo');
     const toggle = document.getElementById('lang-toggle');
+    const contact = document.getElementById('nav-contact');
     if (!nav || !logo || !toggle) return;
     
     if (window.scrollY > 50) {
@@ -12,6 +13,10 @@ window.addEventListener('scroll', () => {
         logo.classList.remove('text-white');
         toggle.classList.add('bg-slate-100', 'hover:bg-slate-200', 'text-slate-700');
         toggle.classList.remove('bg-white/20', 'hover:bg-white/30', 'text-white', 'backdrop-blur-sm');
+        if (contact) {
+            contact.classList.add('text-slate-600');
+            contact.classList.remove('text-white');
+        }
     } else {
         nav.classList.remove('bg-white/90', 'backdrop-blur-md', 'shadow-sm', 'py-3');
         nav.classList.add('bg-transparent', 'py-5');
@@ -19,6 +24,10 @@ window.addEventListener('scroll', () => {
         logo.classList.add('text-white');
         toggle.classList.remove('bg-slate-100', 'hover:bg-slate-200', 'text-slate-700');
         toggle.classList.add('bg-white/20', 'hover:bg-white/30', 'text-white', 'backdrop-blur-sm');
+        if (contact) {
+            contact.classList.remove('text-slate-600');
+            contact.classList.add('text-white');
+        }
     }
 });
 
@@ -210,3 +219,157 @@ _paq.push(['enableLinkTracking']);
     g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
 })();
 // End Matomo Code
+
+// Contact Form Logic
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('contact-form');
+    if (!form) return;
+
+    const btnSubmit = document.getElementById('submit-button');
+    const txtSubmit = document.getElementById('submit-text');
+    const msgBox = document.getElementById('form-message');
+    const checkInInput = document.getElementById('check-in');
+    const checkOutInput = document.getElementById('check-out');
+    const captchaLabel = document.getElementById('captcha-label');
+    const captchaChallenge = document.getElementById('captcha-challenge');
+    const captchaResponse = document.getElementById('captcha-response');
+
+    // Retrieve localized messages from form data attributes
+    const msgSuccess = form.getAttribute('data-msg-success') || 'Thank you! Your message has been sent successfully.';
+    const msgError = form.getAttribute('data-msg-error') || 'Something went wrong. Please check the fields and try again.';
+    const msgSubmitting = form.getAttribute('data-msg-submitting') || 'Sending...';
+    const msgDefaultSubmit = form.getAttribute('data-msg-submit') || 'Send Inquiry';
+    const msgDateError = form.getAttribute('data-msg-date-error') || 'Check-out date must be after check-in date.';
+
+    // Check URL query parameters for success/error redirect state (traditional post fallback)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success') === '1') {
+        showMsg(msgSuccess, true);
+    } else if (urlParams.has('error')) {
+        const errorVal = urlParams.get('error');
+        showMsg(errorVal ? decodeURIComponent(errorVal) : msgError, false);
+    }
+
+    // Setup Date picker min constraints
+    const today = new Date().toISOString().split('T')[0];
+    if (checkInInput) {
+        checkInInput.min = today;
+        checkInInput.addEventListener('change', () => {
+            if (checkInInput.value) {
+                checkOutInput.min = checkInInput.value;
+                if (checkOutInput.value && checkOutInput.value <= checkInInput.value) {
+                    const checkInDate = new Date(checkInInput.value);
+                    checkInDate.setDate(checkInDate.getDate() + 1);
+                    checkOutInput.value = checkInDate.toISOString().split('T')[0];
+                }
+            } else {
+                checkOutInput.min = today;
+            }
+        });
+    }
+    if (checkOutInput) {
+        checkOutInput.min = today;
+    }
+
+    // Dynamic Math Captcha Fetch
+    let captchaSignature = '';
+    async function loadCaptcha() {
+        try {
+            const actionPath = form.getAttribute('action') || 'contact-processor.php';
+            const processorBase = actionPath.replace('contact-processor.php', '');
+            
+            const response = await fetch(processorBase + 'contact-processor.php?action=captcha');
+            if (response.ok) {
+                const data = await response.json();
+                const originalText = captchaLabel.getAttribute('data-original') || captchaLabel.textContent;
+                if (!captchaLabel.getAttribute('data-original')) {
+                    captchaLabel.setAttribute('data-original', originalText);
+                }
+                captchaLabel.textContent = `${originalText} (${data.challenge})`;
+                captchaChallenge.value = data.challenge;
+                captchaSignature = data.signature;
+                captchaResponse.value = '';
+            }
+        } catch (err) {
+            console.error('Error loading captcha:', err);
+        }
+    }
+
+    // Initial load of Captcha
+    loadCaptcha();
+
+    // Form Submit Handler
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Clear messages
+        msgBox.className = 'hidden';
+        msgBox.textContent = '';
+
+        // Front-end Validation
+        const nameVal = document.getElementById('name').value.trim();
+        const emailVal = document.getElementById('email').value.trim();
+        const phoneVal = document.getElementById('phone-number').value.trim();
+        const messageVal = document.getElementById('message').value.trim();
+        const captchaVal = captchaResponse.value.trim();
+
+        if (!nameVal || !emailVal || !phoneVal || !messageVal || !captchaVal) {
+            showMsg(msgError, false);
+            return;
+        }
+
+        // Date Validation
+        if (checkInInput && checkOutInput && checkInInput.value && checkOutInput.value) {
+            if (new Date(checkInInput.value) >= new Date(checkOutInput.value)) {
+                showMsg(msgDateError, false);
+                return;
+            }
+        }
+
+        // Prepare Form Data
+        const formData = new FormData(form);
+        formData.append('captcha_signature', captchaSignature);
+
+        // Submitting State
+        btnSubmit.disabled = true;
+        txtSubmit.textContent = msgSubmitting;
+        btnSubmit.classList.add('opacity-75', 'cursor-not-allowed');
+
+        try {
+            const actionUrl = form.getAttribute('action') || 'contact-processor.php';
+            const response = await fetch(actionUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showMsg(msgSuccess, true);
+                form.reset();
+                loadCaptcha();
+            } else {
+                showMsg(result.message || msgError, false);
+                loadCaptcha();
+            }
+        } catch (err) {
+            showMsg(msgError, false);
+            loadCaptcha();
+        } finally {
+            btnSubmit.disabled = false;
+            txtSubmit.textContent = msgDefaultSubmit;
+            btnSubmit.classList.remove('opacity-75', 'cursor-not-allowed');
+        }
+    });
+
+    function showMsg(message, isSuccess) {
+        msgBox.textContent = message;
+        msgBox.className = isSuccess 
+            ? 'p-4 rounded-2xl text-sm font-medium mb-6 bg-emerald-50 text-emerald-800 border border-emerald-100' 
+            : 'p-4 rounded-2xl text-sm font-medium mb-6 bg-rose-50 text-rose-800 border border-rose-100';
+        msgBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+});

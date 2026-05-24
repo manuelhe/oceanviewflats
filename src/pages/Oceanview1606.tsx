@@ -23,7 +23,7 @@ export default function Oceanview1606({ lang, assetPrefix = './' }: AppProps) {
 
   return (
     <div className="min-h-screen bg-stone-50 font-sans text-stone-800 scroll-smooth">
-      <Navigation isScrolled={isScrolled} lang={lang} />
+      <Navigation isScrolled={isScrolled} lang={lang} assetPrefix={assetPrefix} />
       <main>
         <HeroWarm lang={lang} assetPrefix={assetPrefix} />
         <QuickStatsWarm lang={lang} />

@@ -7,9 +7,10 @@ interface NavigationProps {
   isScrolled: boolean;
   lang: Lang;
   showBookButton?: boolean;
+  assetPrefix?: string;
 }
 
-export const Navigation = ({ isScrolled, lang, showBookButton = true }: NavigationProps) => {
+export const Navigation = ({ isScrolled, lang, showBookButton = true, assetPrefix = './' }: NavigationProps) => {
   const t = dict[lang];
 
   return (
@@ -25,7 +26,14 @@ export const Navigation = ({ isScrolled, lang, showBookButton = true }: Navigati
           </svg>
           <span>OceanViewFlats</span>
         </a>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-6">
+          <a 
+            id="nav-contact"
+            href={lang === 'en' ? `${assetPrefix}contact/index.html` : `${assetPrefix}contact/${lang}.html`}
+            className={`text-sm font-semibold hover:text-[#FF5A5F] transition-colors ${isScrolled ? 'text-slate-600' : 'text-white'}`}
+          >
+            {t.navContact}
+          </a>
           <LanguageDropdown currentLang={lang} isScrolled={isScrolled} />
           {showBookButton && (
             <a 

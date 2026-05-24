@@ -23,6 +23,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Inject Environment Variables into .htaccess
+        run: |
+          echo "" >> public/.htaccess
+          echo "SetEnv RECIPIENT_EMAIL \"${{ secrets.RECIPIENT_EMAIL }}\"" >> public/.htaccess
+          echo "SetEnv CAPTCHA_SECRET \"${{ secrets.CAPTCHA_SECRET }}\"" >> public/.htaccess
+
       - name: Build Project
         run: npm run build
 
