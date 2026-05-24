@@ -201,6 +201,29 @@ document.addEventListener('DOMContentLoaded', () => {
         renderCalendar();
     });
 
+    // Matomo Tracking for Airbnb booking redirection (Goal 3)
+    if (btnBook) {
+        btnBook.addEventListener('click', () => {
+            if (window._paq) {
+                const propId = window.location.pathname.includes('1606') ? '1606' : '1707';
+                window._paq.push(['trackEvent', 'Booking', 'Redirect to Airbnb', propId]);
+                window._paq.push(['trackGoal', 3]);
+            }
+        });
+    }
+
+    // Matomo Tracking for WhatsApp direct booking click (Goal 4)
+    const btnWhatsapp = document.getElementById('whatsapp-booking-link');
+    if (btnWhatsapp) {
+        btnWhatsapp.addEventListener('click', () => {
+            if (window._paq) {
+                const propId = window.location.pathname.includes('1606') ? '1606' : '1707';
+                window._paq.push(['trackEvent', 'Contact', 'WhatsApp Booking Click', propId]);
+                window._paq.push(['trackGoal', 4]);
+            }
+        });
+    }
+
     updateBookingDisplay();
     renderCalendar();
 });
@@ -224,6 +247,17 @@ _paq.push(['enableLinkTracking']);
 document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('contact-form');
     if (!form) return;
+
+    // Matomo Tracking for WhatsApp Sidebar Link (Goal 4)
+    const whatsappContactLink = document.getElementById('whatsapp-contact-link');
+    if (whatsappContactLink) {
+        whatsappContactLink.addEventListener('click', () => {
+            if (window._paq) {
+                window._paq.push(['trackEvent', 'Contact', 'WhatsApp Sidebar Click', 'Contact Page']);
+                window._paq.push(['trackGoal', 4]);
+            }
+        });
+    }
 
     const btnSubmit = document.getElementById('submit-button');
     const txtSubmit = document.getElementById('submit-text');
@@ -322,6 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (checkInInput && checkOutInput && checkInInput.value && checkOutInput.value) {
             if (new Date(checkInInput.value) >= new Date(checkOutInput.value)) {
                 showMsg(msgDateError, false);
+                if (window._paq) {
+                    window._paq.push(['trackEvent', 'Contact Form', 'Validation Error', 'Check-out date before check-in']);
+                }
                 return;
             }
         }
@@ -349,14 +386,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (response.ok && result.success) {
                 showMsg(msgSuccess, true);
+
+                // Matomo Goal & Event Tracking
+                if (window._paq) {
+                    const hasDates = checkInInput && checkOutInput && checkInInput.value && checkOutInput.value;
+                    if (hasDates) {
+                        // Goal 2: Booking Form Submitted
+                        window._paq.push(['trackEvent', 'Contact Form', 'Booking Inquiry Success', `${checkInInput.value} to ${checkOutInput.value}`]);
+                        window._paq.push(['trackGoal', 2]);
+                    } else {
+                        // Goal 1: Contact Form Inquiry
+                        window._paq.push(['trackEvent', 'Contact Form', 'Contact Inquiry Success']);
+                        window._paq.push(['trackGoal', 1]);
+                    }
+                }
+
                 form.reset();
                 loadCaptcha();
             } else {
-                showMsg(result.message || msgError, false);
+                const errorMsg = result.message || msgError;
+                showMsg(errorMsg, false);
+
+                // Matomo Event Tracking for submission failure
+                if (window._paq) {
+                    window._paq.push(['trackEvent', 'Contact Form', 'Submission Failure', errorMsg]);
+                }
+
                 loadCaptcha();
             }
         } catch (err) {
             showMsg(msgError, false);
+
+            // Matomo Event Tracking for network or script error
+            if (window._paq) {
+                window._paq.push(['trackEvent', 'Contact Form', 'Submission Error', err.message || 'Network Error']);
+            }
+
             loadCaptcha();
         } finally {
             btnSubmit.disabled = false;

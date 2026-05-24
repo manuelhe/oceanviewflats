@@ -83,11 +83,23 @@ export default function Contact({ lang, assetPrefix = '../' }: AppProps) {
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-900">{t.contactPhoneLabel}</h3>
-                  <p className="text-slate-600 mt-1 text-sm leading-relaxed">
-                    {t.contactHostLabel}<br />
-                    <a href="tel:+573108155234" className="hover:text-[#FF5A5F] transition-colors font-medium">
-                      +57 (310) 815-5234
-                    </a>
+                  <p className="text-slate-600 mt-1 text-sm leading-relaxed flex flex-col space-y-1">
+                    <span>{t.contactHostLabel}</span>
+                    <span className="flex items-center space-x-3">
+                      <a href="tel:+573108155234" className="hover:text-[#FF5A5F] transition-colors font-medium">
+                        +57 (310) 815-5234
+                      </a>
+                      <span className="text-slate-300">|</span>
+                      <a 
+                        id="whatsapp-contact-link"
+                        href="https://wa.me/573108155234"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-600 hover:text-emerald-700 transition-colors font-semibold flex items-center space-x-1"
+                      >
+                        <span>WhatsApp</span>
+                      </a>
+                    </span>
                   </p>
                 </div>
               </div>
