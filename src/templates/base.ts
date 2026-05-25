@@ -12,6 +12,15 @@ interface TemplateProps {
   customScripts?: string[];
 }
 
+const LOCALE_MAP = {
+  en: 'en_US',
+  es: 'es_ES',
+  fr: 'fr_FR',
+  it: 'it_IT',
+  de: 'de_DE',
+  ja: 'ja_JP'
+};
+
 export const baseTemplate = ({
   markup,
   lang,
@@ -40,6 +49,11 @@ export const baseTemplate = ({
     <meta property="og:description" content="${description}">
     <meta property="og:image" content="${ogImage}">
     <meta property="og:url" content="${url}">
+    <meta property="og:locale" content="${LOCALE_MAP[lang]}">
+    ${Object.keys(LOCALE_MAP)
+      .filter(l => l !== lang)
+      .map(l => `<meta property="og:locale:alternate" content="${LOCALE_MAP[l as keyof typeof LOCALE_MAP]}">`)
+      .join('\n    ')}
     <link rel="canonical" href="${url}">
 
     <!-- Twitter Card -->

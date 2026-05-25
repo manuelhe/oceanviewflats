@@ -41,10 +41,38 @@ export const pages: PageConfig[] = [
             const url = lang === 'en' ? baseUrl : `${baseUrl}/${lang}.html`;
             return JSON.stringify({
                 "@context": "https://schema.org",
-                "@type": "WebSite",
-                "name": "OceanViewFlats",
-                "url": url,
-                "description": "Premium beachfront vacation rentals in Santa Marta, Colombia."
+                "@graph": [
+                    {
+                        "@type": "WebSite",
+                        "@id": `${url}#website`,
+                        "url": url,
+                        "name": "OceanViewFlats",
+                        "description": "Premium beachfront vacation rentals in Santa Marta, Colombia."
+                    },
+                    {
+                        "@type": "LodgingBusiness",
+                        "@id": `${url}#business`,
+                        "name": "OceanViewFlats",
+                        "description": "Direct beachfront rental apartments in Playa Salguero, Santa Marta.",
+                        "url": url,
+                        "telephone": "+573108155234",
+                        "email": "rentals@oceanviewflats.com",
+                        "address": {
+                            "@type": "PostalAddress",
+                            "streetAddress": "Calle 26 # 2-80. Playa Salguero",
+                            "addressLocality": "Santa Marta",
+                            "addressRegion": "Magdalena",
+                            "postalCode": "470006",
+                            "addressCountry": "CO"
+                        },
+                        "geo": {
+                            "@type": "GeoCoordinates",
+                            "latitude": 11.1876481,
+                            "longitude": -74.2313921
+                        },
+                        "priceRange": "$$"
+                    }
+                ]
             });
         },
         scripts: ['js/main.js']
@@ -65,6 +93,8 @@ export const pages: PageConfig[] = [
                 "identifier": "1500108514798091235",
                 "name": "OceanViewFlats 1707",
                 "description": t.seoDescription,
+                "numberOfBedrooms": 2,
+                "numberOfBathroomsTotal": 2,
                 "image": [
                     `${baseUrl}/${IMAGES['1707'].hero}`,
                     `${baseUrl}/${IMAGES['1707'].nomad}`,
@@ -121,6 +151,21 @@ export const pages: PageConfig[] = [
                     "@type": "QuantitativeValue",
                     "value": 6
                 },
+                "offers": {
+                    "@type": "AggregateOffer",
+                    "priceCurrency": "USD",
+                    "lowPrice": "120",
+                    "highPrice": "165",
+                    "offerCount": "1",
+                    "priceRange": "$120 - $165 USD per night",
+                    "offers": {
+                        "@type": "Offer",
+                        "price": "120",
+                        "priceCurrency": "USD",
+                        "availability": "https://schema.org/InStock",
+                        "validFrom": "2026-05-25"
+                    }
+                },
                 "petsAllowed": false,
                 "amenityFeature": [
                     { "@type": "LocationFeatureSpecification", "name": t.amWifi, "value": true },
@@ -161,6 +206,8 @@ export const pages: PageConfig[] = [
                 "identifier": "1584825560087571592",
                 "name": "OceanViewFlats 1606",
                 "description": t.seo1606Description,
+                "numberOfBedrooms": 2,
+                "numberOfBathroomsTotal": 2,
                 "image": [
                     `${baseUrl}/${IMAGES['1606'].hero}`,
                     `${baseUrl}/${IMAGES['1606'].romantic}`,
@@ -216,6 +263,21 @@ export const pages: PageConfig[] = [
                 "occupancy": {
                     "@type": "QuantitativeValue",
                     "value": 6
+                },
+                "offers": {
+                    "@type": "AggregateOffer",
+                    "priceCurrency": "USD",
+                    "lowPrice": "110",
+                    "highPrice": "160",
+                    "offerCount": "1",
+                    "priceRange": "$110 - $160 USD per night",
+                    "offers": {
+                        "@type": "Offer",
+                        "price": "110",
+                        "priceCurrency": "USD",
+                        "availability": "https://schema.org/InStock",
+                        "validFrom": "2026-05-25"
+                    }
                 },
                 "petsAllowed": false,
                 "amenityFeature": [
