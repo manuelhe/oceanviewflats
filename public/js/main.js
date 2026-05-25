@@ -436,3 +436,223 @@ document.addEventListener('DOMContentLoaded', () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 });
+
+// Property Image Gallery Lightbox Interactivity
+document.addEventListener('DOMContentLoaded', () => {
+    const dialog = document.getElementById('lightbox-dialog');
+    if (!dialog) return; // Exit if current page has no gallery
+
+    const triggers = document.querySelectorAll('.gallery-trigger');
+    const btnViewAll = document.getElementById('btn-view-all-photos');
+    const imgActive = document.getElementById('lightbox-active-img');
+    const txtCounter = document.getElementById('lightbox-counter');
+    const txtCaption = document.getElementById('lightbox-caption');
+    const btnClose = document.getElementById('lightbox-close');
+    const btnPrev = document.getElementById('lightbox-prev');
+    const btnNext = document.getElementById('lightbox-next');
+    const announcer = document.getElementById('lightbox-announcer');
+
+    let currentIndex = 0;
+    let lastFocusedElement = null;
+    const imagesData = [];
+
+    // Parse image configurations from HTML attributes
+    triggers.forEach(trigger => {
+        const index = parseInt(trigger.getAttribute('data-index'), 10);
+        if (isNaN(index)) return;
+        imagesData[index] = {
+            src: trigger.getAttribute('data-src'),
+            alt: trigger.getAttribute('data-alt') || '',
+            caption: trigger.getAttribute('data-caption') || ''
+        };
+    });
+
+    // Remove any empty slots from the parsed images
+    const cleanImages = imagesData.filter(item => item !== undefined);
+
+    function showImage(index) {
+        if (cleanImages.length === 0) return;
+
+        // Wrap around circular navigation
+        if (index < 0) {
+            currentIndex = cleanImages.length - 1;
+        } else if (index >= cleanImages.length) {
+            currentIndex = 0;
+        } else {
+            currentIndex = index;
+        }
+
+        const activeImg = cleanImages[currentIndex];
+
+        // Soft visual fade cross-transition
+        imgActive.classList.remove('opacity-100', 'scale-100');
+        imgActive.classList.add('opacity-0', 'scale-95');
+
+        // Wait brief transition tick to swap resources to avoid flash
+        setTimeout(() => {
+            imgActive.src = activeImg.src;
+            imgActive.alt = activeImg.alt;
+            txtCaption.textContent = activeImg.caption;
+            txtCounter.textContent = `${currentIndex + 1} / ${cleanImages.length}`;
+
+            imgActive.onload = () => {
+                imgActive.classList.remove('opacity-0', 'scale-95');
+                imgActive.classList.add('opacity-100', 'scale-100');
+            };
+
+            // Accessibility: Update screen-reader polite status announcer
+            if (announcer) {
+                announcer.textContent = `Showing image ${currentIndex + 1} of ${cleanImages.length}: ${activeImg.caption}`;
+            }
+        }, 150);
+    }
+
+    function openLightbox(index) {
+        lastFocusedElement = document.activeElement;
+        
+        // Open natively
+        dialog.showModal();
+
+        // Reveal with fade-in transition
+        dialog.classList.remove('opacity-0', 'pointer-events-none');
+        dialog.classList.add('opacity-100', 'pointer-events-auto');
+
+        // Prevent body backdrop scrolling
+        document.body.style.overflow = 'hidden';
+
+        showImage(index);
+
+        // Position initial focus on Close button
+        if (btnClose) {
+            setTimeout(() => btnClose.focus(), 50);
+        }
+    }
+
+    function closeLightbox() {
+        // Hide with fade transition
+        dialog.classList.remove('opacity-100', 'pointer-events-auto');
+        dialog.classList.add('opacity-0', 'pointer-events-none');
+
+        // Wait transition duration before closing natively
+        setTimeout(() => {
+            dialog.close();
+            document.body.style.overflow = '';
+            
+            // Restore accessibility focus to triggering element
+            if (lastFocusedElement) {
+                lastFocusedElement.focus();
+            }
+        }, 300);
+    }
+
+    // Set up click handlers for triggers
+    triggers.forEach(trigger => {
+        trigger.addEventListener('click', (e) => {
+            e.preventDefault();
+            const index = parseInt(trigger.getAttribute('data-index'), 10);
+            openLightbox(isNaN(index) ? 0 : index);
+        });
+    });
+
+    if (btnViewAll) {
+        btnViewAll.addEventListener('click', (e) => {
+            e.preventDefault();
+            openLightbox(0);
+        });
+    }
+
+    if (btnClose) btnClose.addEventListener('click', closeLightbox);
+    if (btnPrev) btnPrev.addEventListener('click', () => showImage(currentIndex - 1));
+    if (btnNext) btnNext.addEventListener('click', () => showImage(currentIndex + 1));
+
+    // Native Dialog Cancel/Escape Event Hook
+    dialog.addEventListener('cancel', (e) => {
+        e.preventDefault(); // Override immediate close to play transition
+        closeLightbox();
+    });
+
+    // Light-Dismiss Backdrop Fallback (for older Safari)
+    if (!('closedBy' in HTMLDialogElement.prototype)) {
+        dialog.addEventListener('click', (event) => {
+            if (event.target !== dialog) return;
+
+            const rect = dialog.getBoundingClientRect();
+            const isDialogContent = (
+                rect.top <= event.clientY &&
+                event.clientY <= rect.top + rect.height &&
+                rect.left <= event.clientX &&
+                event.clientX <= rect.left + rect.width
+            );
+
+            if (!isDialogContent) {
+                closeLightbox();
+            }
+        });
+    }
+
+    // Keyboard Navigation Arrow Handlers
+    dialog.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            showImage(currentIndex + 1);
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            showImage(currentIndex - 1);
+        }
+    });
+
+    // Keyboard Accessibility Focus Trap cycling
+    dialog.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            const focusables = dialog.querySelectorAll('button:not([disabled])');
+            if (focusables.length === 0) return;
+
+            const first = focusables[0];
+            const last = focusables[focusables.length - 1];
+
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    last.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    first.focus();
+                    e.preventDefault();
+                }
+            }
+        }
+    });
+
+    // Mobile Swipe Gesture Event Hooks
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchEndX = 0;
+    let touchEndY = 0;
+
+    dialog.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    dialog.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        touchEndY = e.changedTouches[0].screenY;
+        handleSwipe();
+    }, { passive: true });
+
+    function handleSwipe() {
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+
+        // Verify it is a valid horizontal swipe gesture
+        if (Math.abs(deltaX) > 50 && Math.abs(deltaY) < 40) {
+            if (deltaX < 0) {
+                showImage(currentIndex + 1); // Swiped Left -> Next
+            } else {
+                showImage(currentIndex - 1); // Swiped Right -> Prev
+            }
+        }
+    }
+});
+

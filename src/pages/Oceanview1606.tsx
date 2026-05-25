@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AppProps } from '../types';
 import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
+import { ImageGallery } from '../components/ImageGallery';
 
 // Warm Theme Components
 import { HeroWarm } from '../components/warm/HeroWarm';
@@ -27,6 +28,7 @@ export default function Oceanview1606({ lang, assetPrefix = './' }: AppProps) {
       <main>
         <HeroWarm lang={lang} assetPrefix={assetPrefix} />
         <QuickStatsWarm lang={lang} />
+        <ImageGallery lang={lang} property="1606" assetPrefix={assetPrefix} />
         <RomanticFamilySection lang={lang} assetPrefix={assetPrefix} />
         <AboutAmenitiesWarm lang={lang} assetPrefix={assetPrefix} />
         <ReviewsSection lang={lang} />

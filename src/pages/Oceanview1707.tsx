@@ -3,6 +3,7 @@ import { AppProps } from '../types';
 import { Navigation } from '../components/Navigation';
 import { Hero } from '../components/Hero';
 import { QuickStats } from '../components/QuickStats';
+import { ImageGallery } from '../components/ImageGallery';
 import { NomadSection } from '../components/NomadSection';
 import { AboutAmenities } from '../components/AboutAmenities';
 import { BookingSection } from '../components/BookingSection';
@@ -25,6 +26,7 @@ export default function Oceanview1707({ lang, assetPrefix = './' }: AppProps) {
       <main>
         <Hero lang={lang} assetPrefix={assetPrefix} />
         <QuickStats lang={lang} />
+        <ImageGallery lang={lang} property="1707" assetPrefix={assetPrefix} />
         <NomadSection lang={lang} assetPrefix={assetPrefix} />
         <AboutAmenities lang={lang} assetPrefix={assetPrefix} />
         <BookingSection lang={lang} />

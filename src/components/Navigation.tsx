@@ -3,6 +3,8 @@ import { Lang } from '../types';
 import { dict } from '../i18n/dict';
 import { LanguageDropdown } from './LanguageDropdown';
 
+import { Mail } from 'lucide-react';
+
 interface NavigationProps {
   isScrolled: boolean;
   lang: Lang;
@@ -30,9 +32,11 @@ export const Navigation = ({ isScrolled, lang, showBookButton = true, assetPrefi
           <a 
             id="nav-contact"
             href={lang === 'en' ? `${assetPrefix}contact/index.html` : `${assetPrefix}contact/${lang}.html`}
-            className={`text-sm font-semibold hover:text-[#FF5A5F] transition-colors ${isScrolled ? 'text-slate-600' : 'text-white'}`}
+            className={`flex items-center text-sm font-semibold hover:text-[#FF5A5F] transition-colors ${isScrolled ? 'text-slate-600' : 'text-white'}`}
+            aria-label={t.navContact}
           >
-            {t.navContact}
+            <Mail className="w-5 h-5 md:hidden" />
+            <span className="hidden md:inline">{t.navContact}</span>
           </a>
           <LanguageDropdown currentLang={lang} isScrolled={isScrolled} />
           {showBookButton && (
