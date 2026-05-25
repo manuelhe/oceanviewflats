@@ -4,7 +4,7 @@ import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { dict } from '../i18n/dict';
 import { IMAGES } from '../constants/config';
-import { Wifi, Heart, Users } from 'lucide-react';
+import { Wifi, Heart, Users, MessageSquare } from 'lucide-react';
 
 export default function Home({ lang, assetPrefix = './' }: AppProps) {
   const t = dict[lang];
@@ -144,6 +144,33 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
             <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
               <h3 className="text-xl font-bold mb-4 text-slate-900">{t.faqQ2}</h3>
               <p className="text-slate-600 leading-relaxed">{t.faqA2}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Contact CTA Section */}
+        <section className="py-20 px-6 max-w-6xl mx-auto mb-12">
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white text-center relative overflow-hidden rounded-3xl py-16 px-8 md:px-16 shadow-2xl border border-slate-800/50">
+            {/* Decorative background glow blobs for a premium look */}
+            <div className="absolute -top-24 -left-24 w-72 h-72 bg-[#FF5A5F]/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute -bottom-24 -right-24 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div className="relative z-10 max-w-2xl mx-auto flex flex-col items-center">
+              <div className="w-14 h-14 bg-[#FF5A5F]/15 text-[#FF5A5F] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-[#FF5A5F]/10">
+                <MessageSquare className="w-7 h-7" aria-hidden="true" />
+              </div>
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4 text-white">
+                {t.contactTitle}
+              </h2>
+              <p className="text-lg text-slate-300 font-light mb-8 leading-relaxed">
+                {t.contactSub}
+              </p>
+              <a 
+                href={lang === 'en' ? `${assetPrefix}contact/index.html` : `${assetPrefix}contact/${lang}.html`}
+                className="inline-flex items-center space-x-2.5 bg-[#FF5A5F] hover:bg-[#FF424D] text-white px-8 py-4 rounded-full font-bold text-lg shadow-xl shadow-[#FF5A5F]/20 transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-[#FF5A5F]/35 active:scale-[0.98]"
+              >
+                <span>{t.navContact}</span>
+              </a>
             </div>
           </div>
         </section>

@@ -67,11 +67,6 @@ export const ImageGallery = ({ lang, property, assetPrefix = './' }: ImageGaller
         {/* Gallery Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
           <div>
-            <div className="flex items-center space-x-2 mb-2">
-              <span className={`text-xs font-bold tracking-widest uppercase px-3 py-1 rounded-full ${theme.badgeBg}`}>
-                {t.galleryTitle}
-              </span>
-            </div>
             <h2 id="gallery-title" className={`text-3xl md:text-4xl font-extrabold tracking-tight ${theme.text}`}>
               {t.galleryTitle}
             </h2>
