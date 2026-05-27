@@ -4,7 +4,7 @@ import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { dict } from '../i18n/dict';
 import { IMAGES } from '../constants/config';
-import { Wifi, Heart, Users, MessageSquare } from 'lucide-react';
+import { Wifi, Heart, Users, MessageSquare, Percent, ShieldCheck, Sparkles, MessageCircle } from 'lucide-react';
 
 export default function Home({ lang, assetPrefix = './' }: AppProps) {
   const t = dict[lang];
@@ -100,6 +100,51 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
           </div>
         </section>
 
+        {/* Why Book Direct Section */}
+        <section className="py-20 bg-gradient-to-b from-white to-slate-50 border-t border-b border-slate-100 px-6">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <span className="text-[#FF5A5F] text-sm font-extrabold uppercase tracking-widest bg-rose-50 px-4 py-1.5 rounded-full">{t.directTitle}</span>
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 mt-4 mb-4">{t.directTitle}</h2>
+              <p className="text-lg text-slate-600 font-light">{t.directSubtitle}</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-6">
+                  <Percent className="w-6 h-6" aria-hidden="true" />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-slate-900">{t.directReason1Title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{t.directReason1Desc}</p>
+              </div>
+
+              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center mb-6">
+                  <Sparkles className="w-6 h-6" aria-hidden="true" />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-slate-900">{t.directReason2Title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{t.directReason2Desc}</p>
+              </div>
+
+              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
+                  <MessageCircle className="w-6 h-6" aria-hidden="true" />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-slate-900">{t.directReason3Title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{t.directReason3Desc}</p>
+              </div>
+
+              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300">
+                <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center mb-6">
+                  <ShieldCheck className="w-6 h-6" aria-hidden="true" />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-slate-900">{t.directReason4Title}</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">{t.directReason4Desc}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Experiences Section */}
         <section className="bg-slate-900 text-white py-24 px-6 mt-10">
           <div className="max-w-6xl mx-auto">
@@ -137,13 +182,25 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
         <section className="py-24 px-6 max-w-4xl mx-auto border-t border-slate-100">
           <h2 className="text-3xl font-bold mb-12 text-center text-slate-900">{t.faqTitle}</h2>
           <div className="space-y-8">
-            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
               <h3 className="text-xl font-bold mb-4 text-slate-900">{t.faqQ1}</h3>
               <p className="text-slate-600 leading-relaxed">{t.faqA1}</p>
             </div>
-            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm">
+            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
               <h3 className="text-xl font-bold mb-4 text-slate-900">{t.faqQ2}</h3>
               <p className="text-slate-600 leading-relaxed">{t.faqA2}</p>
+            </div>
+            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-xl font-bold mb-4 text-slate-900">{t.faqQ3}</h3>
+              <p className="text-slate-600 leading-relaxed">{t.faqA3}</p>
+            </div>
+            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-xl font-bold mb-4 text-slate-900">{t.faqQ4}</h3>
+              <p className="text-slate-600 leading-relaxed">{t.faqA4}</p>
+            </div>
+            <div className="bg-white p-8 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+              <h3 className="text-xl font-bold mb-4 text-slate-900">{t.faqQ5}</h3>
+              <p className="text-slate-600 leading-relaxed">{t.faqA5}</p>
             </div>
           </div>
         </section>
