@@ -3,10 +3,11 @@
     const currentHref = window.location.href;
     const pathName = window.location.pathname;
     
-    // Only run detection on English pages (index.html or root)
+    // Only run detection on English pages (index.html or root) or any 404 page
+    const is404Page = pathName.includes('404') || pathName.includes('404.html');
     const isEnglishPage = pathName.endsWith('index.html') || pathName.endsWith('/') || (!pathName.includes('.html') && !supportedLangs.some(l => pathName.endsWith(l + '.html')));
     
-    if (!isEnglishPage) return;
+    if (!isEnglishPage && !is404Page) return;
 
     // Check if user has a stored preference
     const storedPref = localStorage.getItem('lang-pref');
@@ -27,7 +28,9 @@
 
     function redirectTo(lang) {
         let newHref;
-        if (pathName.endsWith('index.html')) {
+        if (is404Page) {
+            newHref = window.location.origin + '/404/' + lang + '.html';
+        } else if (pathName.endsWith('index.html')) {
             newHref = currentHref.replace('index.html', lang + '.html');
         } else if (pathName.endsWith('/')) {
             newHref = currentHref + lang + '.html';

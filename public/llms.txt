@@ -1,53 +1,79 @@
 # OceanViewFlats
 
-OceanViewFlats offers premium beachfront vacation rentals in the exclusive Playa Salguero area of Santa Marta, Magdalena, Colombia.
+OceanViewFlats offers premium beachfront vacation rentals in the exclusive Playa Salguero area of Santa Marta, Magdalena, Colombia. The platform is designed as a highly optimized static website featuring full multilingual support across 6 languages.
+
+---
+
+## Global Multilingual Support
+The platform is fully translated and optimized for the following languages:
+- **English (EN):** Default / Root path
+- **Español (ES):** `/es.html` or `/pages/es.html`
+- **Français (FR):** `/fr.html`
+- **Italiano (IT):** `/it.html`
+- **Deutsch (DE):** `/de.html`
+- **日本語 (JA):** `/ja.html`
+
+*Note: Automatic browser language detection and localized redirection is managed dynamically via `js/lang-detect.js` based on client headers and stored local preferences (`lang-pref`).*
+
+---
 
 ## Our Properties
 
-We currently offer two distinct, highly-optimized flats for your stay:
+We offer two distinct, highly-optimized flats for direct vacation rental or booking:
 
 ### [OceanViewFlats 1707](https://www.oceanviewflats.com/Oceanview1707)
-* **Target Audience:** Digital Nomads and Remote Workers
-* **Total Occupancy:** Up to 6 Guests
-* **Layout:** 2 Bedrooms, 2 Bathrooms
-  * **Master Bedroom:** 1 Queen Bed, Air conditioning, TV
-  * **Guest Bedroom:** 2 Double Beds, Air conditioning
-* **Key Features:** High-speed Wi-Fi, laptop-friendly workspace, fully equipped kitchen, and a private balcony with stunning Caribbean sea sunsets.
-* **Rating:** 4.9/5 stars based on 24 reviews.
+*   **Target Audience:** Digital Nomads and Remote Workers
+*   **Total Occupancy:** Up to 6 Guests
+*   **Official Registration:** Registro Nacional de Turismo (RNT) #268781
+*   **Layout:** 2 Bedrooms, 2 Bathrooms
+    *   **Master Bedroom:** 1 Queen Bed, Air conditioning, TV
+    *   **Guest Bedroom:** 2 Double Beds, Air conditioning
+*   **Key Features:** High-speed fiber Wi-Fi (up to 900 Mbps), dedicated laptop-friendly workspace, fully equipped kitchen, and a private balcony with stunning Caribbean sea sunsets.
+*   **Rating:** 4.9/5 stars based on 24 reviews.
 
 ### [OceanViewFlats 1606](https://www.oceanviewflats.com/Oceanview1606)
-* **Target Audience:** Families and Romantic Escapes
-* **Total Occupancy:** Up to 6 Guests
-* **Layout:** 2 Bedrooms, 2 Bathrooms
-  * **Master Bedroom:** 1 Queen Bed, Air conditioning, TV
-  * **Guest Bedroom:** 2 Double Beds, Air conditioning
-* **Key Features:** Spacious layout, private terrace, resort-style amenities, fully equipped kitchen, and a cozy atmosphere for unforgettable moments.
-* **Rating:** 5.0/5 stars based on 12 reviews.
+*   **Target Audience:** Families and Romantic Escapes
+*   **Total Occupancy:** Up to 6 Guests
+*   **Official Registration:** Registro Nacional de Turismo (RNT) #270413
+*   **Layout:** 2 Bedrooms, 2 Bathrooms
+    *   **Master Bedroom:** 1 Queen Bed, Air conditioning, TV
+    *   **Guest Bedroom:** 2 Double Beds, Air conditioning
+*   **Key Features:** Spacious, warm layout, private terrace, resort-style amenities, fully equipped kitchen, and a cozy coastal atmosphere.
+*   **Rating:** 5.0/5 stars based on verified guest reviews.
+
+---
+
+## Direct Booking & Contact Options
+To save 15-20% on booking and platform service fees charged by Airbnb or Booking.com, guests can book directly with the host.
+*   **Contact Page:** [Contact OceanViewFlats](https://www.oceanviewflats.com/contact) (available in all 6 languages)
+*   **Direct Email:** [rentals@oceanviewflats.com](mailto:rentals@oceanviewflats.com)
+*   **Host Name:** Manuel Enrique
+*   **WhatsApp / Phone:** [+57 (310) 815-5234](https://wa.me/573108155234)
+
+---
 
 ## Common Amenities
-All of our flats include:
-- High-speed Wi-Fi
-- Fully equipped kitchens
-- Air conditioning
-- Flat-screen TVs in Master Bedrooms
-- Access to the building's swimming pool (open daily, closed Tuesdays)
-- Free on-site parking
-- Stunning ocean views just one block from the beach
+All flats include access to premium building amenities:
+- High-speed fiber optic Wi-Fi (up to 900 Mbps, optimized for video conferencing)
+- Fully equipped gourmet kitchens
+- In-unit laundry and free on-site private parking
+- Smart lock keyless self check-in
+- Air conditioning in all main areas
+- Access to the building's panoramic swimming pool (open daily, hours vary, closed Tuesdays for maintenance)
+- Pristine beach access just one block from the lobby
+
+---
 
 ## Location Details
-*   **Street Address:** Calle 26 # 2-80. Playa Salguero
-*   **City:** Santa Marta
-*   **Region:** Magdalena
+*   **Street Address:** Calle 26 # 2-80, Playa Salguero
+*   **City / State:** Santa Marta, Magdalena
 *   **Postal Code:** 470006
 *   **Country:** Colombia (CO)
 *   **Coordinates:** Latitude 11.1876481, Longitude -74.2313921
 
-## Your Host
-**Manuel Enrique** - With years of experience in hospitality, I am dedicated to providing a premium, seamless stay for all my guests in beautiful Santa Marta.
+---
 
-## Frequently Asked Questions
-**Q: Where is OceanViewFlats located?**
-A: We are located in the exclusive Playa Salguero area of Santa Marta, Colombia, just one block from the beach.
-
-**Q: What amenities are included?**
-A: All flats include high-speed Wi-Fi, fully equipped kitchens, air conditioning, and access to the building's swimming pool.
+## Smart 404 Error Routing
+The platform includes an appealing, ocean-themed multilingual 404 page experience:
+*   **Root Error Path:** `/404.html`
+*   **Automatic Localization:** If a visitor lands on a missing URL, `js/lang-detect.js` automatically routes non-English users to their preferred language 404 counterpart (e.g., `/404/es.html`, `/404/fr.html`, etc.) for seamless navigational assistance.

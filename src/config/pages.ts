@@ -2,6 +2,7 @@ import Home from '../pages/Home';
 import Oceanview1707 from '../pages/Oceanview1707';
 import Oceanview1606 from '../pages/Oceanview1606';
 import Contact from '../pages/Contact';
+import NotFound from '../pages/NotFound';
 import { IMAGES } from '../constants/config';
 import { Lang } from '../types';
 
@@ -325,6 +326,26 @@ export const pages: PageConfig[] = [
                 "@type": "ContactPage",
                 "name": "Contact OceanViewFlats",
                 "description": t.seoContactDescription,
+                "url": url
+            });
+        },
+        scripts: ['js/main.js']
+    },
+    {
+        id: '404',
+        path: '404',
+        component: NotFound,
+        filename: (lang: Lang) => lang === 'en' ? '404.html' : `404/${lang}.html`,
+        seoTitle: (t: any) => t.notFoundTitle,
+        seoDescription: (t: any) => t.notFoundSubtitle,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/404.html` : `${baseUrl}/404/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": t.notFoundTitle,
+                "description": t.notFoundSubtitle,
                 "url": url
             });
         },

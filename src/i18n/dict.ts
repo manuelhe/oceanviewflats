@@ -161,7 +161,14 @@ export const dict = {
     gallery1606_11: "Pristine master bathroom featuring elegant vanities.",
     gallery1606_12: "Newly refurbished, sparkling clean shower space.",
     gallery1606_13: "Clean, stylish guest bathroom fully stocked.",
-    gallery1606_14: "Convenient pull-out sleeper couch expanding guest capacity."
+    gallery1606_14: "Convenient pull-out sleeper couch expanding guest capacity.",
+    notFoundTitle: "Page Not Found | OceanViewFlats",
+    notFoundHeader: "Lost at Sea?",
+    notFoundSubtitle: "It seems you've drifted off course. The page you are looking for has been washed away or never existed.",
+    notFoundBtnHome: "Return to Safe Harbor",
+    notFoundBtn1707: "Explore Flat 1707",
+    notFoundBtn1606: "Explore Flat 1606",
+    notFoundBtnContact: "Contact Host"
   },
   es: {
     seoTitle: "Apartamento Vista al Mar 1707 | Alquiler Vacacional en Playa Salguero",
@@ -325,7 +332,14 @@ export const dict = {
     gallery1606_11: "Baño principal impecable con elegantes tocadores.",
     gallery1606_12: "Espacio de ducha recientemente renovado y reluciente.",
     gallery1606_13: "Baño de visitas limpio y elegante, totalmente equipado.",
-    gallery1606_14: "Práctico sofá cama extraíble que amplía la capacidad de huéspedes."
+    gallery1606_14: "Práctico sofá cama extraíble que amplía la capacidad de huéspedes.",
+    notFoundTitle: "Página no encontrada | OceanViewFlats",
+    notFoundHeader: "¿Perdido en el mar?",
+    notFoundSubtitle: "Parece que te has desviado de tu rumbo. La página que buscas ha sido arrastrada por la corriente o nunca existió.",
+    notFoundBtnHome: "Volver a puerto seguro",
+    notFoundBtn1707: "Explorar Apartamento 1707",
+    notFoundBtn1606: "Explorar Apartamento 1606",
+    notFoundBtnContact: "Contactar al anfitrión"
   },
   fr: {
     seoTitle: "Appartement Vue Mer 1707 | Location de Vacances à Playa Salguero",
@@ -489,7 +503,14 @@ export const dict = {
     gallery1606_11: "Salle de bain principale impeccable avec des vasques élégantes.",
     gallery1606_12: "Espace douche récemment rénové et étincelant de propreté.",
     gallery1606_13: "Salle de bain d'invités propre et élégante, entièrement équipée.",
-    gallery1606_14: "Canapé-lit gigogne pratique augmentant la capacité d'accueil."
+    gallery1606_14: "Canapé-lit gigogne pratique augmentant la capacité d'accueil.",
+    notFoundTitle: "Page Non Trouvée | OceanViewFlats",
+    notFoundHeader: "Perdu en mer ?",
+    notFoundSubtitle: "Il semble que vous ayez dévié de votre trajectoire. La page que vous recherchez a été emportée par le courant ou n'a jamais existé.",
+    notFoundBtnHome: "Retourner au port sûr",
+    notFoundBtn1707: "Explorer l'Appartement 1707",
+    notFoundBtn1606: "Explorer l'Appartement 1606",
+    notFoundBtnContact: "Contacter l'hôte"
   },
   it: {
     seoTitle: "Appartamento Vista Mare 1707 | Casa Vacanze a Playa Salguero",
@@ -653,7 +674,14 @@ export const dict = {
     gallery1606_11: "Bagno principale immacolato con eleganti lavabi.",
     gallery1606_12: "Spazio doccia recentemente rinnovato e splendente.",
     gallery1606_13: "Bagno di servizio pulito ed elegante, completamente rifornito.",
-    gallery1606_14: "Pratico divano letto estraibile che aumenta la capacità di ospiti."
+    gallery1606_14: "Pratico divano letto estraibile che aumenta la capacità di ospiti.",
+    notFoundTitle: "Pagina Non Trovata | OceanViewFlats",
+    notFoundHeader: "Perso in mare?",
+    notFoundSubtitle: "Sembra che tu sia andato fuori rotta. La pagina che stai cercando è stata spazzata via dalle onde o non è mai esistita.",
+    notFoundBtnHome: "Torna al porto sicuro",
+    notFoundBtn1707: "Esplora l'Appartamento 1707",
+    notFoundBtn1606: "Esplora l'Appartamento 1606",
+    notFoundBtnContact: "Contatta l'host"
   },
   de: {
     seoTitle: "Apartment mit Meerblick 1707 | Ferienwohnung in Playa Salguero",
@@ -817,7 +845,14 @@ export const dict = {
     gallery1606_11: "Makelloses Hauptbadezimmer mit eleganten Waschbecken.",
     gallery1606_12: "Neu renovierter, blitzsauberer Duschbereich.",
     gallery1606_13: "Sauberes, stilvolles Gästebadezimmer, voll ausgestattet.",
-    gallery1606_14: "Praktisches ausziehbares Schlafsofa zur Erweiterung der Gästekapazität."
+    gallery1606_14: "Praktisches ausziehbares Schlafsofa zur Erweiterung der Gästekapazität.",
+    notFoundTitle: "Seite nicht gefunden | OceanViewFlats",
+    notFoundHeader: "Auf See verloren?",
+    notFoundSubtitle: "Es sieht so aus, als ob Sie vom Kurs abgekommen sind. Die von Ihnen gesuchte Seite wurde weggespült oder hat nie existiert.",
+    notFoundBtnHome: "Zurück zum sicheren Hafen",
+    notFoundBtn1707: "Ferienwohnung 1707 erkunden",
+    notFoundBtn1606: "Ferienwohnung 1606 erkunden",
+    notFoundBtnContact: "Gastgeber kontaktieren"
   },
   ja: {
     seoTitle: "オーシャンビューフラット 1707 | サンタマルタ、プラヤ・サルグエロのバケーションレンタル",
@@ -981,6 +1016,13 @@ export const dict = {
     gallery1606_11: "エレガントな洗面台を備えた、非常に清潔なバスルーム。",
     gallery1606_12: "リニューアルされたばかりの、ピカピカに磨き上げられたシャワースペース。",
     gallery1606_13: "スタイリッシュで整理整頓された、清潔なゲスト用バスルーム。",
-    gallery1606_14: "宿泊人数に合わせて手軽に広げられる、便利なソファベッド。"
-  }
+    gallery1606_14: "宿泊人数に合わせて手軽に広げられる、便利なソファベッド。",
+    notFoundTitle: "ページが見つかりません | OceanViewFlats",
+    notFoundHeader: "海で迷子になりましたか？",
+    notFoundSubtitle: "ルートから外れてしまったようです。お探しのページは流されてしまったか、最初から存在しない可能性があります。",
+    notFoundBtnHome: "安全な港へ戻る",
+    notFoundBtn1707: "フラット 1707を見る",
+    notFoundBtn1606: "フラット 1606を見る",
+    notFoundBtnContact: "ホストに連絡する"
+  },
 };

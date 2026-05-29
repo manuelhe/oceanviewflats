@@ -54,7 +54,7 @@ pages.forEach(page => {
         const filename = page.filename(lang);
         
         const depth = filename.split('/').length - 1;
-        const assetPrefix = depth === 0 ? './' : '../'.repeat(depth);
+        const assetPrefix = page.id === '404' ? '/' : (depth === 0 ? './' : '../'.repeat(depth));
 
         const markup = renderToStaticMarkup(<PageComponent lang={lang} assetPrefix={assetPrefix} />);
         
@@ -89,6 +89,6 @@ pages.forEach(page => {
 });
 
 // Generate and save sitemap
-const sitemap = generateSitemap(pages, BASE_URL, LANGUAGES);
+const sitemap = generateSitemap(pages.filter(p => p.id !== '404'), BASE_URL, LANGUAGES);
 fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemap);
 console.log('Generated sitemap.xml');
