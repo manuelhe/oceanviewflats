@@ -350,7 +350,7 @@ export const pages: PageConfig[] = [
                 "url": url
             });
         },
-        scripts: ['js/registry.js']
+        scripts: ['js/main.js', 'js/registry.js']
     },
     {
         id: '404',
