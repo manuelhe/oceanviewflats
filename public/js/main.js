@@ -55,8 +55,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const langToggleGroup = document.getElementById('lang-toggle-group');
     if (!langToggleGroup) return;
     
-    // Select all language links to save preference on click
+    // Select all language links
     const langLinks = langToggleGroup.querySelectorAll('a');
+    
+    // Dynamically append current query parameters if present
+    const searchParams = window.location.search;
+    if (searchParams) {
+        langLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href && !href.includes('?')) {
+                link.setAttribute('href', href + searchParams);
+            }
+        });
+    }
+
+    // Save language preference on click
     langLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             const href = link.getAttribute('href');
