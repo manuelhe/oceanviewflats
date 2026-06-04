@@ -2,6 +2,7 @@ import Home from '../pages/Home';
 import Oceanview1707 from '../pages/Oceanview1707';
 import Oceanview1606 from '../pages/Oceanview1606';
 import Contact from '../pages/Contact';
+import Registry from '../pages/Registry';
 import NotFound from '../pages/NotFound';
 import { IMAGES } from '../constants/config';
 import { Lang } from '../types';
@@ -330,6 +331,26 @@ export const pages: PageConfig[] = [
             });
         },
         scripts: ['js/main.js']
+    },
+    {
+        id: 'registry',
+        path: 'registry',
+        component: Registry,
+        filename: (lang: Lang) => lang === 'en' ? 'registry/index.html' : `registry/${lang}.html`,
+        seoTitle: (t: any) => t.registryTitle,
+        seoDescription: (t: any) => t.registrySubtitle,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/registry` : `${baseUrl}/registry/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": t.registryTitle,
+                "description": t.registrySubtitle,
+                "url": url
+            });
+        },
+        scripts: ['js/registry.js']
     },
     {
         id: '404',

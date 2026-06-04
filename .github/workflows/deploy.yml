@@ -28,6 +28,7 @@ jobs:
           echo "" >> public/.htaccess
           echo "SetEnv RECIPIENT_EMAIL \"${{ secrets.RECIPIENT_EMAIL }}\"" >> public/.htaccess
           echo "SetEnv CAPTCHA_SECRET \"${{ secrets.CAPTCHA_SECRET }}\"" >> public/.htaccess
+          echo "SetEnv GOOGLE_SHEET_WEBAPP_URL \"${{ secrets.GOOGLE_SHEET_WEBAPP_URL }}\"" >> public/.htaccess
 
       - name: Build Project
         run: npm run build

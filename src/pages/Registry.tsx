@@ -1,0 +1,350 @@
+import React, { useState, useEffect } from 'react';
+import { AppProps } from '../types';
+import { Navigation } from '../components/Navigation';
+import { Footer } from '../components/Footer';
+import { dict } from '../i18n/dict';
+import { Users, Calendar, ShieldCheck, Plus, Trash2, Car, User, FileText, CheckCircle2, Building, ShieldAlert } from 'lucide-react';
+
+export default function Registry({ lang, assetPrefix = '../' }: AppProps) {
+  const t = dict[lang];
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800 scroll-smooth">
+      <Navigation isScrolled={isScrolled} lang={lang} showBookButton={false} assetPrefix={assetPrefix} />
+
+      {/* Hero Header */}
+      <header className="relative pt-32 pb-16 px-6 text-center overflow-hidden">
+        <div className="absolute inset-0 w-full h-full">
+          <img 
+            src={`${assetPrefix}images/main-entrance.webp`} 
+            alt="OceanViewFlats Beachfront Entrance" 
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px]"></div>
+        </div>
+        <div className="relative z-10 max-w-3xl mx-auto mt-4">
+          <h1 className="text-4xl md:text-5xl font-extrabold mb-4 text-white tracking-tight drop-shadow-md">
+            {t.registryTitle}
+          </h1>
+          <p className="text-base md:text-lg text-slate-200 font-light max-w-2xl mx-auto drop-shadow-sm leading-relaxed">
+            {t.registrySubtitle}
+          </p>
+        </div>
+      </header>
+
+      <main className="flex-grow w-full py-12 px-6 max-w-5xl mx-auto">
+        
+        {/* Main layout grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* Left Panel: Stay Details & Legal Trust */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* Stay Summary Card (Populated dynamically on client) */}
+            <div className="bg-white rounded-3xl p-6 shadow-md border border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center space-x-2 border-b border-slate-100 pb-3">
+                <Calendar className="w-5 h-5 text-[#FF5A5F]" />
+                <span>{t.registryStayDetails}</span>
+              </h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">{t.registryProperty}</span>
+                  <div className="flex items-center space-x-2 mt-1">
+                    <Building className="w-4 h-4 text-[#FF5A5F]" />
+                    <span id="display-property" className="font-bold text-slate-800 text-sm">--</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">{t.registryCheckIn}</span>
+                    <span id="display-check-in" className="font-bold text-slate-700 text-sm mt-1 block">--</span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">{t.registryCheckOut}</span>
+                    <span id="display-check-out" className="font-bold text-slate-700 text-sm mt-1 block">--</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Legal Trust Banner */}
+            <div className="bg-slate-900 text-white rounded-3xl p-6 shadow-md flex items-start space-x-4">
+              <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl shrink-0">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm uppercase tracking-wide text-emerald-400">Colombian Regulation Compliant</h3>
+                <p className="text-slate-400 mt-2 text-xs leading-relaxed">
+                  According to Decree 2590 of 2009, host administration is legally required to collect formal registry files of all incoming travelers to ensure safety, civic registry accuracy, and security.
+                </p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Panel: Dynamic Registry Form */}
+          <div className="lg:col-span-8 bg-white rounded-3xl p-6 md:p-8 shadow-xl border border-slate-100">
+            
+            {/* Status Message Box */}
+            <div id="form-message" className="hidden p-5 rounded-2xl text-sm font-medium mb-6 transition-all duration-300"></div>
+
+            {/* Successful Confirmation Overlay / Message (Hidden initially) */}
+            <div id="success-overlay" className="hidden text-center py-10 px-4 space-y-6">
+              <div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                <CheckCircle2 className="w-12 h-12" />
+              </div>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900">
+                {t.registrySuccess}
+              </h2>
+              <p className="text-slate-600 max-w-xl mx-auto leading-relaxed text-sm md:text-base font-light">
+                {t.registryWarmMsg}
+              </p>
+              <div className="pt-4">
+                <a 
+                  href={`${assetPrefix}${lang === 'en' ? '' : `${lang}.html`}`} 
+                  className="inline-block bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-full font-bold shadow-md transition-all transform hover:scale-[1.02]"
+                >
+                  Return to Home
+                </a>
+              </div>
+            </div>
+
+            <form 
+              id="registry-form" 
+              action={`${assetPrefix}registry-processor.php`} 
+              method="POST" 
+              className="space-y-6 transition-opacity duration-300"
+              noValidate
+            >
+              {/* Hidden Stay Parameter Fields */}
+              <input type="hidden" name="property" id="hidden-property" />
+              <input type="hidden" name="check_in" id="hidden-check-in" />
+              <input type="hidden" name="check_out" id="hidden-check-out" />
+              
+              {/* Honeypot field (hidden from users) */}
+              <div className="sr-only">
+                <label htmlFor="website-url">Website URL (leave empty)</label>
+                <input 
+                  type="text" 
+                  id="website-url" 
+                  name="website_url" 
+                  tabIndex={-1} 
+                  autoComplete="off" 
+                />
+              </div>
+
+              {/* Dynamic Guests Grid Container */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-bold text-slate-800 flex items-center space-x-2 border-b border-slate-100 pb-2">
+                  <Users className="w-5 h-5 text-[#FF5A5F]" />
+                  <span>{t.registryGuestInfo}</span>
+                </h3>
+
+                {/* Pre-render 6 guest segments. Javascript will toggle hidden states */}
+                {[1, 2, 3, 4, 5, 6].map((num) => (
+                  <div 
+                    key={num} 
+                    id={`guest-card-${num}`} 
+                    className={`p-5 rounded-2xl border transition-all duration-300 ${
+                      num === 1 
+                        ? 'bg-slate-50/50 border-slate-200 shadow-sm' 
+                        : 'bg-white border-slate-150 shadow-xs hidden'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="font-bold text-slate-700 flex items-center space-x-2">
+                        <User className="w-4 h-4 text-[#FF5A5F]" />
+                        <span>{t.registryGuestNum.replace('{num}', num.toString())}</span>
+                      </h4>
+                      {num > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => {}} // Hooked in registry.js
+                          data-remove-guest={num}
+                          className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1 text-xs font-semibold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{t.registryRemoveGuest}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      
+                      {/* Name */}
+                      <div className="flex flex-col">
+                        <label htmlFor={`guest-name-${num}`} className="text-xs font-bold text-slate-500 mb-1 flex justify-between">
+                          <span>{t.registryGuestName}</span>
+                          {num === 1 && <span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">{t.registryRequired}</span>}
+                        </label>
+                        <input 
+                          type="text" 
+                          id={`guest-name-${num}`} 
+                          name={`guest_name_${num}`} 
+                          required={num === 1}
+                          placeholder={t.registryPlaceholderName}
+                          className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
+                        />
+                      </div>
+
+                      {/* Age */}
+                      <div className="flex flex-col">
+                        <label htmlFor={`guest-age-${num}`} className="text-xs font-bold text-slate-500 mb-1 flex justify-between">
+                          <span>{t.registryAge}</span>
+                          {num === 1 && <span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">{t.registryRequired}</span>}
+                        </label>
+                        <input 
+                          type="number" 
+                          id={`guest-age-${num}`} 
+                          name={`guest_age_${num}`} 
+                          min="0"
+                          max="120"
+                          required={num === 1}
+                          placeholder={t.registryPlaceholderAge}
+                          className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
+                        />
+                      </div>
+
+                      {/* Document Type */}
+                      <div className="flex flex-col">
+                        <label htmlFor={`guest-doc-type-${num}`} className="text-xs font-bold text-slate-500 mb-1 flex justify-between">
+                          <span>{t.registryDocType}</span>
+                          {num === 1 && <span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">{t.registryRequired}</span>}
+                        </label>
+                        <select 
+                          id={`guest-doc-type-${num}`} 
+                          name={`guest_doc_type_${num}`} 
+                          required={num === 1}
+                          className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:outline-none text-sm text-slate-700 bg-white cursor-pointer hover:bg-slate-50/50 transition-colors"
+                        >
+                          <option value="Passport">{t.registryDocTypePassport}</option>
+                          <option value="Cédula de Ciudadanía">{t.registryDocTypeCedula}</option>
+                          <option value="Tarjeta de Identidad">{t.registryDocTypeTarjetaIdentidad}</option>
+                          <option value="Registro Civil">{t.registryDocTypeRegistroCivil}</option>
+                          <option value="National ID">{t.registryDocTypeNational}</option>
+                          <option value="Driver License">{t.registryDocTypeDriver}</option>
+                          <option value="Other ID">{t.registryDocTypeOther}</option>
+                        </select>
+                      </div>
+
+                      {/* Document Number */}
+                      <div className="flex flex-col">
+                        <label htmlFor={`guest-doc-num-${num}`} className="text-xs font-bold text-slate-500 mb-1 flex justify-between">
+                          <span>{t.registryDocNumber}</span>
+                          {num === 1 && <span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">{t.registryRequired}</span>}
+                        </label>
+                        <input 
+                          type="text" 
+                          id={`guest-doc-num-${num}`} 
+                          name={`guest_doc_num_${num}`} 
+                          required={num === 1}
+                          placeholder={t.registryPlaceholderDocNumber}
+                          className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
+                        />
+                      </div>
+
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add Guest Button */}
+                <button 
+                  type="button" 
+                  id="add-guest-button"
+                  className="w-full py-3.5 rounded-2xl border-2 border-dashed border-slate-200 hover:border-[#FF5A5F] text-slate-500 hover:text-[#FF5A5F] font-bold text-sm transition-all hover:bg-slate-50/50 flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{t.registryAddGuest}</span>
+                </button>
+              </div>
+
+              {/* Dynamic Input for total count */}
+              <input type="hidden" name="guest_count" id="guest-count-input" defaultValue="1" />
+
+              {/* Optional Car Section */}
+              <div className="bg-slate-50/50 rounded-3xl p-5 border border-slate-150 space-y-4">
+                <h4 className="font-bold text-slate-800 flex items-center space-x-2">
+                  <Car className="w-5 h-5 text-slate-500" />
+                  <span>{t.registryCarOpt}</span>
+                </h4>
+                <p className="text-xs text-slate-500 leading-relaxed font-light">
+                  {t.registryCarDesc}
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                  <div className="flex flex-col">
+                    <label htmlFor="car-plates" className="text-xs font-bold text-slate-500 mb-1">
+                      {t.registryCarPlates}
+                    </label>
+                    <input 
+                      type="text" 
+                      id="car-plates" 
+                      name="car_plates" 
+                      placeholder={t.registryPlaceholderCarPlates}
+                      className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:outline-none text-sm text-slate-800 placeholder-slate-400 bg-white"
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <label htmlFor="car-model" className="text-xs font-bold text-slate-500 mb-1">
+                      {t.registryCarModel}
+                    </label>
+                    <input 
+                      type="text" 
+                      id="car-model" 
+                      name="car_model" 
+                      placeholder={t.registryPlaceholderCarModel}
+                      className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:outline-none text-sm text-slate-800 placeholder-slate-400 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Captcha Block */}
+              <div className="flex flex-col p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                <label htmlFor="captcha-response" className="text-sm font-semibold text-slate-700 mb-2 flex justify-between">
+                  <span id="captcha-label">{t.contactCaptchaLabel}</span>
+                  <span className="text-[#FF5A5F] text-xs font-bold uppercase tracking-wider">{t.contactRequired}</span>
+                </label>
+                <input 
+                  type="number" 
+                  id="captcha-response" 
+                  name="captcha_response" 
+                  required 
+                  placeholder="?"
+                  className="px-4 py-3 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/20 focus:outline-none transition-all text-slate-800 placeholder-slate-400"
+                />
+                <input 
+                  type="hidden" 
+                  id="captcha-challenge" 
+                  name="captcha_challenge" 
+                />
+              </div>
+
+              {/* Submit Button */}
+              <button 
+                type="submit" 
+                id="submit-button"
+                className="w-full bg-[#FF5A5F] hover:bg-[#FF424D] text-white py-4 rounded-full font-bold shadow-lg transition-all transform hover:scale-[1.01] focus:ring-4 focus:ring-[#FF5A5F]/35 flex items-center justify-center space-x-2 cursor-pointer mt-4"
+              >
+                <FileText className="w-5 h-5" />
+                <span id="submit-text">{t.registrySubmit}</span>
+              </button>
+            </form>
+          </div>
+
+        </div>
+      </main>
+
+      <Footer lang={lang} />
+    </div>
+  );
+}
