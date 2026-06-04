@@ -83,9 +83,9 @@ export default function Registry({ lang, assetPrefix = '../' }: AppProps) {
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="font-bold text-sm uppercase tracking-wide text-emerald-400">Colombian Regulation Compliant</h3>
+                <h3 className="font-bold text-sm uppercase tracking-wide text-emerald-400">{t.registryLegalTitle}</h3>
                 <p className="text-slate-400 mt-2 text-xs leading-relaxed">
-                  According to Decree 2590 of 2009, host administration is legally required to collect formal registry files of all incoming travelers to ensure safety, civic registry accuracy, and security.
+                  {t.registryLegalDesc}
                 </p>
               </div>
             </div>

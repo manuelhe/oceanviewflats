@@ -202,7 +202,9 @@ export const dict = {
     registrySubmit: "Complete Guest Registration",
     registrySuccess: "Registration Completed Successfully!",
     registryWarmMsg: "Thank you so much! Your guest registry has been successfully processed and recorded. We are absolutely thrilled to host you and are working hard to ensure your upcoming stay at OceanViewFlats is exceptionally comfortable, seamless, and filled with wonderful memories. Manuel Enrique and our team are looking forward to welcoming you soon!",
-    registryRequired: "Required"
+    registryRequired: "Required",
+    registryLegalTitle: "Colombian Regulation Compliant",
+    registryLegalDesc: "According to Decree 2590 of 2009, host administration is legally required to collect formal registry files of all incoming travelers to ensure safety, civic registry accuracy, and security."
   },
   es: {
     seoTitle: "Apartamento Vista al Mar 1707 | Alquiler Vacacional en Playa Salguero",
@@ -407,7 +409,9 @@ export const dict = {
     registrySubmit: "Completar Registro de Huéspedes",
     registrySuccess: "¡Registro Completado con Éxito!",
     registryWarmMsg: "¡Muchas gracias! Su registro de huéspedes ha sido procesado y guardado correctamente. Estamos absolutamente encantados de tenerle como huésped y estamos trabajando para que su estadía en OceanViewFlats sea increíblemente cómoda, placentera y de ensueño. ¡Manuel Enrique y todo nuestro equipo esperan darle la bienvenida muy pronto!",
-    registryRequired: "Obligatorio"
+    registryRequired: "Obligatorio",
+    registryLegalTitle: "Cumplimiento de la Normativa Colombiana",
+    registryLegalDesc: "De acuerdo con el Decreto 2590 de 2009, la administración del alojamiento está obligada legalmente a recopilar el registro formal de todos los viajeros entrantes para garantizar la seguridad y la exactitud del registro civil."
   },
   fr: {
     seoTitle: "Appartement Vue Mer 1707 | Location de Vacances à Playa Salguero",
@@ -612,7 +616,9 @@ export const dict = {
     registrySubmit: "Compléter l'Enregistrement",
     registrySuccess: "Enregistrement Terminé avec Succès!",
     registryWarmMsg: "Merci beaucoup! Votre registre de voyageurs a été traité avec succès. Nous sommes ravis de vous accueillir et mettons tout en œuvre pour que votre séjour soit inoubliable. Manuel Enrique et notre équipe ont hâte de vous recevoir!",
-    registryRequired: "Requis"
+    registryRequired: "Requis",
+    registryLegalTitle: "Conforme à la Réglementation Colombienne",
+    registryLegalDesc: "Selon le décret 2590 de 2009, l'administration de l'établissement est légalement tenue de collecter les fiches d'enregistrement officielles de tous les voyageurs afin de garantir la sécurité et l'exactitude du registre civil."
   },
   it: {
     seoTitle: "Appartamento Vista Mare 1707 | Casa Vacanze a Playa Salguero",
@@ -817,7 +823,9 @@ export const dict = {
     registrySubmit: "Completa la Registrazione",
     registrySuccess: "Registrazione Completata con Successo!",
     registryWarmMsg: "Grazie mille! Il vostro registro degli ospiti è stato elaborato e registrato con successo. Siamo entusiasti di ospitarvi e stiamo lavorando per garantirvi un soggiorno indimenticabile. Manuel Enrique e il nostro team non vedono l'ora di darvi il benvenuto!",
-    registryRequired: "Richiesto"
+    registryRequired: "Richiesto",
+    registryLegalTitle: "Conforme alle Normative Colombiane",
+    registryLegalDesc: "Ai sensi del Decreto 2590 del 2009, l'amministrazione della struttura è legalmente tenuta a raccogliere i dati di registrazione formale di tutti i viaggiatori in arrivo per garantire la sicurezza e l'accuratezza dell'anagrafe civile."
   },
   de: {
     seoTitle: "Apartment mit Meerblick 1707 | Ferienwohnung in Playa Salguero",
@@ -1022,7 +1030,9 @@ export const dict = {
     registrySubmit: "Registrierung abschließen",
     registrySuccess: "Registrierung erfolgreich abgeschlossen!",
     registryWarmMsg: "Vielen Dank! Ihre Gästeregistrierung wurde erfolgreich verarbeitet und gespeichert. Wir freuen uns riesig, Sie als unsere Gäste begrüßen zu dürfen, und arbeiten daran, Ihnen einen wundervollen und erholsamen Aufenthalt zu bereiten. Manuel Enrique und das gesamte Team freuen sich darauf, Sie bald willkommen zu heißen!",
-    registryRequired: "Erforderlich"
+    registryRequired: "Erforderlich",
+    registryLegalTitle: "Konform mit den kolumbianischen Vorschriften",
+    registryLegalDesc: "Gemäß Dekret 2590 von 2009 ist die Verwaltung der Unterkunft gesetzlich verpflichtet, offizielle Registrierungsdaten aller anreisenden Gäste zu erfassen, um die Sicherheit und die Genauigkeit des Melderegisters zu gewährleisten."
   },
   ja: {
     seoTitle: "オーシャンビューフラット 1707 | サンタマルタ、プラヤ・サルグエロのバケーションレンタル",
@@ -1227,6 +1237,8 @@ export const dict = {
     registrySubmit: "宿泊者登録を完了する",
     registrySuccess: "ご登録が完了しました！",
     registryWarmMsg: "ご登録いただき誠にありがとうございました。宿泊者名簿の登録が正常に完了いたしました。皆様をゲストとしてお迎えできることを心より楽しみにしております。快適で素晴らしいご滞在となるよう、ホストのManuel Enriqueおよびスタッフ一同、万全の準備をしてお待ちしております！",
-    registryRequired: "必須"
+    registryRequired: "必須",
+    registryLegalTitle: "コロンビアの法規制に準拠",
+    registryLegalDesc: "2009年政令第2590号に基づき、宿泊施設の管理者は安全確保、市民登録の正確性、およびセキュリティ維持のため、すべての到着宿泊者様の正式な名簿を収集することが法律で義務付けられています。"
   },
 };
