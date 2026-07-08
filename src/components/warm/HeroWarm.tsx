@@ -14,6 +14,8 @@ export const HeroWarm = ({ lang, assetPrefix = './' }: { lang: Lang, assetPrefix
           src={`${assetPrefix}${IMAGES['1606'].hero}`} 
           alt={t.heroImgAlt} 
           className="w-full h-full object-cover"
+          fetchPriority="high"
+          loading="eager"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-amber-900/30 to-stone-900/80"></div>
       </div>

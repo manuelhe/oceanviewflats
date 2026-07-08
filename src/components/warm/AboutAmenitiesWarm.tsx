@@ -17,8 +17,8 @@ export const AboutAmenitiesWarm = ({ lang, assetPrefix = './' }: { lang: Lang, a
             <p className="leading-relaxed">{t.aboutText2}</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <img src={`${assetPrefix}${IMAGES['1606'].bedroom}`} alt={t.aboutBedroomAlt} className="rounded-xl shadow-md h-48 w-full object-cover" />
-            <img src={`${assetPrefix}${IMAGES['1606'].pool}`} alt={t.aboutPoolAlt} className="rounded-xl shadow-md h-48 w-full object-cover" />
+            <img src={`${assetPrefix}${IMAGES['1606'].bedroom}`} alt={t.aboutBedroomAlt} className="rounded-xl shadow-md h-48 w-full object-cover" loading="lazy" />
+            <img src={`${assetPrefix}${IMAGES['1606'].pool}`} alt={t.aboutPoolAlt} className="rounded-xl shadow-md h-48 w-full object-cover" loading="lazy" />
           </div>
         </div>
         <div>
@@ -49,6 +49,7 @@ export const AboutAmenitiesWarm = ({ lang, assetPrefix = './' }: { lang: Lang, a
               src={`${assetPrefix}${IMAGES['general'].host}`} 
               alt={t.hostName} 
               className="w-full h-full object-cover"
+              loading="lazy"
            />
         </div>
         <div>

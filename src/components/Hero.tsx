@@ -14,6 +14,8 @@ export const Hero = ({ lang, assetPrefix = './' }: { lang: Lang, assetPrefix?: s
           src={`${assetPrefix}${IMAGES['1707'].hero}`} 
           alt={t.heroImgAlt} 
           className="w-full h-full object-cover"
+          fetchPriority="high"
+          loading="eager"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/30 to-slate-900/80"></div>
       </div>

@@ -36,8 +36,8 @@ export const pages: PageConfig[] = [
         path: '',
         component: Home,
         filename: (lang: Lang) => lang === 'en' ? 'index.html' : `${lang}.html`,
-        seoTitle: (t: any) => "Vacation Rentals | Santa Marta | OceanViewFlats",
-        seoDescription: (t: any) => "Explore our beautiful beachfront properties in Santa Marta, Colombia. Book your direct stay at OceanViewFlats 1707 or 1606.",
+        seoTitle: (t: any) => t.seoHomeTitle,
+        seoDescription: (t: any) => t.seoHomeDescription,
         ogImage: IMAGES['1707'].hero,
         getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
             const url = lang === 'en' ? baseUrl : `${baseUrl}/${lang}.html`;
@@ -55,6 +55,8 @@ export const pages: PageConfig[] = [
                         "@type": "LodgingBusiness",
                         "@id": `${url}#business`,
                         "name": "OceanViewFlats",
+                        "legalName": "OceanViewFlats Santa Marta",
+                        "license": "Registro Nacional de Turismo RNT #268781 & RNT #270413",
                         "description": "Direct beachfront rental apartments in Playa Salguero, Santa Marta.",
                         "url": url,
                         "telephone": "+573108155234",
@@ -72,7 +74,53 @@ export const pages: PageConfig[] = [
                             "latitude": 11.1876481,
                             "longitude": -74.2313921
                         },
-                        "priceRange": "$$"
+                        "priceRange": "$110 - $165 USD"
+                    },
+                    {
+                        "@type": "FAQPage",
+                        "@id": `${url}#faq`,
+                        "mainEntity": [
+                            {
+                                "@type": "Question",
+                                "name": t.faqQ1,
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": t.faqA1
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": t.faqQ2,
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": t.faqA2
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": t.faqQ3,
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": t.faqA3
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": t.faqQ4,
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": t.faqA4
+                                }
+                            },
+                            {
+                                "@type": "Question",
+                                "name": t.faqQ5,
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": t.faqA5
+                                }
+                            }
+                        ]
                     }
                 ]
             });
@@ -95,6 +143,13 @@ export const pages: PageConfig[] = [
                 "identifier": "1500108514798091235",
                 "name": "OceanViewFlats 1707",
                 "description": t.seoDescription,
+                "provider": {
+                    "@type": "LodgingBusiness",
+                    "name": "OceanViewFlats",
+                    "url": baseUrl,
+                    "telephone": "+573108155234"
+                },
+                "hasMap": "https://maps.google.com/?q=11.1876481,-74.2313921",
                 "numberOfBedrooms": 2,
                 "numberOfBathroomsTotal": 2,
                 "image": [
@@ -208,6 +263,13 @@ export const pages: PageConfig[] = [
                 "identifier": "1584825560087571592",
                 "name": "OceanViewFlats 1606",
                 "description": t.seo1606Description,
+                "provider": {
+                    "@type": "LodgingBusiness",
+                    "name": "OceanViewFlats",
+                    "url": baseUrl,
+                    "telephone": "+573108155234"
+                },
+                "hasMap": "https://maps.google.com/?q=11.1876481,-74.2313921",
                 "numberOfBedrooms": 2,
                 "numberOfBathroomsTotal": 2,
                 "image": [

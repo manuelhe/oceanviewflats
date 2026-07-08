@@ -28,6 +28,8 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
             src={`${assetPrefix}${IMAGES.home.hero}`} 
             alt="OceanViewFlats" 
             className="w-full h-full object-cover"
+            fetchPriority="high"
+            loading="eager"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-slate-900/80 to-slate-900/40"></div>
         </div>
@@ -55,6 +57,7 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
                     src={`${assetPrefix}${IMAGES['1707'].hero}`} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                     alt={t.heroTitle} 
+                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent"></div>
                   <div className="absolute bottom-6 left-6 text-white">
@@ -81,6 +84,7 @@ export default function Home({ lang, assetPrefix = './' }: AppProps) {
                     src={`${assetPrefix}${IMAGES['1606'].hero}`} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                     alt={t.hero1606Title} 
+                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-stone-900/60 to-transparent"></div>
                   <div className="absolute bottom-6 left-6 text-white">

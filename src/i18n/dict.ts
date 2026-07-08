@@ -1,5 +1,7 @@
 export const dict = {
   en: {
+    seoHomeTitle: "Vacation Rentals Santa Marta | Book Direct & Save | OceanViewFlats",
+    seoHomeDescription: "Book direct beachfront vacation rentals in Playa Salguero, Santa Marta. Save up to 20% on booking fees. Enjoy 900 Mbps Wi-Fi, pool, and stunning sunsets.",
     seoTitle: "Oceanview Flat 1707 | Playa Salguero, Santa Marta Vacation Rental",
     seoDescription: "Book your beachfront stay at Oceanview Flat 1707 in Playa Salguero, Santa Marta. Perfect for digital nomads, featuring high-speed Wi-Fi, pool, and stunning Caribbean sea sunsets. Book your direct stay now.",
     navBook: "Book on Airbnb",
@@ -209,6 +211,8 @@ export const dict = {
     registryLegalDesc: "According to Decree 2590 of 2009, host administration is legally required to collect formal registry files of all incoming travelers to ensure safety, civic registry accuracy, and security."
   },
   es: {
+    seoHomeTitle: "Alquileres Vacacionales Santa Marta | Reserva Directa | OceanViewFlats",
+    seoHomeDescription: "Alquila apartamentos frente a la playa en Playa Salguero, Santa Marta sin comisiones de intermediarios. Ahorra hasta un 20%. Wi-Fi de 900 Mbps, piscina y atardeceres.",
     seoTitle: "Apartamento Vista al Mar 1707 | Alquiler Vacacional en Playa Salguero",
     seoDescription: "Reserva tu estadía frente a la playa en Oceanview Flat 1707 en Playa Salguero, Santa Marta. Ideal para nómadas digitales, con Wi-Fi de alta velocidad, piscina e increíbles atardeceres del Caribe. Reserva tu estancia directa ahora.",
     navBook: "Reservar en Airbnb",
@@ -418,6 +422,8 @@ export const dict = {
     registryLegalDesc: "De acuerdo con el Decreto 2590 de 2009, la administración del alojamiento está obligada legalmente a recopilar el registro formal de todos los viajeros entrantes para garantizar la seguridad y la exactitud del registro civil."
   },
   fr: {
+    seoHomeTitle: "Location Vacances Santa Marta | Réservation Directe | OceanViewFlats",
+    seoHomeDescription: "Réservez vos locations de vacances en bord de mer à Playa Salguero, Santa Marta. Économisez jusqu'à 20% sur les frais de plateforme. Wi-Fi 900 Mbps, piscine.",
     seoTitle: "Appartement Vue Mer 1707 | Location de Vacances à Playa Salguero",
     seoDescription: "Réservez votre séjour en bord de mer au Oceanview Flat 1707 à Playa Salguero, Santa Marta. Idéal pour les nomades digitaux, avec Wi-Fi haut débit, piscine et superbes couchers de soleil sur les Caraïbes. Réservez votre séjour direct dès maintenant.",
     navBook: "Réserver sur Airbnb",
@@ -627,6 +633,8 @@ export const dict = {
     registryLegalDesc: "Selon le décret 2590 de 2009, l'administration de l'établissement est légalement tenue de collecter les fiches d'enregistrement officielles de tous les voyageurs afin de garantir la sécurité et l'exactitude du registre civil."
   },
   it: {
+    seoHomeTitle: "Case Vacanze Santa Marta | Prenotazione Diretta | OceanViewFlats",
+    seoHomeDescription: "Prenota case vacanze fronte mare a Playa Salguero, Santa Marta direttamente dal proprietario. Risparmia fino al 20% sulle commissioni. Wi-Fi da 900 Mbps, piscina.",
     seoTitle: "Appartamento Vista Mare 1707 | Casa Vacanze a Playa Salguero",
     seoDescription: "Prenota il tuo soggiorno di fronte al mare all'Oceanview Flat 1707 a Playa Salguero, Santa Marta. Perfetto per i nomadi digitali, con Wi-Fi ad alta velocità, piscina e splendidi tramonti sui Caraibi. Prenota ora il tuo soggiorno diretto.",
     navBook: "Prenota su Airbnb",
@@ -836,6 +844,8 @@ export const dict = {
     registryLegalDesc: "Ai sensi del Decreto 2590 del 2009, l'amministrazione della struttura è legalmente tenuta a raccogliere i dati di registrazione formale di tutti i viaggiatori in arrivo per garantire la sicurezza e l'accuratezza dell'anagrafe civile."
   },
   de: {
+    seoHomeTitle: "Ferienwohnungen Santa Marta | Direkt Buchen & Sparen | OceanViewFlats",
+    seoHomeDescription: "Buchen Sie Strand-Ferienwohnungen in Playa Salguero, Santa Marta direkt beim Eigentümer. Sparen Sie bis zu 20 % Gebühren. 900 Mbps WLAN, Pool, Meerblick.",
     seoTitle: "Apartment mit Meerblick 1707 | Ferienwohnung in Playa Salguero",
     seoDescription: "Buchen Sie Ihren Strandurlaub im Oceanview Flat 1707 in Playa Salguero, Santa Marta. Perfekt für digitale Nomaden, mit Highspeed-WLAN, Pool und atemberaubenden Sonnenuntergängen in der Karibik. Buchen Sie jetzt Ihren Aufenthalt direkt.",
     navBook: "Auf Airbnb buchen",
@@ -1045,6 +1055,8 @@ export const dict = {
     registryLegalDesc: "Gemäß Dekret 2590 von 2009 ist die Verwaltung der Unterkunft gesetzlich verpflichtet, offizielle Registrierungsdaten aller anreisenden Gäste zu erfassen, um die Sicherheit und die Genauigkeit des Melderegisters zu gewährleisten."
   },
   ja: {
+    seoHomeTitle: "サンタマルタ バケーションレンタル | 直接予約で最安値 | OceanViewFlats",
+    seoHomeDescription: "サンタマルタ、プラヤ・サルグエロのビーチフロント貸別荘を直接予約。仲介手数料最大20%オフ。900 Mbps高速Wi-Fi、プール、美しい夕日を完備。",
     seoTitle: "オーシャンビューフラット 1707 | サンタマルタ、プラヤ・サルグエロのバケーションレンタル",
     seoDescription: "サンタマルタのプラヤ・サルグエロにあるオーシャンビューフラット 1707で、ビーチフロントの滞在をご予約ください。デジタルノマドに最適で、高速Wi-Fi、プール、カリブ海の美しい夕日をお楽しみいただけます。今すぐ直接予約しましょう。",
     navBook: "Airbnbで予約",
