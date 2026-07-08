@@ -6,6 +6,7 @@ import { QuickStats } from '../components/QuickStats';
 import { ImageGallery } from '../components/ImageGallery';
 import { NomadSection } from '../components/NomadSection';
 import { AboutAmenities } from '../components/AboutAmenities';
+import { ReviewsSection1707 } from '../components/ReviewsSection1707';
 import { BookingSection } from '../components/BookingSection';
 import { Footer } from '../components/Footer';
 
@@ -29,9 +30,11 @@ export default function Oceanview1707({ lang, assetPrefix = './' }: AppProps) {
         <ImageGallery lang={lang} property="1707" assetPrefix={assetPrefix} />
         <NomadSection lang={lang} assetPrefix={assetPrefix} />
         <AboutAmenities lang={lang} assetPrefix={assetPrefix} />
+        <ReviewsSection1707 lang={lang} />
         <BookingSection lang={lang} />
       </main>
       <Footer lang={lang} />
     </div>
   );
 }
+

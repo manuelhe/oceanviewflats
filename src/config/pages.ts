@@ -176,16 +176,16 @@ export const pages: PageConfig[] = [
                 ],
                 "aggregateRating": {
                     "@type": "AggregateRating",
-                    "ratingValue": "4.9",
-                    "reviewCount": "24"
+                    "ratingValue": "5.0",
+                    "reviewCount": "1"
                 },
                 "review": [
                     {
                         "@type": "Review",
-                        "author": { "@type": "Person", "name": "Guest" },
-                        "datePublished": "2024-01-15",
+                        "author": { "@type": "Person", "name": t.review1707Author },
+                        "datePublished": "2026-06-28",
                         "reviewRating": { "@type": "Rating", "ratingValue": "5" },
-                        "reviewBody": "Amazing stay, beautiful views."
+                        "reviewBody": t.review1707Text
                     }
                 ]
             });
