@@ -118,6 +118,17 @@ document.addEventListener('DOMContentLoaded', () => {
         registryLink.href = `${pathPrefix}${pageName}?${regParams.toString()}`;
     }
 
+    // 4.5 Hide guest registry banner if already completed for this specific reservation
+    const cleanPropNo = propertyNumber.replace(/\D/g, '');
+    const checkInParam = urlParams.get('check_in') || urlParams.get('checkin') || 'unspecified';
+    const checkOutParam = urlParams.get('check_out') || urlParams.get('checkout') || 'unspecified';
+    const stayKey = `stay_reg_${cleanPropNo || '1606'}_${checkInParam.replace(/\s+/g, '_')}_${checkOutParam.replace(/\s+/g, '_')}`;
+
+    const registryBanner = document.getElementById('guide-registry-banner');
+    if (registryBanner && localStorage.getItem(stayKey) === 'completed') {
+        registryBanner.style.display = 'none';
+    }
+
     // 5. Setup Copy Event Listeners
     const copyButtons = [
         document.getElementById('btn-copy-door-code'),

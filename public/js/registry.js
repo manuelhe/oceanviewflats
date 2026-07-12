@@ -248,6 +248,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (response.ok && result.success) {
+                // Mark registration as completed for this specific reservation (property, check-in, check-out)
+                try {
+                    const cleanPropNo = propertyVal.replace(/\D/g, '');
+                    const checkInParam = urlParams.get('check_in') || urlParams.get('checkin') || 'unspecified';
+                    const checkOutParam = urlParams.get('check_out') || urlParams.get('checkout') || 'unspecified';
+                    const stayKey = `stay_reg_${cleanPropNo || '1606'}_${checkInParam.replace(/\s+/g, '_')}_${checkOutParam.replace(/\s+/g, '_')}`;
+                    localStorage.setItem(stayKey, 'completed');
+                } catch (err) {
+                    console.error('Error saving stay registration status:', err);
+                }
+
                 // Success: Hide form and show success message
                 form.classList.add('opacity-0');
                 setTimeout(() => {

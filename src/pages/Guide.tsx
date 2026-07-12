@@ -63,7 +63,7 @@ export default function Guide({ lang, assetPrefix = '../' }: AppProps) {
       <main className="flex-grow w-full py-12 px-6 max-w-6xl mx-auto space-y-8">
         
         {/* Mandatory Registry Link Button Card - Critical High Priority Callout Banner */}
-        <section className="bg-gradient-to-br from-[#FF5A5F] to-[#FF444A] text-white rounded-3xl p-6 md:p-8 shadow-xl border border-[#FF5A5F]/15 relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <section id="guide-registry-banner" className="bg-gradient-to-br from-[#FF5A5F] to-[#FF444A] text-white rounded-3xl p-6 md:p-8 shadow-xl border border-[#FF5A5F]/15 relative overflow-hidden flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="absolute inset-0 bg-radial-gradient from-white/10 to-transparent pointer-events-none"></div>
           
           <div className="space-y-2 md:max-w-2xl relative z-10">
