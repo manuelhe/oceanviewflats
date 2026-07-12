@@ -89,6 +89,6 @@ pages.forEach(page => {
 });
 
 // Generate and save sitemap
-const sitemap = generateSitemap(pages.filter(p => p.id !== '404' && p.id !== 'registry'), BASE_URL, LANGUAGES);
+const sitemap = generateSitemap(pages.filter(p => p.id !== '404' && p.id !== 'registry' && p.id !== 'guide'), BASE_URL, LANGUAGES);
 fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemap);
 console.log('Generated sitemap.xml');

@@ -4,6 +4,7 @@ import Oceanview1606 from '../pages/Oceanview1606';
 import Contact from '../pages/Contact';
 import Registry from '../pages/Registry';
 import NotFound from '../pages/NotFound';
+import Guide from '../pages/Guide';
 import { IMAGES } from '../constants/config';
 import { Lang } from '../types';
 
@@ -413,6 +414,26 @@ export const pages: PageConfig[] = [
             });
         },
         scripts: ['js/main.js', 'js/registry.js']
+    },
+    {
+        id: 'guide',
+        path: 'guide',
+        component: Guide,
+        filename: (lang: Lang) => lang === 'en' ? 'guide/index.html' : `guide/${lang}.html`,
+        seoTitle: (t: any) => t.guideTitle,
+        seoDescription: (t: any) => t.guideHeader,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/guide` : `${baseUrl}/guide/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": t.guideTitle,
+                "description": t.guideHeader,
+                "url": url
+            });
+        },
+        scripts: ['js/main.js', 'js/guide.js']
     },
     {
         id: '404',
