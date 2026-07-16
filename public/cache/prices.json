@@ -1,0 +1,23 @@
+[
+  {
+    "property_id": "1606",
+    "start_date": "2026-01-01",
+    "end_date": "2026-12-14",
+    "nightly_rate_cop": 350000,
+    "minimum_stay": 2
+  },
+  {
+    "property_id": "1606",
+    "start_date": "2026-12-15",
+    "end_date": "2027-01-15",
+    "nightly_rate_cop": 550000,
+    "minimum_stay": 4
+  },
+  {
+    "property_id": "1707",
+    "start_date": "2026-01-01",
+    "end_date": "2026-12-31",
+    "nightly_rate_cop": 450000,
+    "minimum_stay": 2
+  }
+]

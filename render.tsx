@@ -22,6 +22,51 @@ if (fs.existsSync(publicDir)) {
     console.log('Copied public assets to dist/');
 }
 
+// Parse public/data/prices.csv to generate build-time prices.json caches for client usage
+const parsePricesCsv = () => {
+    const csvPath = path.join(process.cwd(), 'public', 'data', 'prices.csv');
+    const cacheDir = path.join(process.cwd(), 'public', 'cache');
+    const distCacheDir = path.join(distDir, 'cache');
+    
+    if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+    }
+    if (!fs.existsSync(distCacheDir)) {
+        fs.mkdirSync(distCacheDir, { recursive: true });
+    }
+    
+    if (fs.existsSync(csvPath)) {
+        const csvContent = fs.readFileSync(csvPath, 'utf-8');
+        const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        
+        if (lines.length > 1) {
+            const prices: { property_id: string; start_date: string; end_date: string; nightly_rate_cop: number; minimum_stay: number }[] = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(',');
+                if (cols.length >= 5) {
+                    prices.push({
+                        property_id: cols[0],
+                        start_date: cols[1],
+                        end_date: cols[2],
+                        nightly_rate_cop: parseFloat(cols[3]),
+                        minimum_stay: parseInt(cols[4], 10)
+                    });
+                }
+            }
+            
+            const jsonContent = JSON.stringify(prices, null, 2);
+            fs.writeFileSync(path.join(cacheDir, 'prices.json'), jsonContent);
+            fs.writeFileSync(path.join(distCacheDir, 'prices.json'), jsonContent);
+            console.log('Parsed prices.csv and generated cached prices.json files.');
+        }
+    } else {
+        console.log('Warning: public/data/prices.csv not found to parse.');
+    }
+};
+
+parsePricesCsv();
+
 const generateSitemap = (pages: PageConfig[], baseUrl: string, languages: string[]) => {
     const urls: string[] = [];
     const now = new Date().toISOString().split('T')[0];

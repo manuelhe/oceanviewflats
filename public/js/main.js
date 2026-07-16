@@ -250,20 +250,256 @@ document.addEventListener('DOMContentLoaded', () => {
         return d.toLocaleDateString(locMap[lang] || 'en-US', options);
     }
 
+    let pricesData = [];
+    let exchangeRates = null;
+
+    // Fetch build-time compiled seasonal prices json
+    async function fetchPrices() {
+        try {
+            const response = await fetch('/cache/prices.json');
+            if (response.ok) {
+                pricesData = await response.json();
+                if (checkIn && checkOut) {
+                    updateBookingDisplay();
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching seasonal prices:', err);
+        }
+    }
+
+    // Fetch COP exchange rates with 1-hour client-side caching
+    async function fetchExchangeRates() {
+        try {
+            const cachedRates = localStorage.getItem('cop_exchange_rates');
+            const cachedTime = localStorage.getItem('cop_exchange_rates_time');
+            
+            if (cachedRates && cachedTime && (Date.now() - parseInt(cachedTime, 10) < 3600000)) {
+                exchangeRates = JSON.parse(cachedRates);
+                return;
+            }
+            
+            const response = await fetch('https://open.er-api.com/v6/latest/COP');
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.rates) {
+                    exchangeRates = data.rates;
+                    localStorage.setItem('cop_exchange_rates', JSON.stringify(data.rates));
+                    localStorage.setItem('cop_exchange_rates_time', Date.now().toString());
+                    if (checkIn && checkOut) {
+                        updateBookingDisplay();
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching currency exchange rates:', err);
+        }
+    }
+
+    fetchPrices();
+    fetchExchangeRates();
+
+    // Captcha Logic for Direct Booking Form
+    let bookingCaptchaSignature = '';
+    const bookingCaptchaLabel = document.getElementById('booking-captcha-label');
+    const bookingCaptchaChallenge = document.getElementById('booking-captcha-challenge');
+    const bookingCaptchaResponse = document.getElementById('booking-captcha-response');
+
+    async function loadBookingCaptcha() {
+        if (!bookingCaptchaLabel) return;
+        try {
+            const response = await fetch('/api/book-request.php?action=captcha');
+            if (response.ok) {
+                const data = await response.json();
+                const originalText = bookingCaptchaLabel.getAttribute('data-original') || bookingCaptchaLabel.textContent;
+                if (!bookingCaptchaLabel.getAttribute('data-original')) {
+                    bookingCaptchaLabel.setAttribute('data-original', originalText);
+                }
+                bookingCaptchaLabel.textContent = `${originalText} (${data.challenge})`;
+                bookingCaptchaChallenge.value = data.challenge;
+                bookingCaptchaSignature = data.signature;
+                bookingCaptchaResponse.value = '';
+            }
+        } catch (err) {
+            console.error('Error loading booking captcha:', err);
+        }
+    }
+
+    if (bookingCaptchaLabel) {
+        loadBookingCaptcha();
+    }
+
+    function calculateStayDetails(start, end) {
+        let current = new Date(start);
+        const endLimit = new Date(end);
+        let nights = 0;
+        let accommodationTotal = 0;
+
+        while (current < endLimit) {
+            nights++;
+            const dateStr = formatDate(current);
+            const tier = pricesData.find(p => p.property_id === propertyId && dateStr >= p.start_date && dateStr <= p.end_date);
+            const rate = tier ? parseFloat(tier.nightly_rate_cop) : (propertyId === '1707' ? 450000 : 350000);
+            accommodationTotal += rate;
+            current.setDate(current.getDate() + 1);
+        }
+
+        return { nights, accommodationTotal };
+    }
+
     function updateBookingDisplay() {
+        const isSlate = !window.location.pathname.includes('1606');
+        const textClass = isSlate ? "text-slate-900" : "text-stone-900";
+        const muteClass = isSlate ? "text-slate-300" : "text-stone-300";
+
         dpIn.textContent = displayDate(checkIn);
-        dpIn.className = "font-semibold text-lg " + (checkIn ? "text-slate-900" : "text-slate-300");
+        dpIn.className = "font-semibold text-lg " + (checkIn ? textClass : muteClass);
         
         dpOut.textContent = displayDate(checkOut);
-        dpOut.className = "font-semibold text-lg " + (checkOut ? "text-slate-900" : "text-slate-300");
+        dpOut.className = "font-semibold text-lg " + (checkOut ? textClass : muteClass);
+
+        const breakdownCard = document.getElementById('price-breakdown-card');
+        const directForm = document.getElementById('direct-booking-form');
 
         if (checkIn && checkOut) {
             btnBook.href = airbnbUrl + "?check_in=" + formatDate(checkIn) + "&check_out=" + formatDate(checkOut);
             btnBookText.textContent = txtReady;
+
+            // Compute direct booking subtotals
+            const details = calculateStayDetails(checkIn, checkOut);
+            const cleaningFee = propertyId === '1707' ? 100000 : 80000;
+            const resortFee = 20000;
+            const totalCOP = details.accommodationTotal + cleaningFee + resortFee;
+
+            // Form bindings
+            const formCheckIn = document.getElementById('form-check-in-date');
+            const formCheckOut = document.getElementById('form-check-out-date');
+            const formTotalPrice = document.getElementById('form-total-price-cop');
+            if (formCheckIn) formCheckIn.value = formatDate(checkIn);
+            if (formCheckOut) formCheckOut.value = formatDate(checkOut);
+            if (formTotalPrice) formTotalPrice.value = totalCOP;
+
+            // Populate Breakdown UI
+            const accommodationValue = document.getElementById('rate-breakdown-value');
+            const cleaningValue = document.getElementById('cleaning-fee-value');
+            const resortValue = document.getElementById('resort-fee-value');
+            const totalValue = document.getElementById('total-cop-value');
+
+            const copFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+
+            if (accommodationValue) accommodationValue.textContent = copFormatter.format(details.accommodationTotal) + ` (${details.nights} nights)`;
+            if (cleaningValue) cleaningValue.textContent = copFormatter.format(cleaningFee);
+            if (resortValue) resortValue.textContent = copFormatter.format(resortFee);
+            if (totalValue) totalValue.textContent = copFormatter.format(totalCOP) + ' COP';
+
+            // Convert to selected language's suggested currency
+            const currencyBox = document.getElementById('converted-currency-box');
+            const currencyValue = document.getElementById('converted-currency-value');
+            
+            if (currencyBox && currencyValue && exchangeRates) {
+                const langToCurrency = { 'en': 'USD', 'es': 'USD', 'fr': 'EUR', 'de': 'EUR', 'it': 'EUR', 'ja': 'JPY' };
+                const targetCurrency = langToCurrency[lang] || 'USD';
+                const rate = exchangeRates[targetCurrency];
+                
+                if (rate) {
+                    const converted = totalCOP * rate;
+                    let formatted = '';
+                    if (targetCurrency === 'JPY') {
+                        formatted = new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(converted);
+                    } else if (targetCurrency === 'EUR') {
+                        formatted = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(converted);
+                    } else {
+                        formatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(converted);
+                    }
+                    currencyValue.textContent = formatted + ' ' + targetCurrency;
+                    currencyBox.classList.remove('hidden');
+                } else {
+                    currencyBox.classList.add('hidden');
+                }
+            }
+
+            // Reveal breakdown and direct booking form
+            if (breakdownCard) breakdownCard.classList.remove('hidden');
+            if (directForm) directForm.classList.remove('hidden');
         } else {
             btnBook.href = airbnbUrl;
             btnBookText.textContent = txtDefault;
+
+            if (breakdownCard) breakdownCard.classList.add('hidden');
+            if (directForm) directForm.classList.add('hidden');
         }
+    }
+
+    // Direct Booking Form AJAX submit logic
+    const directFormElement = document.getElementById('direct-booking-form');
+    if (directFormElement) {
+        directFormElement.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const btnSubmit = document.getElementById('btn-direct-submit');
+            const btnSubmitText = document.getElementById('btn-direct-submit-text');
+            const msgBox = document.getElementById('booking-form-message');
+
+            const name = document.getElementById('booking-guest-name').value.trim();
+            const email = document.getElementById('booking-guest-email').value.trim();
+            const phone = document.getElementById('booking-guest-phone').value.trim();
+            const captchaVal = bookingCaptchaResponse.value.trim();
+
+            if (!name || !email || !phone || !captchaVal || !checkIn || !checkOut) {
+                if (msgBox) {
+                    msgBox.textContent = "Please fill in all required fields.";
+                    msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
+                }
+                return;
+            }
+
+            if (btnSubmit) btnSubmit.disabled = true;
+            if (btnSubmitText) btnSubmitText.textContent = "Sending...";
+
+            try {
+                const formData = new FormData(directFormElement);
+                formData.append('captcha_signature', bookingCaptchaSignature);
+                formData.append('captcha_response', captchaVal);
+
+                const response = await fetch('/api/book-request.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    if (msgBox) {
+                        msgBox.innerHTML = result.message || "Reservation inquiry sent successfully!";
+                        msgBox.className = "p-4 rounded-xl text-sm font-semibold mb-4 bg-emerald-50 text-emerald-800 border border-emerald-200 block leading-relaxed";
+                    }
+                    directFormElement.reset();
+                    if (btnSubmit) btnSubmit.style.display = 'none';
+
+                    // Track Successful Direct Booking Conversion (Goal 5)
+                    if (window._paq) {
+                        window._paq.push(['trackEvent', 'Booking', 'Direct Booking Inquiry Success', propertyId]);
+                        window._paq.push(['trackGoal', 5]);
+                    }
+                } else {
+                    if (msgBox) {
+                        msgBox.textContent = result.error || "An error occurred. Please try again.";
+                        msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
+                    }
+                    if (btnSubmit) btnSubmit.disabled = false;
+                    if (btnSubmitText) btnSubmitText.textContent = "Enviar Solicitud / Send Inquiry";
+                    loadBookingCaptcha(); // Reset captcha on failure
+                }
+            } catch (err) {
+                console.error('Error submitting direct booking inquiry:', err);
+                if (msgBox) {
+                    msgBox.textContent = "Network error. Please verify connection and try again.";
+                    msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
+                }
+                if (btnSubmit) btnSubmit.disabled = false;
+                if (btnSubmitText) btnSubmitText.textContent = "Enviar Solicitud / Send Inquiry";
+            }
+        });
     }
 
     btnPrev.addEventListener('click', () => {

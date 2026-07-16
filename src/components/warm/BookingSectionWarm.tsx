@@ -94,6 +94,82 @@ export const BookingSectionWarm = ({ lang }: BookingSectionProps) => {
                 <ExternalLink className="w-5 h-5" />
               </a>
 
+              {/* Dynamic Price Breakdown Card */}
+              <div id="price-breakdown-card" className="hidden bg-stone-50 p-6 rounded-2xl border border-stone-200 mb-6 transition-all duration-300">
+                <h4 className="font-bold text-stone-800 text-sm mb-4 uppercase tracking-wider">Detalle del precio / Price Breakdown</h4>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between text-stone-600">
+                    <span id="rate-breakdown-label">Hospedaje / Accommodation</span>
+                    <span id="rate-breakdown-value" className="font-semibold text-stone-900">0 COP</span>
+                  </div>
+                  <div className="flex justify-between text-stone-600">
+                    <span id="cleaning-fee-label">Tarifa de limpieza / Cleaning Fee</span>
+                    <span id="cleaning-fee-value" className="font-semibold text-stone-900">0 COP</span>
+                  </div>
+                  <div className="flex justify-between text-stone-600">
+                    <span id="resort-fee-label">Registro en portería / Resort Reg Fee</span>
+                    <span id="resort-fee-value" className="font-semibold text-stone-900">0 COP</span>
+                  </div>
+                  <hr className="border-stone-200 my-2" />
+                  <div className="flex justify-between items-baseline">
+                    <span className="font-bold text-stone-800">Total</span>
+                    <div className="text-right">
+                      <div id="total-cop-value" className="font-extrabold text-xl text-stone-900">0 COP</div>
+                      <div id="converted-currency-box" className="hidden text-xs text-stone-500 mt-1">
+                        Est. <span id="converted-currency-value">0 USD</span>
+                        <span id="currency-tooltip-trigger" className="inline-block ml-1 cursor-help text-stone-400 hover:text-stone-600" title="Informational estimate only. The transaction is processed in COP.">ⓘ</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Direct Booking Inquiry Form */}
+              <form id="direct-booking-form" className="hidden space-y-4 mb-6 transition-all duration-300">
+                <h4 className="font-bold text-stone-800 text-sm uppercase tracking-wider">Reserva Directa / Direct Booking</h4>
+                <input type="hidden" name="property_id" id="form-property-id" value="1606" />
+                <input type="hidden" name="check_in" id="form-check-in-date" />
+                <input type="hidden" name="check_out" id="form-check-out-date" />
+                <input type="hidden" name="total_price_cop" id="form-total-price-cop" />
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Nombre Completo / Full Name *</label>
+                  <input type="text" name="guest_name" id="booking-guest-name" required className="w-full p-3 rounded-xl border border-stone-200 text-stone-800 text-sm focus:outline-none focus:border-[#FF5A5F]" placeholder="John Doe" />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Email *</label>
+                    <input type="email" name="guest_email" id="booking-guest-email" required className="w-full p-3 rounded-xl border border-stone-200 text-stone-800 text-sm focus:outline-none focus:border-[#FF5A5F]" placeholder="john@example.com" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Teléfono / Phone *</label>
+                    <input type="tel" name="guest_phone" id="booking-guest-phone" required className="w-full p-3 rounded-xl border border-stone-200 text-stone-800 text-sm focus:outline-none focus:border-[#FF5A5F]" placeholder="+1 (123) 456-7890" />
+                  </div>
+                </div>
+
+                <div className="bg-stone-50 p-4 rounded-xl border border-stone-200 grid grid-cols-2 gap-4 items-center">
+                  <div>
+                    <label id="booking-captcha-label" className="block text-xs font-bold text-stone-500 uppercase tracking-wide mb-1">Verificación / Solve *</label>
+                    <input type="text" id="booking-captcha-response" required className="w-full p-2 rounded-lg border border-stone-200 text-stone-800 text-sm focus:outline-none focus:border-[#FF5A5F]" placeholder="Respuesta" />
+                    <input type="hidden" id="booking-captcha-challenge" name="captcha_challenge" />
+                  </div>
+                  <div className="text-xs text-stone-400 leading-tight">
+                    Resuelva la operación para verificar que no es un robot.
+                  </div>
+                </div>
+
+                <div id="booking-form-message" className="hidden"></div>
+
+                <button 
+                  type="submit" 
+                  id="btn-direct-submit"
+                  className="w-full flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-xl font-bold text-lg transition-transform hover:scale-[1.01] shadow-lg"
+                >
+                  <span id="btn-direct-submit-text">Enviar Solicitud / Send Inquiry</span>
+                </button>
+              </form>
+
               <a
                 id="whatsapp-booking-link"
                 href="https://wa.me/573108155234"
