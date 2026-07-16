@@ -115,6 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDate = new Date();
     let checkIn = null;
     let checkOut = null;
+    let blockedDates = []; // Array of YYYY-MM-DD strings of booked dates
     
     const lang = widget.getAttribute('data-lang');
     const monthNames = JSON.parse(widget.getAttribute('data-month-names'));
@@ -132,6 +133,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const airbnbUrl = btnBook.getAttribute('data-airbnb-url');
     const txtReady = btnBook.getAttribute('data-text-ready');
     const txtDefault = btnBook.getAttribute('data-text-default');
+
+    // Retrieve property ID from page path (defaults to 1707 if not 1606)
+    const propertyId = window.location.pathname.includes('1606') ? '1606' : '1707';
+
+    // Fetch live blocked dates from local caching proxy
+    async function fetchBlockedDates() {
+        try {
+            const response = await fetch(`/api/availability.php?property=${propertyId}`);
+            if (response.ok) {
+                blockedDates = await response.json();
+                renderCalendar();
+            }
+        } catch (err) {
+            console.error('Error retrieving live Airbnb calendar blocked dates:', err);
+        }
+    }
 
     function renderCalendar() {
         grid.innerHTML = '';
@@ -154,27 +171,59 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 1; i <= daysInMonth; i++) {
             const btn = document.createElement('button');
             const thisDate = new Date(year, month, i);
+            const dateStr = formatDate(thisDate);
+            
             const isPast = thisDate < today;
+            const isBlocked = blockedDates.includes(dateStr);
             const isCheckIn = checkIn && thisDate.getTime() === checkIn.getTime();
             const isCheckOut = checkOut && thisDate.getTime() === checkOut.getTime();
             const isBetween = checkIn && checkOut && thisDate > checkIn && thisDate < checkOut;
 
             let bgClass = "bg-white hover:bg-slate-100 text-slate-700";
-            if (isPast) bgClass = "bg-transparent text-slate-300 cursor-not-allowed";
-            if (isCheckIn || isCheckOut) bgClass = "bg-[#FF5A5F] text-white font-medium";
-            if (isBetween) bgClass = "bg-[#FF5A5F]/10 text-[#FF5A5F] font-medium";
+            if (isPast) {
+                bgClass = "bg-transparent text-slate-300 cursor-not-allowed";
+            } else if (isBlocked) {
+                bgClass = "bg-slate-50 text-slate-300 cursor-not-allowed line-through relative after:content-[''] after:absolute after:w-full after:h-[1px] after:bg-slate-300 after:rotate-[-45deg]";
+            } else if (isCheckIn || isCheckOut) {
+                bgClass = "bg-[#FF5A5F] text-white font-medium";
+            } else if (isBetween) {
+                bgClass = "bg-[#FF5A5F]/10 text-[#FF5A5F] font-medium";
+            }
 
-            btn.className = "calendar-day w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm transition-all " + bgClass;
+            btn.className = "calendar-day w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center text-sm transition-all relative overflow-hidden " + bgClass;
             btn.textContent = i;
-            btn.disabled = isPast;
+            btn.disabled = isPast || isBlocked;
+            
+            // Accessible label for screen readers
+            if (isBlocked) {
+                btn.setAttribute('title', 'Already Booked');
+                btn.setAttribute('aria-label', `${i} ${monthNames[lang][month]}, Booked`);
+            }
 
-            if (!isPast) {
+            if (!isPast && !isBlocked) {
                 btn.addEventListener('click', () => {
                     if (!checkIn || (checkIn && checkOut)) {
                         checkIn = thisDate;
                         checkOut = null;
                     } else if (thisDate > checkIn) {
-                        checkOut = thisDate;
+                        // Secure dates allocation: prevent selecting ranges spanning across existing bookings
+                        let hasOverlap = false;
+                        let d = new Date(checkIn);
+                        d.setDate(d.getDate() + 1);
+                        while (d < thisDate) {
+                            if (blockedDates.includes(formatDate(d))) {
+                                hasOverlap = true;
+                                break;
+                            }
+                            d.setDate(d.getDate() + 1);
+                        }
+
+                        if (hasOverlap) {
+                            checkIn = thisDate;
+                            checkOut = null;
+                        } else {
+                            checkOut = thisDate;
+                        }
                     } else {
                         checkIn = thisDate;
                     }
@@ -252,6 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateBookingDisplay();
     renderCalendar();
+    fetchBlockedDates(); // Fetch live availability on load
 });
 
 // Contact Form Logic
