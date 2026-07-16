@@ -19,11 +19,15 @@ if ($propertyId !== '1606' && $propertyId !== '1707') {
     exit();
 }
 
-// Define the public Airbnb iCal URLs (Can be overridden by host)
-$icalFeeds = [
-    '1707' => 'https://www.airbnb.com/calendar/ical/1500108514798091235.ics',
-    '1606' => 'https://www.airbnb.com/calendar/ical/1584825560087571592.ics'
-];
+// Load configuration (Security Best Practice: Decouple credentials and feeds from main logic controllers)
+$config = require __DIR__ . '/config.php';
+$icalFeeds = isset($config['ical_feeds']) ? $config['ical_feeds'] : [];
+
+if (!isset($icalFeeds[$propertyId])) {
+    http_response_code(500);
+    echo json_encode(["error" => "No feed configured for property ID: " . $propertyId]);
+    exit();
+}
 
 $feedUrl = $icalFeeds[$propertyId];
 
