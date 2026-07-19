@@ -10,4 +10,5 @@ export interface CalendarWidgetProps {
   checkIn: Date | null;
   checkOut: Date | null;
   onSelectDate: (date: Date) => void;
+  propertyId?: '1707' | '1606';
 }

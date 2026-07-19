@@ -4,13 +4,15 @@ import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { ImageGallery } from '../components/ImageGallery';
 
-// Warm Theme Components
-import { HeroWarm } from '../components/warm/HeroWarm';
-import { QuickStatsWarm } from '../components/warm/QuickStatsWarm';
+// Shared Unified Components
+import { Hero } from '../components/Hero';
+import { QuickStats } from '../components/QuickStats';
+import { AboutAmenities } from '../components/AboutAmenities';
+import { BookingSection } from '../components/BookingSection';
+
+// Unique Theme Components
 import { RomanticFamilySection } from '../components/warm/RomanticFamilySection';
-import { AboutAmenitiesWarm } from '../components/warm/AboutAmenitiesWarm';
 import { ReviewsSection } from '../components/warm/ReviewsSection';
-import { BookingSectionWarm } from '../components/warm/BookingSectionWarm';
 
 export default function Oceanview1606({ lang, assetPrefix = './' }: AppProps) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -26,13 +28,13 @@ export default function Oceanview1606({ lang, assetPrefix = './' }: AppProps) {
     <div className="min-h-screen bg-stone-50 font-sans text-stone-800 scroll-smooth">
       <Navigation isScrolled={isScrolled} lang={lang} assetPrefix={assetPrefix} />
       <main>
-        <HeroWarm lang={lang} assetPrefix={assetPrefix} />
-        <QuickStatsWarm lang={lang} />
+        <Hero lang={lang} propertyId="1606" assetPrefix={assetPrefix} />
+        <QuickStats lang={lang} propertyId="1606" />
         <ImageGallery lang={lang} property="1606" assetPrefix={assetPrefix} />
         <RomanticFamilySection lang={lang} assetPrefix={assetPrefix} />
-        <AboutAmenitiesWarm lang={lang} assetPrefix={assetPrefix} />
+        <AboutAmenities lang={lang} propertyId="1606" assetPrefix={assetPrefix} />
         <ReviewsSection lang={lang} />
-        <BookingSectionWarm lang={lang} />
+        <BookingSection lang={lang} propertyId="1606" />
       </main>
       <Footer lang={lang} />
     </div>

@@ -25,13 +25,13 @@ export default function Oceanview1707({ lang, assetPrefix = './' }: AppProps) {
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 scroll-smooth">
       <Navigation isScrolled={isScrolled} lang={lang} assetPrefix={assetPrefix} />
       <main>
-        <Hero lang={lang} assetPrefix={assetPrefix} />
-        <QuickStats lang={lang} />
+        <Hero lang={lang} propertyId="1707" assetPrefix={assetPrefix} />
+        <QuickStats lang={lang} propertyId="1707" />
         <ImageGallery lang={lang} property="1707" assetPrefix={assetPrefix} />
         <NomadSection lang={lang} assetPrefix={assetPrefix} />
-        <AboutAmenities lang={lang} assetPrefix={assetPrefix} />
+        <AboutAmenities lang={lang} propertyId="1707" assetPrefix={assetPrefix} />
         <ReviewsSection1707 lang={lang} />
-        <BookingSection lang={lang} />
+        <BookingSection lang={lang} propertyId="1707" />
       </main>
       <Footer lang={lang} />
     </div>
