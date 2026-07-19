@@ -9,6 +9,16 @@ declare(strict_types=1);
 // 1. Load Shared Utilities & Configuration
 require_once __DIR__ . '/utils.php';
 
+// Load Unified Translations
+$all_translations = require __DIR__ . '/translations.php';
+$lang = 'en';
+if (isset($_POST['lang']) && isset($all_translations[$_POST['lang']])) {
+    $lang = $_POST['lang'];
+} elseif (isset($_GET['lang']) && isset($all_translations[$_GET['lang']])) {
+    $lang = $_GET['lang'];
+}
+$t = $all_translations[$lang]['registry'];
+
 // Configuration from Environment Variables ($_ENV)
 define('RECIPIENT_EMAIL', $_ENV['RECIPIENT_EMAIL'] ?? $_SERVER['RECIPIENT_EMAIL'] ?? getenv('RECIPIENT_EMAIL') ?: 'rentals@oceanviewflats.com');
 define('CAPTCHA_SECRET', $_ENV['CAPTCHA_SECRET'] ?? $_SERVER['CAPTCHA_SECRET'] ?? getenv('CAPTCHA_SECRET') ?: 'securesaltsecret');
@@ -36,11 +46,11 @@ $is_ajax = is_ajax_request();
 // 2. Honeypot check (Abuse prevention)
 $honeypot = $_POST['website_url'] ?? '';
 if ($honeypot !== '') {
-    send_json_response(true, 'Registration processed successfully.');
+    send_json_response(true, $t['msg_success']);
 }
 
 // 3. Rate Limiting (Abuse prevention)
-enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, 'Too many registry submissions. Please wait a few minutes and try again.');
+enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, $t['err_rate_limit']);
 
 // 4. Captcha Inputs & Verification
 $captcha_challenge = $_POST['captcha_challenge'] ?? '';
@@ -48,7 +58,10 @@ $captcha_signature = $_POST['captcha_signature'] ?? '';
 $captcha_response = $_POST['captcha_response'] ?? '';
 
 $captcha_check = verify_captcha_challenge($captcha_challenge, $captcha_signature, $captcha_response, CAPTCHA_SECRET, 
-    'Security check failed. Please refresh the page and try again.', 'Invalid validation challenge.', 'Incorrect answer to the security question.');
+    $all_translations[$lang]['booking']['err_captcha_sign'], 
+    $all_translations[$lang]['booking']['err_captcha_invalid'], 
+    $all_translations[$lang]['booking']['err_captcha_wrong']
+);
 if ($captcha_check !== true) {
     send_json_response(false, $captcha_check);
 }
@@ -60,17 +73,17 @@ $check_out = clean_input($_POST['check_out'] ?? '');
 
 if (!empty($check_in)) {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $check_in) || strtotime($check_in) === false) {
-        send_json_response(false, 'Invalid check-in date format.');
+        send_json_response(false, $all_translations[$lang]['contact']['err_dates_format']);
     }
 }
 if (!empty($check_out)) {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $check_out) || strtotime($check_out) === false) {
-        send_json_response(false, 'Invalid check-out date format.');
+        send_json_response(false, $all_translations[$lang]['contact']['err_dates_format']);
     }
 }
 if (!empty($check_in) && !empty($check_out)) {
     if (strtotime($check_in) >= strtotime($check_out)) {
-        send_json_response(false, 'Check-out date must be after check-in date.');
+        send_json_response(false, $all_translations[$lang]['contact']['err_dates_invalid']);
     }
 }
 
@@ -86,12 +99,12 @@ for ($i = 1; $i <= $guest_count; $i++) {
     $g_doc_num = clean_input($_POST["guest_doc_num_$i"] ?? '');
 
     if (empty($g_name) || strlen($g_name) < 2 || strlen($g_name) > 100) {
-        send_json_response(false, "Please enter a valid name for Guest $i (2-100 characters).");
+        send_json_response(false, sprintf($t['err_guest_name'], $i));
     }
 
     $g_age = (int)$g_age_raw;
     if ($g_age_raw === '' || $g_age < 0 || $g_age > 120) {
-        send_json_response(false, "Please enter a valid age (0-120) for Guest $i.");
+        send_json_response(false, sprintf($t['err_guest_age'], $i));
     }
 
     $valid_types = ['Passport', 'National ID', 'Driver License', 'Other ID', 'Cédula de Ciudadanía', 'Tarjeta de Identidad', 'Registro Civil'];
@@ -100,7 +113,7 @@ for ($i = 1; $i <= $guest_count; $i++) {
     }
 
     if (empty($g_doc_num) || strlen($g_doc_num) < 2 || strlen($g_doc_num) > 50) {
-        send_json_response(false, "Please enter a valid document number for Guest $i.");
+        send_json_response(false, sprintf($t['err_guest_doc'], $i));
     }
 
     $guests[] = [
@@ -117,10 +130,10 @@ $car_plates = clean_input($_POST['car_plates'] ?? '');
 $car_model = clean_input($_POST['car_model'] ?? '');
 
 if (strlen($car_plates) > 20) {
-    send_json_response(false, 'Car plates cannot exceed 20 characters.');
+    send_json_response(false, $t['err_car_plates']);
 }
 if (strlen($car_model) > 100) {
-    send_json_response(false, 'Car model cannot exceed 100 characters.');
+    send_json_response(false, $t['err_car_model']);
 }
 
 // 8. Store Locally (Fallback Safety)
@@ -169,7 +182,7 @@ if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
 }
 
 // 10. Construct and Send Email
-$subject = 'New Guest Registry - Property ' . ($property ?: 'Unspecified');
+$subject = sprintf($t['email_subject'], ($property ?: 'Unspecified'));
 $subject = strip_newlines($subject);
 
 // Format plain text email
@@ -218,7 +231,7 @@ $headers = [
 $mail_sent = mail(RECIPIENT_EMAIL, $subject, $email_body, $headers);
 
 if ($mail_sent) {
-    send_json_response(true, 'Guest registration completed successfully.');
+    send_json_response(true, $t['msg_success']);
 } else {
-    send_json_response(true, 'Guest registration completed successfully (backed up).');
+    send_json_response(true, $t['msg_success_backed_up']);
 }

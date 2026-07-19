@@ -188,35 +188,6 @@ if ($status === 'approved') {
     }
 
     // 10. Compile and Dispatch Localized Guest Confirmation Receipt Email
-    $lang = 'en'; // Match original request or detect from headers/stored profiles if needed
-    // Let's deduce or defaults
-    $translations = [
-        'en' => [
-            'subject' => 'Booking CONFIRMED! - OceanViewFlats %s',
-            'title' => 'Reservation Confirmed',
-            'intro' => 'Dear <strong>%s</strong>,',
-            'desc' => 'Thank you! Your payment has been successfully cleared and approved. Your reservation has been permanently locked in. We are looking forward to welcoming you.',
-            'summary' => 'Stay Summary',
-            'property' => 'Property',
-            'code' => 'Reservation Code',
-            'nights' => 'Stay Duration',
-            'total' => 'Amount Paid',
-            'footer' => 'You can now access your customized Welcome Guide using your reservation code. Please register guest IDs prior to check-in.'
-        ],
-        'es' => [
-            'subject' => '¡Reserva CONFIRMADA! - OceanViewFlats %s',
-            'title' => 'Reserva Confirmada',
-            'intro' => 'Estimado/a <strong>%s</strong>,',
-            'desc' => '¡Muchas gracias! Su pago ha sido procesado y aprobado con éxito. Su reserva ha sido registrada y asegurada de forma permanente. Nos complace recibirlo pronto.',
-            'summary' => 'Resumen del Soggiorno',
-            'property' => 'Propiedad',
-            'code' => 'Código de Reserva',
-            'nights' => 'Duración de Estadía',
-            'total' => 'Total Pagado',
-            'footer' => 'Ya puede acceder a su Guía de Huéspedes personalizada ingresando su código de reserva. No olvide registrar las identificaciones de sus invitados antes del check-in.'
-        ]
-    ];
-
     // Detect language preference of guest
     $guestEmail = $reservation['guest_email'];
     $guestName = $reservation['guest_name'];
@@ -225,11 +196,16 @@ if ($status === 'approved') {
     $checkOut = $reservation['check_out'];
     $totalPrice = $reservation['total_price'];
     
-    // Default to Spanish if email domain matches Latin domains or es config, else English
-    $lang = (strpos($guestEmail, '.cl') !== false || strpos($guestEmail, '.ar') !== false || strpos($guestEmail, '.co') !== false || strpos($guestEmail, '.mx') !== false || strpos($guestEmail, '.es') !== false) ? 'es' : 'en';
-    $t = $translations[$lang];
+    // Load language preference from the database record, fallback to email deduction
+    $lang = $reservation['lang'] ?? '';
+    if (empty($lang) || !in_array($lang, ['en', 'es', 'fr', 'it', 'de', 'ja'], true)) {
+        $lang = (strpos($guestEmail, '.cl') !== false || strpos($guestEmail, '.ar') !== false || strpos($guestEmail, '.co') !== false || strpos($guestEmail, '.mx') !== false || strpos($guestEmail, '.es') !== false) ? 'es' : 'en';
+    }
 
-    $formattedTotal = "$ " . number_format($totalPrice, 0, ',', '.') . " COP";
+    $all_translations = require __DIR__ . '/translations.php';
+    $t = $all_translations[$lang]['webhook'] ?? $all_translations['en']['webhook'];
+
+    $formattedTotal = "$ " . number_format((float)$totalPrice, 0, ',', '.') . " COP";
     
     // Calculate nights count
     $nights = (int)round((strtotime($checkOut) - strtotime($checkIn)) / 86400);
@@ -267,7 +243,7 @@ if ($status === 'approved') {
               <tr><td><strong>{$t['code']}:</strong></td><td class='text-right'><code style='background:#f1f5f9;padding:2px 6px;border-radius:4px;'>{$uid}</code></td></tr>
               <tr><td><strong>Check-In:</strong></td><td class='text-right'>{$checkIn}</td></tr>
               <tr><td><strong>Check-Out:</strong></td><td class='text-right'>{$checkOut}</td></tr>
-              <tr><td><strong>{$t['nights']}:</strong></td><td class='text-right'>{$nights} nights</td></tr>
+              <tr><td><strong>{$t['nights']}:</strong></td><td class='text-right'>" . sprintf($t['nights_val'], $nights) . "</td></tr>
               <tr style='font-size:16px;font-weight:bold;'><td style='border-bottom:none;'>{$t['total']}:</td><td class='text-right' style='border-bottom:none;color:#0d9488;'>{$formattedTotal}</td></tr>
             </table>
           </div>
@@ -275,7 +251,7 @@ if ($status === 'approved') {
           <p>{$t['footer']}</p>
           
           <div style='text-align: center;'>
-            <a href='https://www.oceanviewflats.com/guide/?code={$uid}' class='btn' style='color:#ffffff;'>Open Welcome Guide</a>
+            <a href='https://www.oceanviewflats.com/guide/?code={$uid}' class='btn' style='color:#ffffff;'>{$t['btn_guide']}</a>
           </div>
         </div>
         <div class='footer'>

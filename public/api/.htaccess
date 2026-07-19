@@ -6,7 +6,7 @@
 Options -Indexes
 
 # 2. Block direct web access to internal configuration, utility, and SQL schema files
-<FilesMatch "^(config|utils|schema)\.php$">
+<FilesMatch "^(config|utils|schema|translations)\.php$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>

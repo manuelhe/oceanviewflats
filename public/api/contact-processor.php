@@ -9,6 +9,16 @@ declare(strict_types=1);
 // 1. Load Shared Utilities & Configuration
 require_once __DIR__ . '/utils.php';
 
+// Load Unified Translations
+$all_translations = require __DIR__ . '/translations.php';
+$lang = 'en';
+if (isset($_POST['lang']) && isset($all_translations[$_POST['lang']])) {
+    $lang = $_POST['lang'];
+} elseif (isset($_GET['lang']) && isset($all_translations[$_GET['lang']])) {
+    $lang = $_GET['lang'];
+}
+$t = $all_translations[$lang]['contact'];
+
 // Configuration from Environment Variables ($_ENV)
 define('RECIPIENT_EMAIL', $_ENV['RECIPIENT_EMAIL'] ?? $_SERVER['RECIPIENT_EMAIL'] ?? getenv('RECIPIENT_EMAIL') ?: 'recipe@mail.com');
 define('CAPTCHA_SECRET', $_ENV['CAPTCHA_SECRET'] ?? $_SERVER['CAPTCHA_SECRET'] ?? getenv('CAPTCHA_SECRET') ?: 'securesaltsecret');
@@ -43,7 +53,7 @@ $is_ajax = is_ajax_request();
 $honeypot = $_POST['website_url'] ?? '';
 if ($honeypot !== '') {
     if ($is_ajax) {
-        send_json_response(true, 'Message sent successfully.');
+        send_json_response(true, $t['msg_success']);
     } else {
         header('Location: contact/index.html?success=1');
         exit;
@@ -51,7 +61,7 @@ if ($honeypot !== '') {
 }
 
 // 5. Rate Limiting (Abuse prevention)
-enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, 'Too many requests. Please wait a few minutes and try again.');
+enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, $t['err_send_failed']);
 
 // 6. Input Validation & Sanitization
 $name = $_POST['name'] ?? '';
@@ -81,15 +91,15 @@ $phone_number = preg_replace('/[^\d\s\-\(\)]/', '', $phone_number);
 $message = clean_input($message);
 
 if (empty($name) || strlen($name) < 2 || strlen($name) > 100) {
-    send_json_response(false, 'Please enter a valid name (2-100 characters).');
+    send_json_response(false, $t['err_name']);
 }
 
 if (!$email) {
-    send_json_response(false, 'Please enter a valid email address.');
+    send_json_response(false, $t['err_email']);
 }
 
 if (empty($phone_number) || strlen($phone_number) < 6 || strlen($phone_number) > 20) {
-    send_json_response(false, 'Please enter a valid phone number.');
+    send_json_response(false, $t['err_phone']);
 }
 
 $full_phone = $phone_country_code . ' ' . $phone_number;
@@ -97,25 +107,25 @@ $full_phone = $phone_country_code . ' ' . $phone_number;
 // Validate optional dates
 if (!empty($check_in)) {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $check_in) || strtotime($check_in) === false) {
-        send_json_response(false, 'Invalid check-in date format.');
+        send_json_response(false, $t['err_dates_format']);
     }
 }
 if (!empty($check_out)) {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $check_out) || strtotime($check_out) === false) {
-        send_json_response(false, 'Invalid check-out date format.');
+        send_json_response(false, $t['err_dates_format']);
     }
 }
 if (!empty($check_in) && !empty($check_out)) {
     if (strtotime($check_in) >= strtotime($check_out)) {
-        send_json_response(false, 'Check-out date must be after check-in date.');
+        send_json_response(false, $t['err_dates_invalid']);
     }
 }
 
 if (empty($message) || strlen($message) < 10) {
-    send_json_response(false, 'Message must be at least 10 characters.');
+    send_json_response(false, $t['err_message_short']);
 }
 if (strlen($message) > 5000) {
-    send_json_response(false, 'Message is too long (max 5000 characters).');
+    send_json_response(false, $t['err_message_long']);
 }
 
 // 7. Safe Email Construction
@@ -123,10 +133,10 @@ $clean_name = strip_newlines($name);
 $clean_email = strip_newlines($email);
 $clean_phone = strip_newlines($full_phone);
 
-$subject = 'Inquiry from ' . $clean_name . ' - OceanViewFlats';
+$subject = sprintf($t['email_subject'], $clean_name);
 $subject = strip_newlines($subject);
 
-$email_body = "You have received a new inquiry from the OceanViewFlats website.\n\n";
+$email_body = $t['email_intro'] . "\n\n";
 $email_body .= "--------------------------------------------------\n";
 $email_body .= "Name:       $clean_name\n";
 $email_body .= "Email:      $clean_email\n";
@@ -154,7 +164,7 @@ $success = mail(RECIPIENT_EMAIL, $subject, $email_body, $headers);
 
 if ($success) {
     if ($is_ajax) {
-        send_json_response(true, 'Message sent successfully.');
+        send_json_response(true, $t['msg_success']);
     } else {
         $referer = $_SERVER['HTTP_REFERER'] ?? 'contact/index.html';
         $redirect = strtok($referer, '?') . '?success=1';
@@ -163,5 +173,5 @@ if ($success) {
     }
 } else {
     http_response_code(500);
-    send_json_response(false, 'Unable to send message. Please try again later.');
+    send_json_response(false, $t['err_send_failed']);
 }

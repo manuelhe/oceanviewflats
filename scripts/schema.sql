@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS `reservations` (
   `total_price` DECIMAL(10, 2) NOT NULL,
   `mercadopago_preference_id` VARCHAR(255) DEFAULT NULL,
   `status` ENUM('pending_payment', 'confirmed', 'cancelled') NOT NULL DEFAULT 'pending_payment',
+  `lang` VARCHAR(5) NOT NULL DEFAULT 'en',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   

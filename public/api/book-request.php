@@ -50,196 +50,8 @@ if (!in_array($lang, ['en', 'es', 'fr', 'it', 'de', 'ja'], true)) {
     $lang = 'en';
 }
 
-$translations = [
-    'en' => [
-        'err_captcha_sign' => 'Security check failed. Please refresh the calendar section and try again.',
-        'err_captcha_invalid' => 'Invalid verification challenge.',
-        'err_captcha_wrong' => 'Incorrect answer to the security verification question.',
-        'err_property' => 'Invalid property selected.',
-        'err_name' => 'Please enter your full name (minimum 3 characters).',
-        'err_email' => 'Please enter a valid email address.',
-        'err_phone' => 'Please enter a valid phone number.',
-        'err_dates_invalid' => 'Please enter a valid check-in and check-out range.',
-        'err_dates_past' => 'Check-in date cannot be in the past.',
-        'err_overlap_airbnb' => 'The selected dates overlap with an existing Airbnb booking (%s). Please choose other dates.',
-        'err_overlap_db' => 'The selected dates are already locked in our direct booking system. Please select another range.',
-        'err_min_stay' => 'The minimum stay for the selected season is %d nights. Your requested stay is %d nights.',
-        'msg_success_title' => 'Inquiry Secured Successfully!',
-        'msg_success_desc1' => 'We have received your inquiry for apartment <strong>%s</strong>. A temporal hold has been secured under registration code <strong>%s</strong>.',
-        'msg_success_desc2' => 'A confirmation email with the price breakdown of <strong>%s</strong> was sent to <strong>%s</strong>. We will contact you shortly to coordinate payment.',
-        'email_subject_guest' => 'We received your booking inquiry - OceanViewFlats %s',
-        'email_title' => 'Booking Inquiry',
-        'email_intro' => 'Dear <strong>%s</strong>,',
-        'email_received' => 'We have successfully received your direct booking inquiry and placed a 10-minute temporary block. Here is your stay summary:',
-        'email_summary' => 'Stay Summary',
-        'email_property' => 'Property',
-        'email_code' => 'Registration Code',
-        'email_nights' => '%d nights',
-        'email_breakdown' => 'Price Breakdown',
-        'email_accommodation' => 'Accommodation',
-        'email_cleaning' => 'Cleaning Fee',
-        'email_resort' => 'Lobby Register',
-        'email_total' => 'Total',
-        'email_footer' => 'We will contact you in the next few minutes to specify authorized direct payment options.'
-    ],
-    'es' => [
-        'err_captcha_sign' => 'Error de comprobación de seguridad. Por favor, recargue la sección del calendario e intente de nuevo.',
-        'err_captcha_invalid' => 'Desafío de verificación inválido.',
-        'err_captcha_wrong' => 'Respuesta incorrecta a la pregunta de verificación de seguridad.',
-        'err_property' => 'Propiedad seleccionada inválida.',
-        'err_name' => 'Por favor, ingrese su nombre completo (mínimo 3 caracteres).',
-        'err_email' => 'Por favor, ingrese un correo electrónico válido.',
-        'err_phone' => 'Por favor, ingrese un número de teléfono válido.',
-        'err_dates_invalid' => 'Por favor, ingrese un rango de fechas de entrada y salida válido.',
-        'err_dates_past' => 'La fecha de llegada no puede ser en el pasado.',
-        'err_overlap_airbnb' => 'Las fechas seleccionadas coinciden con una reserva de Airbnb existente (%s). Por favor, elija otras fechas.',
-        'err_overlap_db' => 'Las fechas seleccionadas ya están reservadas en nuestro sistema. Por favor, seleccione otro rango.',
-        'err_min_stay' => 'La estadía mínima para la temporada seleccionada es de %d noches. Su solicitud es de %d noches.',
-        'msg_success_title' => '¡Solicitud Recibida Exitosamente!',
-        'msg_success_desc1' => 'Hemos recibido su solicitud para el apartamento <strong>%s</strong>. Se ha reservado un bloqueo temporal bajo el código <strong>%s</strong>.',
-        'msg_success_desc2' => 'Enviamos un correo de confirmación con el desglose de <strong>%s</strong> a <strong>%s</strong>. Nos comunicaremos con usted a la brevedad para coordinar el pago.',
-        'email_subject_guest' => 'Recibimos su solicitud de reserva - OceanViewFlats %s',
-        'email_title' => 'Solicitud de Reserva',
-        'email_intro' => 'Estimado/a <strong>%s</strong>,',
-        'email_received' => 'Hemos recibido su solicitud de reserva directa y guardado un bloqueo temporal por 10 minutos. A continuación, el resumen de su estadía:',
-        'email_summary' => 'Resumen de Reserva',
-        'email_property' => 'Propiedad',
-        'email_code' => 'Código de Registro',
-        'email_nights' => '%d noches',
-        'email_breakdown' => 'Detalle del Precio',
-        'email_accommodation' => 'Hospedaje',
-        'email_cleaning' => 'Limpieza',
-        'email_resort' => 'Registro Lobby',
-        'email_total' => 'Total',
-        'email_footer' => 'Nos contactaremos con usted en los próximos minutos para indicarle los canales de pago directo autorizados.'
-    ],
-    'fr' => [
-        'err_captcha_sign' => 'La vérification de sécurité a échoué. Veuillez actualiser le calendrier et réessayer.',
-        'err_captcha_invalid' => 'Défi de vérification invalide.',
-        'err_captcha_wrong' => 'Réponse incorrecte à la question de sécurité.',
-        'err_property' => 'Propriété sélectionnée non valide.',
-        'err_name' => 'Veuillez saisir votre nom complet (au moins 3 caractères).',
-        'err_email' => 'Veuillez saisir une adresse e-mail valide.',
-        'err_phone' => 'Veuillez saisir un numéro de téléphone valide.',
-        'err_dates_invalid' => 'Veuillez saisir des dates d\'arrivée et de départ valides.',
-        'err_dates_past' => 'La date d\'arrivée ne peut pas être dans le passé.',
-        'err_overlap_airbnb' => 'Les dates sélectionnées chevauchent une réservation Airbnb existante (%s). Veuillez choisir d\'autres dates.',
-        'err_overlap_db' => 'Les dates sélectionnées sont déjà bloquées dans notre système de réservation directe.',
-        'err_min_stay' => 'Le séjour minimum pour la saison sélectionnée est de %d nuits. Votre demande est de %d nuits.',
-        'msg_success_title' => 'Demande reçue avec succès !',
-        'msg_success_desc1' => 'Nous avons reçu votre demande pour l\'appartement <strong>%s</strong>. Un blocage temporaire a été sécurisé sous le code de réservation <strong>%s</strong>.',
-        'msg_success_desc2' => 'Un e-mail de confirmation avec le détail de <strong>%s</strong> a été envoyé à <strong>%s</strong>. Nous vous contacterons sous peu pour coordonner le paiement.',
-        'email_subject_guest' => 'Nous avons reçu votre demande de réservation - OceanViewFlats %s',
-        'email_title' => 'Demande de Réservation',
-        'email_intro' => 'Cher/Chère <strong>%s</strong>,',
-        'email_received' => 'Nous avons bien reçu votre demande de réservation directe et avons bloqué temporairement les dates pendant 10 minutes. Voici le résumé de votre séjour :',
-        'email_summary' => 'Résumé du Séjour',
-        'email_property' => 'Propriété',
-        'email_code' => 'Code d\'enregistrement',
-        'email_nights' => '%d nuits',
-        'email_breakdown' => 'Détail du Prix',
-        'email_accommodation' => 'Hébergement',
-        'email_cleaning' => 'Frais de ménage',
-        'email_resort' => 'Enregistrement Hall',
-        'email_total' => 'Total',
-        'email_footer' => 'Nous vous contacterons dans les prochaines minutes pour vous indiquer les modalités de paiement direct autorisées.'
-    ],
-    'it' => [
-        'err_captcha_sign' => 'Verifica di sicurezza fallita. Aggiorna la sezione del calendario e riprova.',
-        'err_captcha_invalid' => 'Sfida di verifica non valida.',
-        'err_captcha_wrong' => 'Risposta errata alla domanda di sicurezza.',
-        'err_property' => 'Proprietà selezionata non valida.',
-        'err_name' => 'Inserisci il tuo nome completo (almeno 3 caratteri).',
-        'err_email' => 'Inserisci un indirizzo e-mail valido.',
-        'err_phone' => 'Inserisci un numero di telefono valido.',
-        'err_dates_invalid' => 'Inserisci date di arrivo e partenza valide.',
-        'err_dates_past' => 'La data di arrivo non può essere nel passato.',
-        'err_overlap_airbnb' => 'Le date selezionate si sovrappongono a una prenotazione Airbnb esistente (%s). Scegli altre date.',
-        'err_overlap_db' => 'Le date selezionate sono già bloccate nel nostro sistema di prenotazione diretta.',
-        'err_min_stay' => 'Il soggiorno minimo per la stagione selezionata è di %d notti. La tua richiesta è di %d notti.',
-        'msg_success_title' => 'Richiesta ricevuta con successo!',
-        'msg_success_desc1' => 'Abbiamo ricevuto la tua richiesta per l\'appartamento <strong>%s</strong>. Un blocco temporaneo è stato riservato con il codice <strong>%s</strong>.',
-        'msg_success_desc2' => 'Un\'e-mail di conferma con il dettaglio di <strong>%s</strong> è stata inviata a <strong>%s</strong>. Ti contatteremo a breve per coordinare il pagamento.',
-        'email_subject_guest' => 'Abbiamo ricevuto la tua richiesta di prenotazione - OceanViewFlats %s',
-        'email_title' => 'Richiesta di Prenotazione',
-        'email_intro' => 'Gentile <strong>%s</strong>,',
-        'email_received' => 'Abbiamo ricevuto la tua richiesta di prenotazione diretta e salvato un blocco temporaneo di 10 minuti. Ecco il riepilogo del tuo soggiorno:',
-        'email_summary' => 'Riepilogo del Soggiorno',
-        'email_property' => 'Proprietà',
-        'email_code' => 'Codice di registrazione',
-        'email_nights' => '%d notti',
-        'email_breakdown' => 'Dettaglio Prezzo',
-        'email_accommodation' => 'Alloggio',
-        'email_cleaning' => 'Spese di pulizia',
-        'email_resort' => 'Registrazione Hall',
-        'email_total' => 'Totale',
-        'email_footer' => 'Ti contatteremo nei prossimi minuti per indicarti le modalità di pagamento diretto autorizzate.'
-    ],
-    'de' => [
-        'err_captcha_sign' => 'Sicherheitsprüfung fehlgeschlagen. Bitte laden Sie den Kalenderbereich neu und versuchen Sie es erneut.',
-        'err_captcha_invalid' => 'Ungültige Sicherheitsprüfung.',
-        'err_captcha_wrong' => 'Falsche Antwort auf die Sicherheitsfrage.',
-        'err_property' => 'Ungültige Unterkunft ausgewählt.',
-        'err_name' => 'Bitte geben Sie Ihren vollständigen Namen ein (mindestens 3 Zeichen).',
-        'err_email' => 'Bitte geben Sie eine gültige E-Mail-Adresse ein.',
-        'err_phone' => 'Bitte geben Sie eine gültige Telefonnummer ein.',
-        'err_dates_invalid' => 'Bitte geben Sie einen gültigen Zeitraum für An- und Abreise ein.',
-        'err_dates_past' => 'Das Anreisedatum darf nicht in der Vergangenheit liegen.',
-        'err_overlap_airbnb' => 'Die ausgewählten Daten überschneiden sich mit einer bestehenden Airbnb-Buchung (%s). Bitte wählen Sie andere Daten.',
-        'err_overlap_db' => 'Die ausgewählten Daten sind bereits in unserem Direktbuchungssystem blockiert.',
-        'err_min_stay' => 'Der Mindestaufenthalt für die gewählte Saison beträgt %d Nächte. Ihre Anfrage beträgt %d Nächte.',
-        'msg_success_title' => 'Buchungsanfrage erfolgreich erhalten!',
-        'msg_success_desc1' => 'Wir haben Ihre Anfrage für das Apartment <strong>%s</strong> erhalten. Eine temporäre Sperre wurde unter dem Registrierungscode <strong>%s</strong> hinterlegt.',
-        'msg_success_desc2' => 'Eine Bestätigungs-E-Mail mit der Preisaufschlüsselung von <strong>%s</strong> wurde an <strong>%s</strong> gesendet. Wir werden uns in Kürze mit Ihnen in Verbindung setzen, um die Zahlung zu koordinieren.',
-        'email_subject_guest' => 'Ihre Buchungsanfrage ist eingegangen - OceanViewFlats %s',
-        'email_title' => 'Buchungsanfrage',
-        'email_intro' => 'Sehr geehrte/r <strong>%s</strong>,',
-        'email_received' => 'wir haben Ihre Anfrage zur Direktbuchung erhalten und die Daten für 10 Minuten für Sie blockiert. Hier ist die Zusammenfassung Ihres Aufenthalts:',
-        'email_summary' => 'Zusammenfassung des Aufenthalts',
-        'email_property' => 'Unterkunft',
-        'email_code' => 'Registrierungscode',
-        'email_nights' => '%d Nächte',
-        'email_breakdown' => 'Preisaufschlüsselung',
-        'email_accommodation' => 'Unterkunft',
-        'email_cleaning' => 'Reinigungsgebühr',
-        'email_resort' => 'Lobby-Registrierung',
-        'email_total' => 'Gesamt',
-        'email_footer' => 'Wir werden uns in den nächsten Minuten mit Ihnen in Verbindung setzen, um Ihnen die autorisierten Direktzahlungsmöglichkeiten mitzuteilen.'
-    ],
-    'ja' => [
-        'err_captcha_sign' => 'セキュリティ検証に失敗しました。カレンダーエリアを更新して、もう一度お試しください。',
-        'err_captcha_invalid' => '無効な認証要請です。',
-        'err_captcha_wrong' => 'セキュリティ質問の答えが正しくありません。',
-        'err_property' => '選択されたアパートメントは無効です。',
-        'err_name' => 'お名前をフルネームで入力してください（3文字以上）。',
-        'err_email' => '有効なメールアドレスを入力してください。',
-        'err_phone' => '有効な電話番号を入力してください。',
-        'err_dates_invalid' => '有効なチェックインおよびチェックアウトの日付を選択してください。',
-        'err_dates_past' => '過去の日付はチェックイン日として選択できません。',
-        'err_overlap_airbnb' => 'ご希望の日付は既にAirbnbの予約（%s）と重複しています。別の日付を選択してください。',
-        'err_overlap_db' => 'ご希望の日付は既に直接予約システムで確保されています。別の範囲を選択してください。',
-        'err_min_stay' => '選択されたシーズンの最低宿泊日数は %d 泊です。現在のご希望は %d 泊です。',
-        'msg_success_title' => 'お問い合わせを正常に受け付けました！',
-        'msg_success_desc1' => 'アパートメント <strong>%s</strong> の直接予約のお問い合わせを受領いたしました。登録コード <strong>%s</strong> にて仮押さえをいたしました。',
-        'msg_success_desc2' => '料金明細 <strong>%s</strong> を記載した確認メールを <strong>%s</strong> 宛に送信しました。お支払い方法のご案内のため、まもなくホストよりご連絡いたします。',
-        'email_subject_guest' => '予約問い合わせを承りました - OceanViewFlats %s',
-        'email_title' => '予約問い合わせ',
-        'email_intro' => '<strong>%s</strong> 様',
-        'email_received' => 'この度は直接予約のお問い合わせをいただきありがとうございます。ご希望の日程を10分間、仮押さえいたしました。ご予約内容は以下の通りです：',
-        'email_summary' => 'ご予約内容の概要',
-        'email_property' => 'お部屋',
-        'email_code' => '登録コード',
-        'email_nights' => '%d 泊',
-        'email_breakdown' => '料金明細',
-        'email_accommodation' => '宿泊料金',
-        'email_cleaning' => '清掃料金',
-        'email_resort' => 'ロビー登録料',
-        'email_total' => '合計金額',
-        'email_footer' => 'お支払い方法のご案内について、まもなくホストより直接ご連絡いたします。今しばらくお待ちください。'
-    ]
-];
-
-$t = $translations[$lang];
+$all_translations = require __DIR__ . '/translations.php';
+$t = $all_translations[$lang]['booking'] ?? $all_translations['en']['booking'];
 
 // 4. Captcha Verification
 $captcha_challenge = $_POST['captcha_challenge'] ?? '';
@@ -264,7 +76,7 @@ const MAX_SUBMISSIONS = 3;
 const RATE_LIMIT_WINDOW = 600; // 10 minutes (600 seconds)
 
 // Record timestamp and enforce rate-limit
-enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, 'Too many booking inquiries. Please wait a few minutes and try again.');
+enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, $t['err_rate_limit']);
 
 // 5. Gather & Validate Core Input Details
 $propertyId = clean_input($_POST['property_id'] ?? '');
@@ -348,11 +160,19 @@ try {
       `total_price` DECIMAL(10, 2) NOT NULL,
       `mercadopago_preference_id` VARCHAR(255) DEFAULT NULL,
       `status` ENUM('pending_payment', 'confirmed', 'cancelled') NOT NULL DEFAULT 'pending_payment',
+      `lang` VARCHAR(5) NOT NULL DEFAULT 'en',
       `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX `idx_property_dates` (`property_id`, `check_in`, `check_out`),
       INDEX `idx_status` (`status`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    // Self-healing migration to add lang column if table existed beforehand
+    try {
+        $pdo->exec("ALTER TABLE `reservations` ADD COLUMN `lang` VARCHAR(5) NOT NULL DEFAULT 'en'");
+    } catch (PDOException $e) {
+        // Column already exists, safe to ignore
+    }
 
     // Query for overlapping local reservations that are NOT cancelled
     $stmt = $pdo->prepare("
@@ -442,8 +262,8 @@ $dbLogged = false;
 if ($pdo !== null) {
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO `reservations` (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status)
-            VALUES (:uid, :prop, :name, :email, :phone, :check_in, :check_out, :price, 'pending_payment')
+            INSERT INTO `reservations` (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, lang)
+            VALUES (:uid, :prop, :name, :email, :phone, :check_in, :check_out, :price, 'pending_payment', :lang)
         ");
         $stmt->execute([
             'uid' => $uid,
@@ -453,7 +273,8 @@ if ($pdo !== null) {
             'phone' => $guestPhone,
             'check_in' => $checkInStr,
             'check_out' => $checkOutStr,
-            'price' => $serverTotalCop
+            'price' => $serverTotalCop,
+            'lang' => $lang
         ]);
         $dbLogged = true;
     } catch (PDOException $e) {
