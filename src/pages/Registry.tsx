@@ -121,7 +121,7 @@ export default function Registry({ lang, assetPrefix = '../' }: AppProps) {
 
             <form 
               id="registry-form" 
-              action={`${assetPrefix}registry-processor.php`} 
+              action={`${assetPrefix}api/registry-processor.php`} 
               method="POST" 
               className="space-y-6 transition-opacity duration-300"
               noValidate

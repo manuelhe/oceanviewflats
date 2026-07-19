@@ -29,6 +29,13 @@ jobs:
           echo "SetEnv RECIPIENT_EMAIL \"${{ secrets.RECIPIENT_EMAIL }}\"" >> public/.htaccess
           echo "SetEnv CAPTCHA_SECRET \"${{ secrets.CAPTCHA_SECRET }}\"" >> public/.htaccess
           echo "SetEnv GOOGLE_SHEET_WEBAPP_URL \"${{ secrets.GOOGLE_SHEET_WEBAPP_URL }}\"" >> public/.htaccess
+          echo "SetEnv DB_HOST \"${{ secrets.DB_HOST }}\"" >> public/.htaccess
+          echo "SetEnv DB_NAME \"${{ secrets.DB_NAME }}\"" >> public/.htaccess
+          echo "SetEnv DB_USER \"${{ secrets.DB_USER }}\"" >> public/.htaccess
+          echo "SetEnv DB_PASS \"${{ secrets.DB_PASS }}\"" >> public/.htaccess
+          echo "SetEnv MERCADOPAGO_ACCESS_TOKEN \"${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}\"" >> public/.htaccess
+          echo "SetEnv MERCADOPAGO_PUBLIC_KEY \"${{ secrets.MERCADOPAGO_PUBLIC_KEY }}\"" >> public/.htaccess
+          echo "SetEnv MERCADOPAGO_SANDBOX \"${{ secrets.MERCADOPAGO_SANDBOX }}\"" >> public/.htaccess
 
       - name: Build Project
         run: npm run build

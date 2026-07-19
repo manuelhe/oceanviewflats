@@ -387,7 +387,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const copFormatter = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 
-            if (accommodationValue) accommodationValue.textContent = copFormatter.format(details.accommodationTotal) + ` (${details.nights} nights)`;
+            if (accommodationValue) {
+                const nightsFormat = accommodationValue.getAttribute('data-nights-format') || '({nights} nights)';
+                accommodationValue.textContent = copFormatter.format(details.accommodationTotal) + ' ' + nightsFormat.replace('{nights}', details.nights);
+            }
             if (cleaningValue) cleaningValue.textContent = copFormatter.format(cleaningFee);
             if (resortValue) resortValue.textContent = copFormatter.format(resortFee);
             if (totalValue) totalValue.textContent = copFormatter.format(totalCOP) + ' COP';
@@ -480,6 +483,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (window._paq) {
                         window._paq.push(['trackEvent', 'Booking', 'Direct Booking Inquiry Success', propertyId]);
                         window._paq.push(['trackGoal', 5]);
+                    }
+
+                    // Seamless Checkout Redirection to MercadoPago Gateway
+                    if (result.redirect_url) {
+                        if (msgBox) {
+                            msgBox.innerHTML += `<div class="mt-3 flex items-center text-emerald-900 text-xs font-semibold animate-pulse">
+                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Redirecting to secure payment checkout...
+                            </div>`;
+                        }
+                        setTimeout(() => {
+                            window.location.href = result.redirect_url;
+                        }, 1500);
                     }
                 } else {
                     if (msgBox) {
@@ -606,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let captchaSignature = '';
     async function loadCaptcha() {
         try {
-            const actionPath = form.getAttribute('action') || 'contact-processor.php';
+            const actionPath = form.getAttribute('action') || 'api/contact-processor.php';
             const processorBase = actionPath.replace('contact-processor.php', '');
             
             const response = await fetch(processorBase + 'contact-processor.php?action=captcha');
@@ -670,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmit.classList.add('opacity-75', 'cursor-not-allowed');
 
         try {
-            const actionUrl = form.getAttribute('action') || 'contact-processor.php';
+            const actionUrl = form.getAttribute('action') || 'api/contact-processor.php';
             const response = await fetch(actionUrl, {
                 method: 'POST',
                 body: formData,

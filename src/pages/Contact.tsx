@@ -127,7 +127,7 @@ export default function Contact({ lang, assetPrefix = '../' }: AppProps) {
 
             <form 
               id="contact-form" 
-              action={`${assetPrefix}contact-processor.php`} 
+              action={`${assetPrefix}api/contact-processor.php`} 
               method="POST" 
               className="space-y-6"
               noValidate

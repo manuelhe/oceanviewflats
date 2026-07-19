@@ -134,6 +134,6 @@ pages.forEach(page => {
 });
 
 // Generate and save sitemap
-const sitemap = generateSitemap(pages.filter(p => p.id !== '404' && p.id !== 'registry' && p.id !== 'guide'), BASE_URL, LANGUAGES);
+const sitemap = generateSitemap(pages.filter(p => p.id !== '404' && p.id !== 'registry' && p.id !== 'guide' && p.id !== 'booking-success' && p.id !== 'booking-failure' && p.id !== 'booking-pending'), BASE_URL, LANGUAGES);
 fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemap);
 console.log('Generated sitemap.xml');

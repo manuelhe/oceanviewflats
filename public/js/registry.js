@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let captchaSignature = '';
     async function loadCaptcha() {
         try {
-            const actionPath = form.getAttribute('action') || 'registry-processor.php';
+            const actionPath = form.getAttribute('action') || 'api/registry-processor.php';
             const processorBase = actionPath.replace('registry-processor.php', '');
             
             // Re-use the captcha endpoint from contact-processor.php since it has CAPTCHA_SECRET config!
@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmit.classList.add('opacity-75', 'cursor-not-allowed');
 
         try {
-            const actionUrl = form.getAttribute('action') || 'registry-processor.php';
+            const actionUrl = form.getAttribute('action') || 'api/registry-processor.php';
             const response = await fetch(actionUrl, {
                 method: 'POST',
                 body: formData,

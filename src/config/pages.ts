@@ -5,6 +5,9 @@ import Contact from '../pages/Contact';
 import Registry from '../pages/Registry';
 import NotFound from '../pages/NotFound';
 import Guide from '../pages/Guide';
+import BookingSuccess from '../pages/BookingSuccess';
+import BookingFailure from '../pages/BookingFailure';
+import BookingPending from '../pages/BookingPending';
 import { IMAGES } from '../constants/config';
 import { Lang } from '../types';
 
@@ -450,6 +453,66 @@ export const pages: PageConfig[] = [
                 "@type": "WebPage",
                 "name": t.notFoundTitle,
                 "description": t.notFoundSubtitle,
+                "url": url
+            });
+        },
+        scripts: ['js/main.js']
+    },
+    {
+        id: 'booking-success',
+        path: 'booking-success',
+        component: BookingSuccess,
+        filename: (lang: Lang) => lang === 'en' ? 'booking-success/index.html' : `booking-success/${lang}.html`,
+        seoTitle: (t: any) => t.dbSuccessTitle,
+        seoDescription: (t: any) => t.dbSuccessSubtitle,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/booking-success` : `${baseUrl}/booking-success/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": t.dbSuccessTitle,
+                "description": t.dbSuccessSubtitle,
+                "url": url
+            });
+        },
+        scripts: ['js/main.js']
+    },
+    {
+        id: 'booking-failure',
+        path: 'booking-failure',
+        component: BookingFailure,
+        filename: (lang: Lang) => lang === 'en' ? 'booking-failure/index.html' : `booking-failure/${lang}.html`,
+        seoTitle: (t: any) => t.dbFailureTitle,
+        seoDescription: (t: any) => t.dbFailureSubtitle,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/booking-failure` : `${baseUrl}/booking-failure/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": t.dbFailureTitle,
+                "description": t.dbFailureSubtitle,
+                "url": url
+            });
+        },
+        scripts: ['js/main.js']
+    },
+    {
+        id: 'booking-pending',
+        path: 'booking-pending',
+        component: BookingPending,
+        filename: (lang: Lang) => lang === 'en' ? 'booking-pending/index.html' : `booking-pending/${lang}.html`,
+        seoTitle: (t: any) => t.dbPendingTitle,
+        seoDescription: (t: any) => t.dbPendingSubtitle,
+        ogImage: IMAGES['1707'].hero,
+        getStructuredData: (t: any, lang: Lang, baseUrl: string) => {
+            const url = lang === 'en' ? `${baseUrl}/booking-pending` : `${baseUrl}/booking-pending/${lang}.html`;
+            return JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": t.dbPendingTitle,
+                "description": t.dbPendingSubtitle,
                 "url": url
             });
         },
