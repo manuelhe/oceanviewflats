@@ -15,6 +15,13 @@ if (count(get_included_files()) === 1 && !defined('ALLOW_ICAL_RUN')) {
 
 // 2. Load Shared Utilities & Configuration
 require_once __DIR__ . '/utils.php';
+
+// Enforce security headers & CORS policy dynamically
+enforce_security_headers_and_cors(['GET', 'OPTIONS']);
+
+// Enforce rate-limit to prevent DOS/scraping attacks on calendar exports
+enforce_rate_limit('ovf_ical_rate_limits.json', 100, 600, 'Too many requests. Please wait a few minutes and try again.');
+
 $configPath = __DIR__ . '/config.php';
 if (!file_exists($configPath)) {
     http_response_code(500);

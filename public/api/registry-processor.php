@@ -19,11 +19,17 @@ const MAX_SUBMISSIONS = 5; // Allow more submissions in case they are registerin
 const RATE_LIMIT_WINDOW = 600; // 10 minutes (600 seconds)
 const LOCAL_BACKUP_FILE = 'ovf_registries_backup.json';
 
+// Enforce security headers & CORS policy dynamically
+enforce_security_headers_and_cors(['POST', 'OPTIONS']);
+
 // Reject non-POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     send_json_response(false, 'Method Not Allowed');
 }
+
+// Enforce referer check for actual submissions (prevent direct script browsing)
+enforce_referer_check();
 
 $is_ajax = is_ajax_request();
 

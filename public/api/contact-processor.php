@@ -17,6 +17,9 @@ const RATE_LIMIT_FILE = 'ovf_rate_limits.json';
 const MAX_SUBMISSIONS = 3;
 const RATE_LIMIT_WINDOW = 600; // 10 minutes (600 seconds)
 
+// Enforce security headers & CORS policy dynamically
+enforce_security_headers_and_cors(['GET', 'POST', 'OPTIONS']);
+
 // 2. Check if the request is for generating a new captcha challenge
 if (isset($_GET['action']) && $_GET['action'] === 'captcha') {
     $captcha = generate_captcha_challenge(CAPTCHA_SECRET);
@@ -30,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     send_json_response(false, 'Method Not Allowed');
 }
+
+// Enforce referer check for actual submissions (prevent direct script browsing)
+enforce_referer_check();
 
 $is_ajax = is_ajax_request();
 

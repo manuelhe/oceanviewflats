@@ -172,3 +172,85 @@ function enforce_rate_limit(string $filename, int $maxSubmissions, int $windowSe
     $limits[$ip_hash][] = $now;
     @file_put_contents($rate_limit_path, json_encode($limits), LOCK_EX);
 }
+
+/**
+ * Enforces security headers and CORS (Cross-Origin Resource Sharing) restrictions.
+ * 
+ * @param array $allowedMethods Allowed HTTP methods for this endpoint.
+ */
+function enforce_security_headers_and_cors(array $allowedMethods = ['GET', 'POST', 'OPTIONS']): void {
+    // 1. Send Security Headers
+    if (!headers_sent()) {
+        header("X-Frame-Options: DENY");
+        header("X-Content-Type-Options: nosniff");
+        header("X-XSS-Protection: 1; mode=block");
+        header("Referrer-Policy: strict-origin-when-cross-origin");
+    }
+
+    // 2. Validate Origin if set
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? null;
+    if ($origin !== null) {
+        $originClean = trim($origin);
+        $allowed = false;
+        
+        if ($originClean === 'https://www.oceanviewflats.com' || $originClean === 'https://oceanviewflats.com') {
+            $allowed = true;
+        } elseif (preg_match('/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i', $originClean)) {
+            $allowed = true;
+        }
+        
+        if ($allowed) {
+            header("Access-Control-Allow-Origin: " . $originClean);
+            header("Access-Control-Allow-Methods: " . implode(', ', $allowedMethods));
+            header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+            header("Access-Control-Max-Age: 86400"); // 24 Hours
+        } else {
+            http_response_code(403);
+            send_json_response(false, 'CORS Policy: Access Denied.');
+        }
+    }
+
+    // 3. Handle OPTIONS preflight requests
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(200);
+        exit;
+    }
+
+    // 4. Validate Method
+    if (!in_array($_SERVER['REQUEST_METHOD'], $allowedMethods, true)) {
+        http_response_code(405);
+        send_json_response(false, 'Method Not Allowed');
+    }
+}
+
+/**
+ * Restricts access to forms to prevent direct browser address bar accesses (missing Referer)
+ * or accesses from unauthorized foreign domains.
+ * 
+ * @param array $allowedHosts Allowed referrer domain names.
+ */
+function enforce_referer_check(array $allowedHosts = ['oceanviewflats.com', 'localhost', '127.0.0.1']): void {
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    if (empty($referer)) {
+        // Enforce restriction for browser clients only (to avoid blocking legitimate curl tests or server webhooks)
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        if (!empty($userAgent) && stripos($userAgent, 'Mozilla') !== false) {
+            http_response_code(403);
+            send_json_response(false, 'Direct access to this processing script is not permitted.');
+        }
+    } else {
+        $host = parse_url($referer, PHP_URL_HOST);
+        $host = strtolower($host ?: '');
+        $allowed = false;
+        foreach ($allowedHosts as $allowedHost) {
+            if ($host === $allowedHost || (strlen($host) > strlen($allowedHost) && substr($host, -(strlen($allowedHost) + 1)) === '.' . $allowedHost)) {
+                $allowed = true;
+                break;
+            }
+        }
+        if (!$allowed) {
+            http_response_code(403);
+            send_json_response(false, 'Unauthorized access origin.');
+        }
+    }
+}

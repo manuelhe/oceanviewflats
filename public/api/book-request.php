@@ -10,19 +10,17 @@
 
 declare(strict_types=1);
 
+// Load central utilities & configuration
+require_once __DIR__ . '/utils.php';
+$config = require __DIR__ . '/config.php';
+
 // Configuration parameters
 define('RECIPIENT_EMAIL', $_ENV['RECIPIENT_EMAIL'] ?? $_SERVER['RECIPIENT_EMAIL'] ?? getenv('RECIPIENT_EMAIL') ?: 'rentals@oceanviewflats.com');
 define('CAPTCHA_SECRET', $_ENV['CAPTCHA_SECRET'] ?? $_SERVER['CAPTCHA_SECRET'] ?? getenv('CAPTCHA_SECRET') ?: 'securesaltsecret');
 define('GOOGLE_SHEET_WEBAPP_URL', $_ENV['GOOGLE_SHEET_WEBAPP_URL'] ?? $_SERVER['GOOGLE_SHEET_WEBAPP_URL'] ?? getenv('GOOGLE_SHEET_WEBAPP_URL') ?: '');
 
-// Set headers
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET, POST");
-header("Content-Type: application/json; charset=UTF-8");
-
-// Load central utilities & configuration
-require_once __DIR__ . '/utils.php';
-$config = require __DIR__ . '/config.php';
+// Enforce security headers & CORS policy dynamically
+enforce_security_headers_and_cors(['GET', 'POST', 'OPTIONS']);
 
 // 1. Math Captcha Action (GET)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'captcha') {
@@ -36,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     send_json_response(false, 'Method Not Allowed');
 }
+
+// Enforce referer check for actual submissions (prevent direct script browsing)
+enforce_referer_check();
 
 // 2. Honeypot check (anti-spam)
 $honeypot = $_POST['website_url'] ?? '';
@@ -258,9 +259,12 @@ if ($captcha_check !== true) {
     send_json_response(false, $captcha_check);
 }
 
-// Record timestamp for rate-limit
-$limits[$ip_hash][] = $now;
-@file_put_contents($rate_limit_path, json_encode($limits), LOCK_EX);
+const RATE_LIMIT_FILE = 'ovf_booking_rate_limits.json';
+const MAX_SUBMISSIONS = 3;
+const RATE_LIMIT_WINDOW = 600; // 10 minutes (600 seconds)
+
+// Record timestamp and enforce rate-limit
+enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, 'Too many booking inquiries. Please wait a few minutes and try again.');
 
 // 5. Gather & Validate Core Input Details
 $propertyId = clean_input($_POST['property_id'] ?? '');

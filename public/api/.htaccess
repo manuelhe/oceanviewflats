@@ -1,0 +1,36 @@
+# =============================================================================
+# OceanViewFlats - API Folder Apache Security Configuration
+# =============================================================================
+
+# 1. Disable directory index browsing (avoids file listing leaks)
+Options -Indexes
+
+# 2. Block direct web access to internal configuration, utility, and SQL schema files
+<FilesMatch "^(config|utils|schema)\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Deny,Allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 3. Block web access to local backups, logs, or lockfiles (defense-in-depth)
+<FilesMatch "\.(json|log|sql|lock|bak|config)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Deny,Allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 4. Enforce basic frame protection and mime sniffing headers via Apache (if mod_headers is active)
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "DENY"
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

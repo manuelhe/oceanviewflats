@@ -6,10 +6,11 @@
  * Prevents double bookings by disabling already-booked dates in the frontend calendar.
  */
 
-// Basic security headers
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET");
-header("Content-Type: application/json; charset=UTF-8");
+// Load central utilities
+require_once __DIR__ . '/utils.php';
+
+// Enforce security headers & CORS policy dynamically
+enforce_security_headers_and_cors(['GET', 'OPTIONS']);
 
 // Validate property parameter
 $propertyId = isset($_GET['property']) ? $_GET['property'] : '1606';
@@ -18,6 +19,9 @@ if ($propertyId !== '1606' && $propertyId !== '1707') {
     echo json_encode(["error" => "Invalid property ID. Must be 1606 or 1707."]);
     exit();
 }
+
+// Enforce rate-limit for availability inquiries (avoids API scraping/abuse)
+enforce_rate_limit('ovf_avail_rate_limits.json', 60, 600, 'Too many requests. Please wait a few minutes and try again.');
 
 // Load configuration (Security Best Practice: Decouple credentials and feeds from main logic controllers)
 $config = require __DIR__ . '/config.php';
