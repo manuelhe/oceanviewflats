@@ -6,6 +6,9 @@
 
 declare(strict_types=1);
 
+// 1. Load Shared Utilities & Configuration
+require_once __DIR__ . '/utils.php';
+
 // Configuration from Environment Variables ($_ENV)
 define('RECIPIENT_EMAIL', $_ENV['RECIPIENT_EMAIL'] ?? $_SERVER['RECIPIENT_EMAIL'] ?? getenv('RECIPIENT_EMAIL') ?: 'rentals@oceanviewflats.com');
 define('CAPTCHA_SECRET', $_ENV['CAPTCHA_SECRET'] ?? $_SERVER['CAPTCHA_SECRET'] ?? getenv('CAPTCHA_SECRET') ?: 'securesaltsecret');
@@ -16,100 +19,35 @@ const MAX_SUBMISSIONS = 5; // Allow more submissions in case they are registerin
 const RATE_LIMIT_WINDOW = 600; // 10 minutes (600 seconds)
 const LOCAL_BACKUP_FILE = 'ovf_registries_backup.json';
 
-// Helper function to send JSON response
-function send_json_response(bool $success, string $message): void {
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success' => $success, 'message' => $message]);
-    exit;
-}
-
-// Helper to clean and sanitize string inputs
-function clean_input(string $data): string {
-    $data = trim($data);
-    $data = stripslashes($data);
-    return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
-}
-
-// Helper to strip newlines (prevents email header injection)
-function strip_newlines(string $str): string {
-    return str_replace(["\r", "\n", "%0a", "%0d"], '', $str);
-}
-
 // Reject non-POST requests
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     send_json_response(false, 'Method Not Allowed');
 }
 
-// Detect if AJAX request
-$is_ajax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') 
-    || (isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== false)
-    || (isset($_SERVER['HTTP_ACCEPT']) && stripos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+$is_ajax = is_ajax_request();
 
-// 1. Honeypot check (Abuse prevention)
+// 2. Honeypot check (Abuse prevention)
 $honeypot = $_POST['website_url'] ?? '';
 if ($honeypot !== '') {
-    // Drop request silently to trick the bot
     send_json_response(true, 'Registration processed successfully.');
 }
 
-// 2. Rate Limiting (Abuse prevention)
-$temp_dir = sys_get_temp_dir();
-$rate_limit_path = $temp_dir . '/' . RATE_LIMIT_FILE;
-$ip_hash = hash('sha256', $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
-$now = time();
+// 3. Rate Limiting (Abuse prevention)
+enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, 'Too many registry submissions. Please wait a few minutes and try again.');
 
-$limits = [];
-if (file_exists($rate_limit_path)) {
-    $file_content = @file_get_contents($rate_limit_path);
-    if ($file_content !== false) {
-        $limits = json_decode($file_content, true) ?: [];
-    }
-}
-
-// Clean up old rate limit entries
-foreach ($limits as $hash => $timestamps) {
-    $filtered = array_filter($timestamps, function($ts) use ($now) {
-        return ($now - $ts) < RATE_LIMIT_WINDOW;
-    });
-    if (empty($filtered)) {
-        unset($limits[$hash]);
-    } else {
-        $limits[$hash] = array_values($filtered);
-    }
-}
-
-// Check rate limit for current IP
-if (isset($limits[$ip_hash]) && count($limits[$ip_hash]) >= MAX_SUBMISSIONS) {
-    http_response_code(429);
-    send_json_response(false, 'Too many registry submissions. Please wait a few minutes and try again.');
-}
-
-// 3. Captcha Inputs & Verification
+// 4. Captcha Inputs & Verification
 $captcha_challenge = $_POST['captcha_challenge'] ?? '';
 $captcha_signature = $_POST['captcha_signature'] ?? '';
 $captcha_response = $_POST['captcha_response'] ?? '';
 
-// Validate Captcha Signature
-$expected_signature = hash_hmac('sha256', $captcha_challenge, CAPTCHA_SECRET);
-if (!hash_equals($expected_signature, $captcha_signature)) {
-    send_json_response(false, 'Security check failed. Please refresh the page and try again.');
+$captcha_check = verify_captcha_challenge($captcha_challenge, $captcha_signature, $captcha_response, CAPTCHA_SECRET, 
+    'Security check failed. Please refresh the page and try again.', 'Invalid validation challenge.', 'Incorrect answer to the security question.');
+if ($captcha_check !== true) {
+    send_json_response(false, $captcha_check);
 }
 
-// Verify Captcha Math Answer
-if (!preg_match('/^(\d+)\s*\+\s*(\d+)$/', $captcha_challenge, $matches)) {
-    send_json_response(false, 'Invalid validation challenge.');
-}
-$expected_sum = (int)$matches[1] + (int)$matches[2];
-if ((int)$captcha_response !== $expected_sum) {
-    send_json_response(false, 'Incorrect answer to the security question.');
-}
-
-// Save timestamp for rate-limit
-$limits[$ip_hash][] = $now;
-@file_put_contents($rate_limit_path, json_encode($limits), LOCK_EX);
-
-// 4. Validate Stay Details
+// 5. Validate Stay Details
 $property = clean_input($_POST['property'] ?? '');
 $check_in = clean_input($_POST['check_in'] ?? '');
 $check_out = clean_input($_POST['check_out'] ?? '');
@@ -130,7 +68,7 @@ if (!empty($check_in) && !empty($check_out)) {
     }
 }
 
-// 5. Validate & Parse Guests List
+// 6. Validate & Parse Guests List
 $guest_count_raw = $_POST['guest_count'] ?? '1';
 $guest_count = min(6, max(1, (int)$guest_count_raw));
 $guests = [];
@@ -141,7 +79,6 @@ for ($i = 1; $i <= $guest_count; $i++) {
     $g_doc_type = clean_input($_POST["guest_doc_type_$i"] ?? '');
     $g_doc_num = clean_input($_POST["guest_doc_num_$i"] ?? '');
 
-    // Validation for guest entries
     if (empty($g_name) || strlen($g_name) < 2 || strlen($g_name) > 100) {
         send_json_response(false, "Please enter a valid name for Guest $i (2-100 characters).");
     }
@@ -169,7 +106,7 @@ for ($i = 1; $i <= $guest_count; $i++) {
     ];
 }
 
-// 6. Validate Optional Car Registration
+// 7. Validate Optional Car Registration
 $car_plates = clean_input($_POST['car_plates'] ?? '');
 $car_model = clean_input($_POST['car_model'] ?? '');
 
@@ -180,7 +117,8 @@ if (strlen($car_model) > 100) {
     send_json_response(false, 'Car model cannot exceed 100 characters.');
 }
 
-// 7. Store Locally (Fallback Safety)
+// 8. Store Locally (Fallback Safety)
+$temp_dir = sys_get_temp_dir();
 $backup_path = $temp_dir . '/' . LOCAL_BACKUP_FILE;
 $backup_data = [];
 if (file_exists($backup_path)) {
@@ -202,7 +140,7 @@ $new_entry = [
 $backup_data[] = $new_entry;
 @file_put_contents($backup_path, json_encode($backup_data, JSON_PRETTY_PRINT), LOCK_EX);
 
-// 8. Forward to Google Spreadsheet Web App (if configured)
+// 9. Forward to Google Spreadsheet Web App (if configured)
 $google_sheet_success = false;
 $webhook_url = GOOGLE_SHEET_WEBAPP_URL;
 if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
@@ -224,7 +162,7 @@ if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
     }
 }
 
-// 9. Construct and Send Email
+// 10. Construct and Send Email
 $subject = 'New Guest Registry - Property ' . ($property ?: 'Unspecified');
 $subject = strip_newlines($subject);
 
@@ -263,7 +201,6 @@ $email_body .= "Local Backup:   Logged successfully.\n";
 $email_body .= "Google Sheet:   " . ($google_sheet_success ? "Recorded successfully." : (empty($webhook_url) ? "Not configured." : "FAILED (HTTP $http_code)")) . "\n";
 $email_body .= "==================================================\n";
 
-// Secure headers array for PHP 8
 $headers = [
     'From' => 'no-reply@oceanviewflats.com',
     'Reply-To' => 'rentals@oceanviewflats.com',
@@ -277,8 +214,5 @@ $mail_sent = mail(RECIPIENT_EMAIL, $subject, $email_body, $headers);
 if ($mail_sent) {
     send_json_response(true, 'Guest registration completed successfully.');
 } else {
-    // If the local backup succeeded, we can still claim success to the user so they are not frustrated, but let's notify they should double check
-    // Actually, mail failing is a server error, so if local backup is saved, we are safe. Let's return true since local safety backup is saved!
-    // That prevents stressing out guests when their browser successfully logged it but mail service has minor transient issues.
     send_json_response(true, 'Guest registration completed successfully (backed up).');
 }

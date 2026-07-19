@@ -13,7 +13,8 @@ if (count(get_included_files()) === 1 && !defined('ALLOW_ICAL_RUN')) {
     define('ALLOW_ICAL_RUN', true);
 }
 
-// 2. Load DB Configuration
+// 2. Load Shared Utilities & Configuration
+require_once __DIR__ . '/utils.php';
 $configPath = __DIR__ . '/config.php';
 if (!file_exists($configPath)) {
     http_response_code(500);
@@ -28,15 +29,9 @@ if (!in_array($propertyId, ['1606', '1707'])) {
     exit("Bad Request: Invalid or missing property parameter.");
 }
 
-// 4. Initialize PDO Connection
+// 4. Initialize PDO Connection using shared library
 try {
-    $dbConfig = $config['db'];
-    $dsn = "mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset=utf8mb4";
-    $pdo = new PDO($dsn, $dbConfig['user'], $dbConfig['pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false
-    ]);
+    $pdo = get_db_connection($config['db']);
 } catch (PDOException $e) {
     http_response_code(500);
     exit("Internal Server Error: Database offline.");

@@ -20,37 +20,14 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST");
 header("Content-Type: application/json; charset=UTF-8");
 
-// Load central configuration
+// Load central utilities & configuration
+require_once __DIR__ . '/utils.php';
 $config = require __DIR__ . '/config.php';
-
-// Helper function to send JSON response
-function send_json_response(bool $success, string $message, array $extra = []): void {
-    $res = array_merge(['success' => $success], $extra);
-    if ($success) {
-        $res['message'] = $message;
-    } else {
-        $res['error'] = $message;
-    }
-    echo json_encode($res);
-    exit;
-}
-
-// Helper to clean inputs
-function clean_input(string $data): string {
-    return htmlspecialchars(trim(stripslashes($data)), ENT_QUOTES, 'UTF-8');
-}
 
 // 1. Math Captcha Action (GET)
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'captcha') {
-    $x = random_int(2, 9);
-    $y = random_int(2, 9);
-    $challenge = "$x + $y";
-    $signature = hash_hmac('sha256', $challenge, CAPTCHA_SECRET);
-    
-    echo json_encode([
-        'challenge' => $challenge,
-        'signature' => $signature
-    ]);
+    $captcha = generate_captcha_challenge(CAPTCHA_SECRET);
+    echo json_encode($captcha);
     exit;
 }
 
@@ -268,17 +245,17 @@ $captcha_challenge = $_POST['captcha_challenge'] ?? '';
 $captcha_signature = $_POST['captcha_signature'] ?? '';
 $captcha_response = $_POST['captcha_response'] ?? '';
 
-$expected_signature = hash_hmac('sha256', $captcha_challenge, CAPTCHA_SECRET);
-if (!hash_equals($expected_signature, $captcha_signature)) {
-    send_json_response(false, $t['err_captcha_sign']);
-}
-
-if (!preg_match('/^(\d+)\s*\+\s*(\d+)$/', $captcha_challenge, $matches)) {
-    send_json_response(false, $t['err_captcha_invalid']);
-}
-$expected_sum = (int)$matches[1] + (int)$matches[2];
-if ((int)$captcha_response !== $expected_sum) {
-    send_json_response(false, $t['err_captcha_wrong']);
+$captcha_check = verify_captcha_challenge(
+    $captcha_challenge, 
+    $captcha_signature, 
+    $captcha_response, 
+    CAPTCHA_SECRET,
+    $t['err_captcha_sign'],
+    $t['err_captcha_invalid'],
+    $t['err_captcha_wrong']
+);
+if ($captcha_check !== true) {
+    send_json_response(false, $captcha_check);
 }
 
 // Record timestamp for rate-limit

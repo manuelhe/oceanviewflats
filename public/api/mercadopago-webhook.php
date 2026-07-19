@@ -12,7 +12,8 @@ if (count(get_included_files()) === 1 && !defined('ALLOW_WEBHOOK_RUN')) {
     define('ALLOW_WEBHOOK_RUN', true);
 }
 
-// 2. Load DB Config
+// 2. Load Shared Utilities & Configuration
+require_once __DIR__ . '/utils.php';
 $configPath = __DIR__ . '/config.php';
 if (!file_exists($configPath)) {
     http_response_code(500);
@@ -65,13 +66,7 @@ if (empty($mpAccessToken)) {
 }
 
 try {
-    $dbConfig = $config['db'];
-    $dsn = "mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset=utf8mb4";
-    $pdo = new PDO($dsn, $dbConfig['user'], $dbConfig['pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false
-    ]);
+    $pdo = get_db_connection($config['db']);
 } catch (PDOException $e) {
     log_webhook_message("Database offline: " . $e->getMessage());
     http_response_code(503);
