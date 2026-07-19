@@ -43,13 +43,6 @@ export const CalendarWidget = ({ lang, checkIn, checkOut, onSelectDate, property
   const today = new Date();
   today.setHours(0,0,0,0);
 
-  const neutralDayTextClass = propertyId === '1707' ? 'text-slate-700' : 'text-stone-700';
-  const neutralDayHoverBgClass = propertyId === '1707' ? 'hover:bg-slate-100' : 'hover:bg-stone-100';
-  const controlBtnHoverClass = propertyId === '1707' ? 'hover:bg-slate-100' : 'hover:bg-stone-100';
-  const controlTxtColorClass = propertyId === '1707' ? 'text-slate-800' : 'text-stone-800';
-  const controlBtnChevronColorClass = propertyId === '1707' ? 'text-slate-600' : 'text-stone-600';
-  const calendarDayHeadingTxtColorClass = propertyId === '1707' ? 'text-slate-400' : 'text-stone-400';
-
   for (let i = 1; i <= daysInMonth; i++) {
     const thisDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), i);
     const isPast = thisDate < today;
@@ -58,13 +51,13 @@ export const CalendarWidget = ({ lang, checkIn, checkOut, onSelectDate, property
     const isCheckOut = checkOut && thisDate.getTime() === checkOut.getTime();
     const isInRange = checkIn && checkOut && thisDate > checkIn && thisDate < checkOut;
 
-    let bgClass = `bg-white ${neutralDayHoverBgClass} ${neutralDayTextClass}`;
+    let bgClass = `bg-white ${theme.calendarDayHoverBg} ${theme.calendarDayText}`;
     if (isPast) {
       bgClass = "bg-transparent text-slate-300 cursor-not-allowed";
     } else if (isCheckIn || isCheckOut) {
-      bgClass = propertyId === '1707' ? "bg-[#FF5A5F] text-white" : "bg-rose-600 text-white";
+      bgClass = theme.calendarDaySelected;
     } else if (isInRange) {
-      bgClass = propertyId === '1707' ? "bg-[#FF5A5F]/10 text-[#FF5A5F]" : "bg-rose-600/10 text-rose-600";
+      bgClass = theme.calendarDayInRange;
     }
 
     days.push(
@@ -93,25 +86,25 @@ export const CalendarWidget = ({ lang, checkIn, checkOut, onSelectDate, property
           id="btn-prev-month"
           type="button"
           onClick={prevMonth}
-          className={`p-2 ${controlBtnHoverClass} rounded-full transition-colors`}
+          className={`p-2 ${theme.calendarDayHoverBg} rounded-full transition-colors`}
         >
-          <ChevronLeft className={`w-5 h-5 ${controlBtnChevronColorClass}`} />
+          <ChevronLeft className={`w-5 h-5 ${theme.textColor}`} />
         </button>
-        <div id="month-label" className={`font-bold text-lg ${controlTxtColorClass}`}>
+        <div id="month-label" className={`font-bold text-lg ${theme.textColor}`}>
           {monthNames[lang][viewDate.getMonth()]} {viewDate.getFullYear()}
         </div>
         <button 
           id="btn-next-month"
           type="button"
           onClick={nextMonth}
-          className={`p-2 ${controlBtnHoverClass} rounded-full transition-colors`}
+          className={`p-2 ${theme.calendarDayHoverBg} rounded-full transition-colors`}
         >
-          <ChevronRight className={`w-5 h-5 ${controlBtnChevronColorClass}`} />
+          <ChevronRight className={`w-5 h-5 ${theme.textColor}`} />
         </button>
       </div>
       <div className="grid grid-cols-7 gap-1 mb-2">
         {dayNames[lang].map(day => (
-          <div key={day} className={`text-center text-xs font-bold ${calendarDayHeadingTxtColorClass} py-2`}>
+          <div key={day} className={`text-center text-xs font-bold ${theme.calendarDayNamesHeader} py-2`}>
             {day}
           </div>
         ))}
