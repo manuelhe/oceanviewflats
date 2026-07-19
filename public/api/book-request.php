@@ -45,10 +45,7 @@ if ($honeypot !== '') {
 }
 
 // 3. Multi-language Localization Dictionary Setup
-$lang = clean_input($_POST['lang'] ?? 'en');
-if (!in_array($lang, ['en', 'es', 'fr', 'it', 'de', 'ja'], true)) {
-    $lang = 'en';
-}
+$lang = get_validated_lang();
 
 $all_translations = require __DIR__ . '/translations.php';
 $t = $all_translations[$lang]['booking'] ?? $all_translations['en']['booking'];

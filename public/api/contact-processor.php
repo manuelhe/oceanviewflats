@@ -11,12 +11,7 @@ require_once __DIR__ . '/utils.php';
 
 // Load Unified Translations
 $all_translations = require __DIR__ . '/translations.php';
-$lang = 'en';
-if (isset($_POST['lang']) && isset($all_translations[$_POST['lang']])) {
-    $lang = $_POST['lang'];
-} elseif (isset($_GET['lang']) && isset($all_translations[$_GET['lang']])) {
-    $lang = $_GET['lang'];
-}
+$lang = get_validated_lang();
 $t = $all_translations[$lang]['contact'];
 
 // Configuration from Environment Variables ($_ENV)

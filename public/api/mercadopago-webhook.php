@@ -198,6 +198,10 @@ if ($status === 'approved') {
     
     // Load language preference from the database record, fallback to email deduction
     $lang = $reservation['lang'] ?? '';
+    if (is_array($lang)) {
+        $lang = '';
+    }
+    $lang = htmlspecialchars(trim(stripslashes((string)$lang)), ENT_QUOTES, 'UTF-8');
     if (empty($lang) || !in_array($lang, ['en', 'es', 'fr', 'it', 'de', 'ja'], true)) {
         $lang = (strpos($guestEmail, '.cl') !== false || strpos($guestEmail, '.ar') !== false || strpos($guestEmail, '.co') !== false || strpos($guestEmail, '.mx') !== false || strpos($guestEmail, '.es') !== false) ? 'es' : 'en';
     }

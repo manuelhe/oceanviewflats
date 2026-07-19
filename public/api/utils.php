@@ -254,3 +254,22 @@ function enforce_referer_check(array $allowedHosts = ['oceanviewflats.com', 'loc
         }
     }
 }
+
+/**
+ * Resolves, sanitizes, and validates the lang parameter.
+ * Supports: 'en', 'es', 'fr', 'it', 'de', 'ja'.
+ * Falls back to 'en' if missing, empty, or invalid.
+ * 
+ * @return string The validated lang code.
+ */
+function get_validated_lang(): string {
+    $lang = $_POST['lang'] ?? $_GET['lang'] ?? 'en';
+    if (is_array($lang)) {
+        return 'en';
+    }
+    $langStr = htmlspecialchars(trim(stripslashes((string)$lang)), ENT_QUOTES, 'UTF-8');
+    if (!in_array($langStr, ['en', 'es', 'fr', 'it', 'de', 'ja'], true)) {
+        return 'en';
+    }
+    return $langStr;
+}
