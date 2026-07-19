@@ -108,6 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Pass same parameters down to registry page
         const regParams = new URLSearchParams();
         regParams.set('property', propertyNumber);
+        regParams.set('lang', lang);
         if (urlParams.get('check_in') || urlParams.get('checkin')) {
             regParams.set('check_in', checkIn);
         }

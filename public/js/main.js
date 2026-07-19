@@ -308,7 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadBookingCaptcha() {
         if (!bookingCaptchaLabel) return;
         try {
-            const response = await fetch('/api/book-request.php?action=captcha');
+            const currentLang = document.documentElement.lang || 'en';
+            const response = await fetch(`/api/book-request.php?action=captcha&lang=${currentLang}`);
             if (response.ok) {
                 const data = await response.json();
                 const originalText = bookingCaptchaLabel.getAttribute('data-original') || bookingCaptchaLabel.textContent;
@@ -461,6 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 const formData = new FormData(directFormElement);
+                formData.append('lang', lang || document.documentElement.lang || 'en');
                 formData.append('captcha_signature', bookingCaptchaSignature);
                 formData.append('captcha_response', captchaVal);
 
@@ -628,7 +630,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const actionPath = form.getAttribute('action') || 'api/contact-processor.php';
             const processorBase = actionPath.replace('contact-processor.php', '');
             
-            const response = await fetch(processorBase + 'contact-processor.php?action=captcha');
+            const currentLang = document.documentElement.lang || 'en';
+            const response = await fetch(processorBase + 'contact-processor.php?action=captcha&lang=' + currentLang);
             if (response.ok) {
                 const data = await response.json();
                 const originalText = captchaLabel.getAttribute('data-original') || captchaLabel.textContent;
@@ -681,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Prepare Form Data
         const formData = new FormData(form);
+        formData.append('lang', document.documentElement.lang || 'en');
         formData.append('captcha_signature', captchaSignature);
 
         // Submitting State

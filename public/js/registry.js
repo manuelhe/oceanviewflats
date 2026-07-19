@@ -170,7 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const processorBase = actionPath.replace('registry-processor.php', '');
             
             // Re-use the captcha endpoint from contact-processor.php since it has CAPTCHA_SECRET config!
-            const response = await fetch(processorBase + 'contact-processor.php?action=captcha');
+            const currentLang = document.documentElement.lang || 'en';
+            const response = await fetch(processorBase + 'contact-processor.php?action=captcha&lang=' + currentLang);
             if (response.ok) {
                 const data = await response.json();
                 const originalText = captchaLabel.getAttribute('data-original') || captchaLabel.textContent;
@@ -228,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Prepare Form Data
         const formData = new FormData(form);
+        formData.append('lang', document.documentElement.lang || 'en');
         formData.append('captcha_signature', captchaSignature);
 
         // Submitting State
