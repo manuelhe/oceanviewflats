@@ -50,3 +50,25 @@
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
+## 🛠️ Development Rules (From Lessons Learned)
+
+### 🎨 Theme Abstractions & Component Separation
+- Completely centralize style classes, custom layout flags, imagery arrays, and target endpoints within central config sheets (e.g. `src/constants/theme.ts` or `src/constants/config.ts`).
+- **Rule**: React components must never contain localized dynamic layout ternary operators or hardcoded property-conditional paths. Keep components 100% style-agnostic.
+
+### 🌐 No Hardcoded Client-Side Text (Dynamic DOM Localizer)
+- Client-side Vanilla JS scripts must never embed hardcoded text literals (English or any other language) since they process pre-compiled multilingual static HTML files.
+- **Rule**: Extract all strings into `src/i18n/dict.ts` and bind them to DOM elements as `data-msg-*` attributes. Client scripts must query these attributes at initialization time.
+
+### ⚡ Async Lazyloading of Weighty Assets
+- Banish globally loaded third-party scripts/SDKs from the base templates (e.g. `base.ts`) to preserve pristine PageSpeed / Core Web Vitals (FCP, LCP) on static content views.
+- **Rule**: Load external SDK scripts dynamically via custom Promises triggered only on active user intent events (such as calendar unhiding or form field focusing).
+
+### 🗄️ Banned Inline Database Schema Mutations
+- Banish inline, dynamic `ALTER TABLE` or `CREATE TABLE IF NOT EXISTS` commands inside runtime client-facing transactional REST scripts (e.g. `payment.php`).
+- **Rule**: Centralize SQL schema definitions under `scripts/schema.sql` and run additions exclusively using CLI migration routines (`scripts/migrate.php`) during deploy time.
+
+### 🔗 Absolute Asset Prefix Propagation
+- Since generated outputs map to both root and nested folder structures, compile-time relative links will break if absolute paths are utilized.
+- **Rule**: Always pass down the calculated `assetPrefix` prop through all React modules and prepend it to every relative link to ensure local preview and subdirectory durability.
