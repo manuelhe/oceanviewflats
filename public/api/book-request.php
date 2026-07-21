@@ -142,34 +142,7 @@ try {
 
     // Create database and tables automatically if missing
     $dbname = $config['db']['dbname'];
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS `$dbname` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $pdo->exec("USE `$dbname`");
-
-    $pdo->exec("CREATE TABLE IF NOT EXISTS `reservations` (
-      `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      `reservation_uid` VARCHAR(36) NOT NULL UNIQUE,
-      `property_id` VARCHAR(10) NOT NULL,
-      `guest_name` VARCHAR(120) NOT NULL,
-      `guest_email` VARCHAR(100) NOT NULL,
-      `guest_phone` VARCHAR(25) NOT NULL,
-      `check_in` DATE NOT NULL,
-      `check_out` DATE NOT NULL,
-      `total_price` DECIMAL(10, 2) NOT NULL,
-      `mercadopago_preference_id` VARCHAR(255) DEFAULT NULL,
-      `status` ENUM('pending_payment', 'confirmed', 'cancelled') NOT NULL DEFAULT 'pending_payment',
-      `lang` VARCHAR(5) NOT NULL DEFAULT 'en',
-      `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX `idx_property_dates` (`property_id`, `check_in`, `check_out`),
-      INDEX `idx_status` (`status`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-
-    // Self-healing migration to add lang column if table existed beforehand
-    try {
-        $pdo->exec("ALTER TABLE `reservations` ADD COLUMN `lang` VARCHAR(5) NOT NULL DEFAULT 'en'");
-    } catch (PDOException $e) {
-        // Column already exists, safe to ignore
-    }
 
     // Query for overlapping local reservations that are NOT cancelled
     $stmt = $pdo->prepare("
@@ -397,80 +370,6 @@ mail(RECIPIENT_EMAIL, $subjectHost, $html_message, $headers);
 $subjectGuest = sprintf($t['email_subject_guest'], $propertyId);
 mail($guestEmail, $subjectGuest, $html_message, $headers);
 
-// 11. Generate MercadoPago Payment Preference Session (Checkout Pro)
-$mpAccessToken = $_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: '';
-$mpSandbox = $_ENV['MERCADOPAGO_SANDBOX'] ?? $_SERVER['MERCADOPAGO_SANDBOX'] ?? getenv('MERCADOPAGO_SANDBOX') ?: 'false';
-$isSandbox = (strtolower($mpSandbox) === 'true' || $mpSandbox === '1' || $mpSandbox === 1);
-
-$redirectUrl = '';
-$preferenceId = '';
-
-if (!empty($mpAccessToken)) {
-    // Compile exact localized receipt return URLs
-    $baseUrl = 'https://www.oceanviewflats.com';
-    $backSuccess = $lang === 'en' ? "{$baseUrl}/booking-success/" : "{$baseUrl}/booking-success/{$lang}.html";
-    $backFailure = $lang === 'en' ? "{$baseUrl}/booking-failure/" : "{$baseUrl}/booking-failure/{$lang}.html";
-    $backPending = $lang === 'en' ? "{$baseUrl}/booking-pending/" : "{$baseUrl}/booking-pending/{$lang}.html";
-
-    // Call MercadoPago Preferences REST API
-    $ch = curl_init("https://api.mercadopago.com/checkout/preferences");
-    $preferenceData = [
-        "items" => [[
-            "id" => "ovf_" . $propertyId,
-            "title" => "Reserva Apto " . $propertyId . " - OceanViewFlats",
-            "quantity" => 1,
-            "currency_id" => "COP",
-            "unit_price" => (float)$serverTotalCop
-        ]],
-        "payer" => [
-            "name" => $guestName,
-            "email" => $guestEmail,
-            "phone" => ["number" => $guestPhone]
-        ],
-        "back_urls" => [
-            "success" => $backSuccess,
-            "failure" => $backFailure,
-            "pending" => $backPending
-        ],
-        "auto_return" => "all",
-        "external_reference" => $uid,
-        "expires" => true,
-        "date_of_expiration" => date('c', strtotime('+10 minutes'))
-    ];
-
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($preferenceData));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Authorization: Bearer " . $mpAccessToken,
-        "Content-Type: application/json"
-    ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    $responseStr = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode === 200 || $httpCode === 201) {
-        $prefResponse = json_decode($responseStr, true);
-        if (isset($prefResponse['id'])) {
-            $preferenceId = $prefResponse['id'];
-            $redirectUrl = $isSandbox ? $prefResponse['sandbox_init_point'] : $prefResponse['init_point'];
-            
-            // Link preference id inside MySQL database row
-            if ($pdo !== null && $dbLogged) {
-                try {
-                    $upStmt = $pdo->prepare("UPDATE `reservations` SET `mercadopago_preference_id` = :pref WHERE `reservation_uid` = :uid");
-                    $upStmt->execute(['pref' => $preferenceId, 'uid' => $uid]);
-                } catch (PDOException $e) {
-                    error_log("Failed to update reservation with preference ID: " . $e->getMessage());
-                }
-            }
-        }
-    } else {
-        error_log("MercadoPago preference API error. Code: $httpCode. Response: $responseStr");
-    }
-}
-
 // Output successful response to client - fully localized!
 $localizedMessage = "
   <div class='space-y-2'>
@@ -482,6 +381,5 @@ $localizedMessage = "
 
 send_json_response(true, $localizedMessage, [
     'reservation_uid' => $uid,
-    'total_price' => $serverTotalCop,
-    'redirect_url' => $redirectUrl
+    'total_price' => $serverTotalCop
 ]);

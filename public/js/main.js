@@ -424,13 +424,218 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Reveal breakdown and direct booking form
             if (breakdownCard) breakdownCard.classList.remove('hidden');
-            if (directForm) directForm.classList.remove('hidden');
+            if (directForm) {
+                directForm.classList.remove('hidden');
+                // Proactively trigger background pre-loading of the MercadoPago SDK asynchronously
+                loadMercadoPagoSDK().catch(err => console.warn("Background SDK load error:", err));
+            }
         } else {
             btnBook.href = airbnbUrl;
             btnBookText.textContent = txtDefault;
 
             if (breakdownCard) breakdownCard.classList.add('hidden');
             if (directForm) directForm.classList.add('hidden');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // MercadoPago Checkout Bricks Implementation
+    // -------------------------------------------------------------------------
+    let mpInstance = null;
+    let paymentBrickController = null;
+
+    // Proactively lazy-load the MercadoPago JS SDK v2 asynchronously
+    function loadMercadoPagoSDK() {
+        return new Promise((resolve, reject) => {
+            if (window.MercadoPago) {
+                resolve();
+                return;
+            }
+            // Check if there is already a script loading
+            const existing = document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]');
+            if (existing) {
+                existing.addEventListener('load', resolve);
+                existing.addEventListener('error', () => reject(new Error('Failed to load MercadoPago SDK')));
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://sdk.mercadopago.com/js/v2';
+            script.async = true;
+            script.onload = () => {
+                if (window.MercadoPago) {
+                    resolve();
+                } else {
+                    reject(new Error('MercadoPago SDK loaded but window.MercadoPago is missing'));
+                }
+            };
+            script.onerror = () => {
+                reject(new Error('Failed to load MercadoPago SDK'));
+            };
+            document.head.appendChild(script);
+        });
+    }
+
+    async function initPaymentBrick(publicKey, totalAmount, reservationUid, guestEmail, guestName) {
+        if (!window.MercadoPago) {
+            try {
+                await loadMercadoPagoSDK();
+            } catch (err) {
+                console.error("Failed to load MercadoPago SDK:", err);
+                const msgBox = document.getElementById('booking-form-message');
+                if (msgBox) {
+                    msgBox.textContent = "Unable to load the payment gateway. Please check your internet connection or try again.";
+                    msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
+                }
+                const btnSubmit = document.getElementById('btn-direct-submit');
+                const btnSubmitText = document.getElementById('btn-direct-submit-text');
+                const formEl = document.getElementById('direct-booking-form');
+                const msgSubmitDefault = formEl ? formEl.getAttribute('data-msg-submit-default') : "Enviar Solicitud / Send Inquiry";
+                if (btnSubmit) btnSubmit.disabled = false;
+                if (btnSubmitText) btnSubmitText.textContent = msgSubmitDefault;
+                return;
+            }
+        }
+
+        if (!mpInstance) {
+            mpInstance = new window.MercadoPago(publicKey, { locale: 'es-CO' });
+        }
+
+        if (paymentBrickController) {
+            try {
+                await paymentBrickController.unmount();
+            } catch (unmountErr) {
+                console.warn("Unmount failed or container already empty:", unmountErr);
+            }
+        }
+
+        const bricksBuilder = mpInstance.bricks();
+        const container = document.getElementById('payment-brick-container');
+        if (container) {
+            container.classList.remove('hidden');
+        }
+
+        const propertyId = window.location.pathname.includes('1606') ? '1606' : '1707';
+
+        try {
+            paymentBrickController = await bricksBuilder.create('payment', 'payment-brick-container', {
+                initialization: {
+                    amount: totalAmount,
+                    payer: {
+                        email: guestEmail,
+                        firstName: guestName.split(' ')[0] || '',
+                        lastName: guestName.split(' ').slice(1).join(' ') || '',
+                    }
+                },
+                customization: {
+                    visual: {
+                        style: {
+                            theme: 'default',
+                            customVariables: {
+                                borderRadiusStyle: '16px',
+                                colorPrimary: '#10b981', // Emerald matching the system theme colors
+                            }
+                        }
+                    },
+                    paymentMethods: {
+                        creditCard: 'all',
+                        debitCard: 'all',
+                        bankTransfer: ['pse'],
+                        ticket: ['efecty'],
+                        maxInstallments: 12
+                    }
+                },
+                callbacks: {
+                    onReady: () => {
+                        console.log('Payment Brick mounted successfully.');
+                        const btnSubmit = document.getElementById('btn-direct-submit');
+                        if (btnSubmit) btnSubmit.style.display = 'none'; // Hide old submit button permanently
+                    },
+                    onSubmit: ({ selectedPaymentMethod, formData }) => {
+                        return new Promise((resolve, reject) => {
+                            processBricksPayment(selectedPaymentMethod, formData, reservationUid, guestEmail, guestName, propertyId)
+                                .then(resolve)
+                                .catch(reject);
+                        });
+                    },
+                    onError: (error) => {
+                        console.error('Payment Brick initialization error:', error);
+                    }
+                }
+            });
+        } catch (brickErr) {
+            console.error("Error creating Payment Brick:", brickErr);
+        }
+    }
+
+    async function processBricksPayment(selectedPaymentMethod, formData, reservationUid, guestEmail, guestName, propertyId) {
+        const payload = {
+            reservation_uid: reservationUid,
+            property_id: propertyId,
+            guest_name: guestName,
+            guest_email: guestEmail,
+            guest_phone: document.getElementById('booking-guest-phone').value.trim(),
+            check_in: document.getElementById('form-check-in-date').value,
+            check_out: document.getElementById('form-check-out-date').value,
+            payment_method_id: selectedPaymentMethod,
+            lang: lang || document.documentElement.lang || 'en',
+            ...formData
+        };
+
+        const msgBox = document.getElementById('booking-form-message');
+        const formEl = document.getElementById('direct-booking-form');
+        const msgDeclined = formEl ? formEl.getAttribute('data-msg-declined') : "Your payment was declined. Please try another payment option or verify your details.";
+
+        try {
+            const response = await fetch('/api/payment.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                // Track Successful Direct Booking Conversion (Goal 5)
+                if (window._paq) {
+                    window._paq.push(['trackEvent', 'Booking', 'Transparent Payment Success', propertyId]);
+                    window._paq.push(['trackGoal', 5]);
+                }
+
+                // Route dynamically based on status and method
+                if (result.status === 'approved') {
+                    window.location.href = `/booking-success?id=${result.payment_id}&code=${result.reservation_code}&status=approved`;
+                } else if (selectedPaymentMethod === 'pse' && result.external_resource_url) {
+                    // Redirection for bank payment authorization
+                    window.location.href = result.external_resource_url;
+                } else if (selectedPaymentMethod === 'efecty') {
+                    // Redirection to booking-success page, passing Efecty voucher print parameters
+                    const params = new URLSearchParams({
+                        id: result.payment_id,
+                        code: result.reservation_code,
+                        status: 'pending',
+                        method: 'efecty',
+                        barcode: result.barcode,
+                        verif_code: result.verification_code,
+                        voucher_url: result.printable_voucher_url
+                    });
+                    window.location.href = `/booking-success?${params.toString()}`;
+                } else {
+                    // Standard pending screen fallback
+                    window.location.href = `/booking-pending?id=${result.payment_id}&code=${result.reservation_code}`;
+                }
+            } else {
+                throw new Error(result.error || msgDeclined);
+            }
+        } catch (err) {
+            console.error("Transparent Payment Error:", err);
+            if (msgBox) {
+                msgBox.textContent = err.message || msgDeclined;
+                msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
+            }
+            throw err; // Forces Brick to reset its internal loader
         }
     }
 
@@ -444,6 +649,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const btnSubmitText = document.getElementById('btn-direct-submit-text');
             const msgBox = document.getElementById('booking-form-message');
 
+            const msgVerifying = directFormElement.getAttribute('data-msg-verifying') || "Verifying details...";
+            const msgSecured = directFormElement.getAttribute('data-msg-secured') || "Booking secured! Please select your payment method below to guarantee your reservation.";
+            const msgFillFields = directFormElement.getAttribute('data-msg-fill-fields') || "Please fill in all required fields.";
+            const msgSubmitDefault = directFormElement.getAttribute('data-msg-submit-default') || "Enviar Solicitud / Send Inquiry";
+            const msgNetworkError = directFormElement.getAttribute('data-msg-network-error') || "Network error. Please verify connection and try again.";
+
             const name = document.getElementById('booking-guest-name').value.trim();
             const email = document.getElementById('booking-guest-email').value.trim();
             const phone = document.getElementById('booking-guest-phone').value.trim();
@@ -451,14 +662,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!name || !email || !phone || !captchaVal || !checkIn || !checkOut) {
                 if (msgBox) {
-                    msgBox.textContent = "Please fill in all required fields.";
+                    msgBox.textContent = msgFillFields;
                     msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
                 }
                 return;
             }
 
             if (btnSubmit) btnSubmit.disabled = true;
-            if (btnSubmitText) btnSubmitText.textContent = "Sending...";
+            if (btnSubmitText) btnSubmitText.textContent = msgVerifying;
 
             try {
                 const formData = new FormData(directFormElement);
@@ -475,50 +686,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (response.ok && result.success) {
                     if (msgBox) {
-                        msgBox.innerHTML = result.message || "Reservation inquiry sent successfully!";
+                        msgBox.innerHTML = msgSecured;
                         msgBox.className = "p-4 rounded-xl text-sm font-semibold mb-4 bg-emerald-50 text-emerald-800 border border-emerald-200 block leading-relaxed";
                     }
-                    directFormElement.reset();
-                    if (btnSubmit) btnSubmit.style.display = 'none';
 
-                    // Track Successful Direct Booking Conversion (Goal 5)
-                    if (window._paq) {
-                        window._paq.push(['trackEvent', 'Booking', 'Direct Booking Inquiry Success', propertyId]);
-                        window._paq.push(['trackGoal', 5]);
-                    }
+                    const publicKey = directFormElement.getAttribute('data-mp-public-key');
+                    const totalAmount = parseFloat(result.total_price);
+                    const reservationUid = result.reservation_uid;
 
-                    // Seamless Checkout Redirection to MercadoPago Gateway
-                    if (result.redirect_url) {
-                        if (msgBox) {
-                            msgBox.innerHTML += `<div class="mt-3 flex items-center text-emerald-900 text-xs font-semibold animate-pulse">
-                                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Redirecting to secure payment checkout...
-                            </div>`;
-                        }
-                        setTimeout(() => {
-                            window.location.href = result.redirect_url;
-                        }, 1500);
-                    }
+                    // Initialize the MercadoPago Payment Brick natively
+                    await initPaymentBrick(publicKey, totalAmount, reservationUid, email, name);
                 } else {
                     if (msgBox) {
-                        msgBox.textContent = result.error || "An error occurred. Please try again.";
+                        msgBox.textContent = result.error || msgNetworkError;
                         msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
                     }
                     if (btnSubmit) btnSubmit.disabled = false;
-                    if (btnSubmitText) btnSubmitText.textContent = "Enviar Solicitud / Send Inquiry";
+                    if (btnSubmitText) btnSubmitText.textContent = msgSubmitDefault;
                     loadBookingCaptcha(); // Reset captcha on failure
                 }
             } catch (err) {
                 console.error('Error submitting direct booking inquiry:', err);
                 if (msgBox) {
-                    msgBox.textContent = "Network error. Please verify connection and try again.";
+                    msgBox.textContent = msgNetworkError;
                     msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
                 }
                 if (btnSubmit) btnSubmit.disabled = false;
-                if (btnSubmitText) btnSubmitText.textContent = "Enviar Solicitud / Send Inquiry";
+                if (btnSubmitText) btnSubmitText.textContent = msgSubmitDefault;
             }
         });
     }

@@ -143,10 +143,19 @@ if ($status === 'approved') {
         
         $upStmt = $pdo->prepare("
             UPDATE `reservations` 
-            SET `status` = 'confirmed', `updated_at` = NOW() 
+            SET `status` = 'confirmed', 
+                `mercadopago_payment_id` = :pay_id, 
+                `payment_status` = :pay_status, 
+                `payment_method_id` = :pay_method, 
+                `updated_at` = NOW() 
             WHERE `reservation_uid` = :uid AND `status` != 'confirmed'
         ");
-        $upStmt->execute(['uid' => $uid]);
+        $upStmt->execute([
+            'uid' => $uid,
+            'pay_id' => $paymentId,
+            'pay_status' => $status,
+            'pay_method' => $paymentData['payment_method_id'] ?? ''
+        ]);
         
         $pdo->commit();
         log_webhook_message("Reservation {$uid} successfully CONFIRMED in local MySQL database.");

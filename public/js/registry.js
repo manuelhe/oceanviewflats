@@ -43,6 +43,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const defaultErrorMsg = errorMsgs[lang] || errorMsgs.en;
     const submittingMsg = submittingMsgs[lang] || submittingMsgs.en;
+    const defaultDates = {
+        en: "Not Specified",
+        es: "No especificado",
+        fr: "Non spécifiée",
+        it: "Non specificato",
+        de: "Nicht angegeben",
+        ja: "未指定"
+    };
+
+    const defaultProperty = {
+        en: "OceanViewFlats (Not Specified)",
+        es: "OceanViewFlats (No especificado)",
+        fr: "OceanViewFlats (Non spécifiée)",
+        it: "OceanViewFlats (Non specificato)",
+        de: "OceanViewFlats (Nicht angegeben)",
+        ja: "OceanViewFlats（未指定）"
+    };
+
+    const defaultDateMsg = defaultDates[lang] || defaultDates.en;
+    const defaultPropMsg = defaultProperty[lang] || defaultProperty.en;
 
     // 1. Read URL query params and populate stay details
     const urlParams = new URLSearchParams(window.location.search);
@@ -55,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayProperty.textContent = `OceanViewFlats ${propertyVal}`;
         hiddenProperty.value = propertyVal;
     } else {
-        displayProperty.textContent = "OceanViewFlats (Not Specified)";
+        displayProperty.textContent = defaultPropMsg;
         hiddenProperty.value = "";
     }
 
@@ -63,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayCheckIn.textContent = checkInVal;
         hiddenCheckIn.value = checkInVal;
     } else {
-        displayCheckIn.textContent = "Not Specified";
+        displayCheckIn.textContent = defaultDateMsg;
         hiddenCheckIn.value = "";
     }
 
@@ -71,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayCheckOut.textContent = checkOutVal;
         hiddenCheckOut.value = checkOutVal;
     } else {
-        displayCheckOut.textContent = "Not Specified";
+        displayCheckOut.textContent = defaultDateMsg;
         hiddenCheckOut.value = "";
     }
 

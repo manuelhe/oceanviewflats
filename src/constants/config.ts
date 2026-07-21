@@ -3,6 +3,9 @@ export const AIRBNB_URLS = {
   '1606': "https://www.airbnb.com/rooms/1584825560087571592"
 };
 
+export const MERCADOPAGO_PUBLIC_KEY = "APP_USR-d820875d-6c1a-4f51-b997-7fc6f15779c6"; // Official MercadoPago Public Key (or Sandbox)
+
+
 export const IMAGES = {
   '1707': {
     hero: "images/1707-main-room-seaside.webp",

@@ -5,6 +5,8 @@ import { dict } from '../i18n/dict';
 import { CalendarWidget } from './CalendarWidget';
 import { formatDate } from '../utils/date';
 import { THEMES } from '../constants/theme';
+import { MERCADOPAGO_PUBLIC_KEY } from '../constants/config';
+
 
 interface BookingSectionProps {
   lang: Lang;
@@ -128,7 +130,17 @@ export const BookingSection = ({ lang, propertyId = '1707' }: BookingSectionProp
               </div>
 
               {/* Direct Booking Inquiry Form */}
-              <form id="direct-booking-form" className="hidden space-y-4 mb-6 transition-all duration-300">
+              <form 
+                id="direct-booking-form" 
+                data-mp-public-key={MERCADOPAGO_PUBLIC_KEY} 
+                data-msg-verifying={t.dbVerifying}
+                data-msg-secured={t.dbSecured}
+                data-msg-fill-fields={t.dbFillFields}
+                data-msg-declined={t.dbDeclined}
+                data-msg-submit-default={t.dbSubmit}
+                data-msg-network-error={t.contactError}
+                className="hidden space-y-4 mb-6 transition-all duration-300"
+              >
                 <h4 className={`font-bold ${theme.textColor} text-sm uppercase tracking-wider`}>{t.dbFormTitle}</h4>
                 <input type="hidden" name="property_id" id="form-property-id" value={propertyId} />
                 <input type="hidden" name="check_in" id="form-check-in-date" />
@@ -164,6 +176,9 @@ export const BookingSection = ({ lang, propertyId = '1707' }: BookingSectionProp
                 </div>
 
                 <div id="booking-form-message" className="hidden"></div>
+
+                {/* Div container where MercadoPago Bricks will mount its UI dynamically */}
+                <div id="payment-brick-container" className="w-full mt-4 hidden transition-all duration-300"></div>
 
                 <button 
                   type="submit" 
