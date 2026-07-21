@@ -13,7 +13,7 @@ You are an expert backend database and infrastructure engineer. This guide defin
 
 Bypassing schema managers and running schema updates (`ALTER TABLE`, `CREATE TABLE`) during live request loops is **strictly forbidden**.
 *   **Why?**: Inline updates introduce critical thread locks under traffic, degrade response times, expose DB credentials to unnecessary privileges, and cause structural fragmentation.
-*   **The Standard**: All structural tables, indices, or column expansions are declared under [`scripts/schema.sql`](file:///Users/manuel.herrera/Projects/17071606/scripts/schema.sql) and executed dynamically using the self-healing migration CLI runner [`scripts/migrate.php`](file:///Users/manuel.herrera/Projects/17071606/scripts/migrate.php).
+*   **The Standard**: All structural tables, indices, or column expansions are declared under [`scripts/schema.sql`](scripts/schema.sql) and executed dynamically using the self-healing migration CLI runner [`scripts/migrate.php`](scripts/migrate.php).
 
 ---
 
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS `payment_idempotency` (
 ## 🚀 Running Migrations
 
 To apply database alterations during deployment:
-1.  Add new fields, indices, or table structures to [`scripts/schema.sql`](file:///Users/manuel.herrera/Projects/17071606/scripts/schema.sql).
-2.  Update the self-healing loop in [`scripts/migrate.php`](file:///Users/manuel.herrera/Projects/17071606/scripts/migrate.php) to conditionally add new items.
+1.  Add new fields, indices, or table structures to [`scripts/schema.sql`](scripts/schema.sql).
+2.  Update the self-healing loop in [`scripts/migrate.php`](scripts/migrate.php) to conditionally add new items.
 3.  Log into your hosting server terminal and execute:
     ```bash
     php scripts/migrate.php

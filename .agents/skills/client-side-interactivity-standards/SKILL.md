@@ -13,14 +13,14 @@ You are an expert frontend and interaction performance engineer. This guide defi
 
 To maintain maximum loading speeds, perfect Core Web Vitals (LCP, INP), and total framework independence, **React is never hydrated on the client**.
 *   **Compilation**: React exists exclusively to generate beautiful, static semantic HTML markup at build time.
-*   **Interactivity**: Lightweight, native Vanilla JavaScript files inside [`public/js/`](file:///Users/manuel.herrera/Projects/17071606/public/js/) are linked at the bottom of pages to attach listeners and manage dynamic states.
+*   **Interactivity**: Lightweight, native Vanilla JavaScript files inside [`public/js/`](public/js/) are linked at the bottom of pages to attach listeners and manage dynamic states.
 
 ---
 
 ## 🎨 Layout and Interactivity Coupling
 
 When building interactive UI widgets (modals, calendars, galleries, form alerts, accordion cards):
-1.  **Draft HTML Structure**: Implement structural tags, styling selectors, and baseline containers inside the React page components ([`src/pages/`](file:///Users/manuel.herrera/Projects/17071606/src/pages/)).
+1.  **Draft HTML Structure**: Implement structural tags, styling selectors, and baseline containers inside the React page components ([`src/pages/`](src/pages/)).
 2.  **Bind Hooks**: Affix unique `id` handles or `data-*` attributes to target interactive wrappers.
 3.  **Write Logic**: Program custom EventListeners, network fetch calls, and transition animations directly in matching script targets under `public/js/`.
 
@@ -37,7 +37,7 @@ alert("Please select dates first.");
 ```
 
 ###  The Clean Standard:
-Store all translations in [`src/i18n/dict.ts`](file:///Users/manuel.herrera/Projects/17071606/src/i18n/dict.ts) and attach them to DOM nodes as custom `data-msg-*` parameters:
+Store all translations in [`src/i18n/dict.ts`](src/i18n/dict.ts) and attach them to DOM nodes as custom `data-msg-*` parameters:
 
 ```typescript
 // inside React component:

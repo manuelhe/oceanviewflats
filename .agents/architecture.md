@@ -145,7 +145,7 @@ All dynamic network traffic routes to standalone transaction endpoints under `/p
 
 ### 2. Centralized Database Schema Migrations
 *   No database creations or `ALTER TABLE` operations occur inside client transactional API endpoints.
-*   Database updates are compiled under [`scripts/schema.sql`](file:///Users/manuel.herrera/Projects/17071606/scripts/schema.sql) and ran through the CLI-exclusive self-healing migrator [`scripts/migrate.php`](file:///Users/manuel.herrera/Projects/17071606/scripts/migrate.php).
+*   Database updates are compiled under [`scripts/schema.sql`](scripts/schema.sql) and ran through the CLI-exclusive self-healing migrator [`scripts/migrate.php`](scripts/migrate.php).
 
 ### 3. Double-Charge Protection (Idempotency Key)
 Payments utilize unique reservation identifier codes as idempotency keys. Pre-payment steps check the `payment_idempotency` table before routing to MercadoPago, short-circuiting duplicate transactions instantly.
@@ -155,10 +155,10 @@ Payments utilize unique reservation identifier codes as idempotency keys. Pre-pa
 ## 🌐 Dynamic Localizations Bridge
 
 We maintain clean separation between pre-compiled static structures and dynamic script notifications:
-*   **Core Dictionary**: Standard UI terms are mapped inside the central React translation sheet ([`src/i18n/dict.ts`](file:///Users/manuel.herrera/Projects/17071606/src/i18n/dict.ts)).
+*   **Core Dictionary**: Standard UI terms are mapped inside the central React translation sheet ([`src/i18n/dict.ts`](src/i18n/dict.ts)).
 *   **Bridging System**: React embeds translated terms inside custom parent HTML node attributes (e.g., `data-msg-success="Trans_Val"`).
 *   **Client Parsing**: Native JS scripts query these attributes on load. This completely prevents hardcoded English terms from leaking onto Spanish, French, Italian, German, or Japanese viewports.
-*   **API Translation Keys**: Dynamic server outputs are matched against the validated client request language query and loaded from the central backend dictionary [`public/api/translations.php`](file:///Users/manuel.herrera/Projects/17071606/public/api/translations.php).
+*   **API Translation Keys**: Dynamic server outputs are matched against the validated client request language query and loaded from the central backend dictionary [`public/api/translations.php`](public/api/translations.php).
 
 ---
 
