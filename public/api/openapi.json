@@ -1,0 +1,1100 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "OceanViewFlats REST API",
+        "description": "Comprehensive REST API documentation for OceanViewFlats vacation rentals in Cartagena, Colombia (Apartments 1606 & 1707). Provides endpoints for real-time calendar availability, direct booking requests, Mercado Pago Checkout Bricks payment processing, asynchronous webhooks, police guest registration, and iCalendar synchronization.",
+        "contact": {
+            "name": "OceanViewFlats Support",
+            "url": "https://oceanviewflats.com",
+            "email": "rentals@oceanviewflats.com"
+        },
+        "license": {
+            "name": "Proprietary",
+            "url": "https://oceanviewflats.com"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "/api",
+            "description": "Current Environment / Relative API Server"
+        },
+        {
+            "url": "https://oceanviewflats.com/api",
+            "description": "Production API Server"
+        },
+        {
+            "url": "http://localhost:8000/api",
+            "description": "Local Development Server"
+        }
+    ],
+    "paths": {
+        "/availability.php": {
+            "get": {
+                "tags": [
+                    "Availability"
+                ],
+                "summary": "Fetch blocked calendar dates for a property",
+                "description": "Fetches, parses, and returns cached blocked calendar dates (from upstream Airbnb iCal feeds and direct reservations) for the specified apartment.",
+                "operationId": "getAvailability",
+                "parameters": [
+                    {
+                        "name": "property",
+                        "in": "query",
+                        "description": "Property Unit ID (1606 or 1707)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "1606",
+                            "enum": [
+                                "1606",
+                                "1707"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of ISO 8601 blocked dates (YYYY-MM-DD)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-01"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid property ID",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    },
+                    "502": {
+                        "description": "Failed to retrieve calendar feed from upstream provider",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/book-request.php": {
+            "get": {
+                "tags": [
+                    "Booking"
+                ],
+                "summary": "Generate a CAPTCHA challenge for booking",
+                "description": "Returns a newly generated arithmetic challenge and cryptographic signature for booking anti-abuse verification.",
+                "operationId": "getBookingCaptcha",
+                "parameters": [
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "description": "Action trigger must be \"captcha\"",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "captcha"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active math challenge and signature",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CaptchaChallenge"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Booking"
+                ],
+                "summary": "Submit a direct booking inquiry and quotation calculation",
+                "description": "Validates requested dates against blocked calendar dates, computes rate breakdown, logs reservation to database and Google Sheets, and sends confirmation emails.",
+                "operationId": "submitBookingRequest",
+                "requestBody": {
+                    "description": "Booking request parameters (Form-urlencoded or multipart)",
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "required": [
+                                    "property_id",
+                                    "check_in",
+                                    "check_out",
+                                    "guest_name",
+                                    "guest_email",
+                                    "guest_phone",
+                                    "captcha_challenge",
+                                    "captcha_signature",
+                                    "captcha_response"
+                                ],
+                                "properties": {
+                                    "property_id": {
+                                        "type": "string",
+                                        "enum": [
+                                            "1606",
+                                            "1707"
+                                        ],
+                                        "example": "1606"
+                                    },
+                                    "check_in": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-10"
+                                    },
+                                    "check_out": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-15"
+                                    },
+                                    "guest_name": {
+                                        "type": "string",
+                                        "example": "John Doe"
+                                    },
+                                    "guest_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "john@example.com"
+                                    },
+                                    "guest_phone": {
+                                        "type": "string",
+                                        "example": "+57 300 123 4567"
+                                    },
+                                    "total_price_cop": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 1520000
+                                    },
+                                    "lang": {
+                                        "type": "string",
+                                        "default": "en",
+                                        "enum": [
+                                            "en",
+                                            "es",
+                                            "fr",
+                                            "it",
+                                            "de",
+                                            "ja"
+                                        ]
+                                    },
+                                    "captcha_challenge": {
+                                        "type": "string",
+                                        "example": "5 + 3 = ?"
+                                    },
+                                    "captcha_signature": {
+                                        "type": "string",
+                                        "example": "f8c9d0..."
+                                    },
+                                    "captcha_response": {
+                                        "type": "string",
+                                        "example": "8"
+                                    },
+                                    "website_url": {
+                                        "description": "Anti-spam honeypot (leave empty)",
+                                        "type": "string",
+                                        "example": ""
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Booking inquiry submitted successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StandardResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error (invalid email, phone, or dates)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Dates unavailable or overlapping existing reservation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/contact-processor.php": {
+            "get": {
+                "tags": [
+                    "Contact"
+                ],
+                "summary": "Generate a CAPTCHA challenge for contact form",
+                "description": "Returns a newly generated arithmetic challenge and cryptographic signature for contact form anti-abuse verification.",
+                "operationId": "getContactCaptcha",
+                "parameters": [
+                    {
+                        "name": "action",
+                        "in": "query",
+                        "description": "Action trigger must be \"captcha\"",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "captcha"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Active math challenge and signature",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CaptchaChallenge"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Contact"
+                ],
+                "summary": "Submit a contact form inquiry",
+                "description": "Processes and sanitizes contact inquiries, verifies math CAPTCHA, and sends localized notification emails to host support.",
+                "operationId": "submitContactMessage",
+                "requestBody": {
+                    "description": "Contact form fields",
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "required": [
+                                    "name",
+                                    "email",
+                                    "message",
+                                    "captcha_challenge",
+                                    "captcha_signature",
+                                    "captcha_response"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string",
+                                        "example": "Jane Smith"
+                                    },
+                                    "email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "jane@example.com"
+                                    },
+                                    "phone": {
+                                        "type": "string",
+                                        "example": "+1 555 123 4567"
+                                    },
+                                    "message": {
+                                        "type": "string",
+                                        "example": "Hello, I have a question about parking availability."
+                                    },
+                                    "lang": {
+                                        "type": "string",
+                                        "default": "en",
+                                        "enum": [
+                                            "en",
+                                            "es",
+                                            "fr",
+                                            "it",
+                                            "de",
+                                            "ja"
+                                        ]
+                                    },
+                                    "captcha_challenge": {
+                                        "type": "string",
+                                        "example": "9 + 2 = ?"
+                                    },
+                                    "captcha_signature": {
+                                        "type": "string",
+                                        "example": "9a8b7c..."
+                                    },
+                                    "captcha_response": {
+                                        "type": "string",
+                                        "example": "11"
+                                    },
+                                    "website_url": {
+                                        "description": "Anti-spam honeypot (leave empty)",
+                                        "type": "string",
+                                        "example": ""
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Message sent successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StandardResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation or CAPTCHA error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/payment.php": {
+            "post": {
+                "tags": [
+                    "Payments"
+                ],
+                "summary": "Process booking payment via Mercado Pago Bricks custom API",
+                "description": "Performs server-to-server transaction processing with Mercado Pago (credit cards, PSE bank transfers, Efecty vouchers), validates date availability, locks records, logs to database, and issues confirmation emails.",
+                "operationId": "processPayment",
+                "requestBody": {
+                    "description": "Payment transaction payload with Mercado Pago Token and Booking details",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "property_id",
+                                    "check_in",
+                                    "check_out",
+                                    "guest_name",
+                                    "guest_email",
+                                    "guest_phone",
+                                    "payment_method_id",
+                                    "transaction_amount",
+                                    "payer",
+                                    "captcha_challenge",
+                                    "captcha_signature",
+                                    "captcha_response"
+                                ],
+                                "properties": {
+                                    "property_id": {
+                                        "type": "string",
+                                        "enum": [
+                                            "1606",
+                                            "1707"
+                                        ],
+                                        "example": "1606"
+                                    },
+                                    "check_in": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-10-01"
+                                    },
+                                    "check_out": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-10-06"
+                                    },
+                                    "guest_name": {
+                                        "type": "string",
+                                        "example": "Carlos Mendoza"
+                                    },
+                                    "guest_email": {
+                                        "type": "string",
+                                        "format": "email",
+                                        "example": "carlos@example.com"
+                                    },
+                                    "guest_phone": {
+                                        "type": "string",
+                                        "example": "+57 310 987 6543"
+                                    },
+                                    "lang": {
+                                        "type": "string",
+                                        "default": "es",
+                                        "enum": [
+                                            "en",
+                                            "es",
+                                            "fr",
+                                            "it",
+                                            "de",
+                                            "ja"
+                                        ]
+                                    },
+                                    "token": {
+                                        "description": "Mercado Pago one-time credit card token",
+                                        "type": "string",
+                                        "example": "9876543210abcdef"
+                                    },
+                                    "payment_method_id": {
+                                        "description": "Payment method identifier (e.g. visa, master, pse, efecty)",
+                                        "type": "string",
+                                        "example": "visa"
+                                    },
+                                    "issuer_id": {
+                                        "type": "string",
+                                        "example": "25",
+                                        "nullable": true
+                                    },
+                                    "installments": {
+                                        "type": "integer",
+                                        "default": 1,
+                                        "example": 1
+                                    },
+                                    "transaction_amount": {
+                                        "type": "number",
+                                        "format": "float",
+                                        "example": 1750000
+                                    },
+                                    "payer": {
+                                        "$ref": "#/components/schemas/PaymentPayer"
+                                    },
+                                    "captcha_challenge": {
+                                        "type": "string",
+                                        "example": "4 + 6 = ?"
+                                    },
+                                    "captcha_signature": {
+                                        "type": "string",
+                                        "example": "3f2e1d..."
+                                    },
+                                    "captcha_response": {
+                                        "type": "string",
+                                        "example": "10"
+                                    },
+                                    "website_url": {
+                                        "type": "string",
+                                        "example": ""
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Payment processed and reservation logged successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "approved"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Payment processed successfully."
+                                        },
+                                        "payment": {
+                                            "$ref": "#/components/schemas/PaymentTransactionResult"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Payment rejection or invalid parameters",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Selected dates already booked or unavailable",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    },
+                    "500": {
+                        "description": "Database or payment gateway communication error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/mercadopago-webhook.php": {
+            "post": {
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Mercado Pago asynchronous IPN & Webhook receiver",
+                "description": "Receives real-time payment status updates from Mercado Pago, verifies payment status server-to-server, updates database reservation records, and syncs status with Google Sheets and guest emails.",
+                "operationId": "handleMercadoPagoWebhook",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "query",
+                        "description": "Payment ID (IPN fallback)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "1234567890"
+                        }
+                    },
+                    {
+                        "name": "topic",
+                        "in": "query",
+                        "description": "Notification topic (e.g. payment)",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "payment"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Webhook JSON payload from Mercado Pago",
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "example": "payment.updated"
+                                    },
+                                    "api_version": {
+                                        "type": "string",
+                                        "example": "v1"
+                                    },
+                                    "data": {
+                                        "properties": {
+                                            "id": {
+                                                "type": "string",
+                                                "example": "1234567890"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "date_created": {
+                                        "type": "string",
+                                        "format": "date-time",
+                                        "example": "2026-09-01T15:00:00Z"
+                                    },
+                                    "id": {
+                                        "type": "integer",
+                                        "example": 1234567890
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "example": "payment"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully or acknowledged",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StandardResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid webhook payload or signature",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Database or configuration error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/registry-processor.php": {
+            "post": {
+                "tags": [
+                    "Guest Registry"
+                ],
+                "summary": "Submit Guest Check-in Police Registration",
+                "description": "Submits guest personal identity details, document numbers, companion guest information, and vehicle details required by Colombian tourism and police regulation (SIRE / TRA).",
+                "operationId": "submitGuestRegistry",
+                "requestBody": {
+                    "description": "Guest check-in registry form data",
+                    "required": true,
+                    "content": {
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "required": [
+                                    "property",
+                                    "check_in",
+                                    "check_out",
+                                    "guests",
+                                    "captcha_challenge",
+                                    "captcha_signature",
+                                    "captcha_response"
+                                ],
+                                "properties": {
+                                    "property": {
+                                        "type": "string",
+                                        "enum": [
+                                            "1606",
+                                            "1707"
+                                        ],
+                                        "example": "1606"
+                                    },
+                                    "check_in": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-10"
+                                    },
+                                    "check_out": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-15"
+                                    },
+                                    "guests": {
+                                        "description": "Array of registered guests",
+                                        "type": "array",
+                                        "items": {
+                                            "$ref": "#/components/schemas/GuestInfo"
+                                        }
+                                    },
+                                    "car_plates": {
+                                        "type": "string",
+                                        "example": "XYZ 123",
+                                        "nullable": true
+                                    },
+                                    "car_model": {
+                                        "type": "string",
+                                        "example": "Toyota Fortuner White",
+                                        "nullable": true
+                                    },
+                                    "lang": {
+                                        "type": "string",
+                                        "default": "es",
+                                        "enum": [
+                                            "en",
+                                            "es",
+                                            "fr",
+                                            "it",
+                                            "de",
+                                            "ja"
+                                        ]
+                                    },
+                                    "captcha_challenge": {
+                                        "type": "string",
+                                        "example": "3 + 8 = ?"
+                                    },
+                                    "captcha_signature": {
+                                        "type": "string",
+                                        "example": "4e5f6a..."
+                                    },
+                                    "captcha_response": {
+                                        "type": "string",
+                                        "example": "11"
+                                    },
+                                    "website_url": {
+                                        "type": "string",
+                                        "example": ""
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Guest registry successfully recorded and logged",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StandardResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Validation error (missing guest details or invalid document)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    }
+                }
+            }
+        },
+        "/ical.php": {
+            "get": {
+                "tags": [
+                    "Calendar Feed"
+                ],
+                "summary": "Export booked calendar dates in iCalendar (.ics) format",
+                "description": "Generates a standard RFC 5545 iCalendar stream containing all confirmed and active holds for the specified apartment to synchronize with Airbnb, Booking.com, and VRBO calendar channel managers.",
+                "operationId": "exportICalFeed",
+                "parameters": [
+                    {
+                        "name": "property",
+                        "in": "query",
+                        "description": "Property Unit ID (1606 or 1707)",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "1606",
+                                "1707"
+                            ],
+                            "example": "1606"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Valid iCalendar file stream (text/calendar)",
+                        "content": {
+                            "text/calendar": {
+                                "schema": {
+                                    "type": "string",
+                                    "example": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//OceanViewFlats//Direct Booking Sync//EN\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:RES-1606-1234@oceanviewflats.com\r\nDTSTART;VALUE=DATE:20260910\r\nDTEND;VALUE=DATE:20260915\r\nSUMMARY:Blocked - OceanViewFlats Direct Booking\r\nEND:VEVENT\r\nEND:VCALENDAR"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid or missing property parameter"
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded"
+                    },
+                    "500": {
+                        "description": "Database or server configuration error"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "CaptchaChallenge": {
+                "description": "Mathematical CAPTCHA challenge model for anti-abuse verification",
+                "properties": {
+                    "math_challenge": {
+                        "description": "Human-readable arithmetic question",
+                        "type": "string",
+                        "example": "7 + 4 = ?"
+                    },
+                    "captcha_signature": {
+                        "description": "HMAC cryptographic signature of the answer",
+                        "type": "string",
+                        "example": "a1b2c3d4e5f67890abcdef..."
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    }
+                },
+                "type": "object"
+            },
+            "StandardResponse": {
+                "description": "Standard JSON success response structure",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Operation completed successfully."
+                    }
+                },
+                "type": "object"
+            },
+            "ErrorResponse": {
+                "description": "Standard JSON error response structure",
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "Invalid parameter provided."
+                    },
+                    "error": {
+                        "type": "string",
+                        "example": "Validation Error",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            },
+            "GuestInfo": {
+                "description": "Guest identity detail for check-in registry",
+                "required": [
+                    "name",
+                    "doc_type",
+                    "doc_number",
+                    "age"
+                ],
+                "properties": {
+                    "name": {
+                        "description": "Full legal name of the guest",
+                        "type": "string",
+                        "example": "Juan Perez"
+                    },
+                    "doc_type": {
+                        "description": "Identity document type",
+                        "type": "string",
+                        "enum": [
+                            "CC",
+                            "CE",
+                            "PASSPORT",
+                            "DNI",
+                            "TI",
+                            "OTHER"
+                        ],
+                        "example": "PASSPORT"
+                    },
+                    "doc_number": {
+                        "description": "Document or passport number",
+                        "type": "string",
+                        "example": "P12345678"
+                    },
+                    "age": {
+                        "description": "Guest age in years",
+                        "type": "integer",
+                        "example": 32
+                    }
+                },
+                "type": "object"
+            },
+            "BookingQuotation": {
+                "description": "Calculated pricing breakdown for a booking request",
+                "properties": {
+                    "nights": {
+                        "type": "integer",
+                        "example": 4
+                    },
+                    "nightly_rate_cop": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 350000
+                    },
+                    "cleaning_fee_cop": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 120000
+                    },
+                    "total_price_cop": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 1520000
+                    },
+                    "currency": {
+                        "type": "string",
+                        "example": "COP"
+                    }
+                },
+                "type": "object"
+            },
+            "PaymentPayerIdentification": {
+                "description": "Payer identification details for payment gateway",
+                "properties": {
+                    "type": {
+                        "description": "Identification type (e.g., CC, CE, PASSPORT, NIT)",
+                        "type": "string",
+                        "example": "CC"
+                    },
+                    "number": {
+                        "description": "Identification number",
+                        "type": "string",
+                        "example": "1020304050"
+                    }
+                },
+                "type": "object"
+            },
+            "PaymentPayer": {
+                "description": "Payer contact and identity details",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "guest@example.com"
+                    },
+                    "identification": {
+                        "$ref": "#/components/schemas/PaymentPayerIdentification"
+                    }
+                },
+                "type": "object"
+            },
+            "PaymentTransactionResult": {
+                "description": "Detailed payment gateway processing transaction response",
+                "properties": {
+                    "id": {
+                        "description": "Mercado Pago transaction identifier",
+                        "type": "integer",
+                        "example": 1234567890
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "approved",
+                            "in_process",
+                            "pending",
+                            "rejected",
+                            "cancelled"
+                        ],
+                        "example": "approved"
+                    },
+                    "status_detail": {
+                        "type": "string",
+                        "example": "accredited"
+                    },
+                    "payment_method_id": {
+                        "type": "string",
+                        "example": "visa"
+                    },
+                    "transaction_amount": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 1520000
+                    },
+                    "external_reference": {
+                        "type": "string",
+                        "example": "RES-1707-ABCD-1234"
+                    },
+                    "date_approved": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-09-01T14:30:00.000-05:00",
+                        "nullable": true
+                    },
+                    "ticket_url": {
+                        "type": "string",
+                        "example": "https://www.mercadopago.com.co/payments/1234567890/ticket",
+                        "nullable": true
+                    }
+                },
+                "type": "object"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Availability",
+            "description": "Real-time calendar availability and iCal feeds synchronization"
+        },
+        {
+            "name": "Booking",
+            "description": "Direct booking requests, date validations, and quotation processing"
+        },
+        {
+            "name": "Payments",
+            "description": "Mercado Pago Checkout Bricks and server-to-server transaction processor"
+        },
+        {
+            "name": "Webhooks",
+            "description": "Asynchronous payment status notifications and IPN listener"
+        },
+        {
+            "name": "Guest Registry",
+            "description": "Police guest check-in registration form processor"
+        },
+        {
+            "name": "Contact",
+            "description": "Direct contact form messaging and math challenge generation"
+        },
+        {
+            "name": "Calendar Feed",
+            "description": "Outbound iCalendar (.ics) exports for channel management"
+        }
+    ]
+}

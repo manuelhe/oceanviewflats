@@ -6,7 +6,7 @@
 Options -Indexes
 
 # 2. Block direct web access to internal configuration, utility, and SQL schema files
-<FilesMatch "^(config|utils|schema|translations)\.php$">
+<FilesMatch "^(config|utils|schema|translations|OpenApi)\.php$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -16,14 +16,25 @@ Options -Indexes
     </IfModule>
 </FilesMatch>
 
-# 3. Block web access to local backups, logs, or lockfiles (defense-in-depth)
-<FilesMatch "\.(json|log|sql|lock|bak|config)$">
+# 3. Block web access to internal logs, rate limits, or lockfiles
+<FilesMatch "^(ovf_|composer|\.).*\.(json|lock|log|sql|bak|config)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
     <IfModule !mod_authz_core.c>
         Order Deny,Allow
         Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 4. Explicitly allow public OpenAPI specification files
+<FilesMatch "^openapi\.(json|yaml)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Allow,Deny
+        Allow from all
     </IfModule>
 </FilesMatch>
 

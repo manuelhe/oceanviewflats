@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OceanViewFlats API Documentation</title>
+  <meta name="description" content="Interactive OpenAPI 3.1 Documentation for OceanViewFlats REST API">
+  <link rel="icon" type="image/svg+xml" href="../../images/favicon.svg">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #059669;
+      --primary-dark: #047857;
+      --bg-dark: #0f172a;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f8fafc;
+      color: var(--text-main);
+    }
+    .custom-topbar {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      color: #ffffff;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: #ffffff;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: white;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+    .badge-openapi {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.3);
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .topbar-links {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .topbar-link {
+      color: #cbd5e1;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .topbar-link:hover {
+      color: #ffffff;
+    }
+    .topbar-btn {
+      background: #059669;
+      color: #ffffff;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s ease;
+    }
+    .topbar-btn:hover {
+      background: #047857;
+    }
+    /* Swagger UI Custom Overrides */
+    .swagger-ui .topbar {
+      display: none !important;
+    }
+    .swagger-ui .info {
+      margin: 30px 0 20px 0;
+    }
+    .swagger-ui .info .title {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .swagger-ui code, .swagger-ui pre {
+      font-family: 'JetBrains Mono', monospace !important;
+    }
+    .swagger-ui .btn.authorize {
+      background-color: #059669;
+      border-color: #059669;
+      color: #fff;
+    }
+    .swagger-ui .btn.authorize svg {
+      fill: #fff;
+    }
+    .swagger-ui .opblock.opblock-get .opblock-summary-method {
+      background: #0284c7;
+    }
+    .swagger-ui .opblock.opblock-post .opblock-summary-method {
+      background: #059669;
+    }
+  </style>
+</head>
+<body>
+  <header class="custom-topbar">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="/" class="brand">
+        <div class="brand-logo">OVF</div>
+        <div class="brand-title">OceanViewFlats</div>
+      </a>
+      <span class="badge-openapi">OpenAPI 3.1</span>
+    </div>
+    <nav class="topbar-links">
+      <a href="../openapi.json" target="_blank" class="topbar-link" title="Raw OpenAPI JSON Specification">
+        <span>📄</span> JSON Spec
+      </a>
+      <a href="../openapi.yaml" target="_blank" class="topbar-link" title="Raw OpenAPI YAML Specification">
+        <span>📄</span> YAML Spec
+      </a>
+      <a href="/" class="topbar-btn">← Back to Site</a>
+    </nav>
+  </header>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: "../openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        displayRequestDuration: true,
+        docExpansion: "list",
+        filter: true,
+        showExtensions: true,
+        showCommonExtensions: true,
+        tryItOutEnabled: true
+      });
+      window.ui = ui;
+    };
+  </script>
+</body>
+</html>

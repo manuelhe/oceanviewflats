@@ -1,0 +1,23 @@
+{
+  "name": "oceanviewflats/backend-api",
+  "description": "OceanViewFlats PHP REST API with OpenAPI Specification",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.1"
+  },
+  "require-dev": {
+    "zircote/swagger-php": "^4.11"
+  },
+  "autoload": {
+    "psr-4": {
+      "OceanViewFlats\\Api\\": "public/api/"
+    }
+  },
+  "scripts": {
+    "generate-docs": "php scripts/generate-docs.php"
+  },
+  "config": {
+    "allow-plugins": {}
+  }
+}
