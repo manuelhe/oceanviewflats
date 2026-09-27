@@ -141,3 +141,5 @@ Thumbs.db
 # Other tools
 .antigravitycli
 tasks
+.phpunit.result.cache
+.phpunit.cache/
