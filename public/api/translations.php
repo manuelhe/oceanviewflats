@@ -80,8 +80,9 @@ return [
             'nights' => 'Stay Duration',
             'nights_val' => '%d nights',
             'total' => 'Amount Paid',
-            'footer' => 'You can now access your customized Welcome Guide using your reservation code. Please register guest IDs prior to check-in.',
-            'btn_guide' => 'Open Welcome Guide'
+            'footer' => 'In compliance with Colombian statutory hospitality regulations and Playa Salguero condominium security requirements, complete identification for all staying guests is required before property access credentials can be issued.',
+            'btn_registry' => 'Complete Guest Registry',
+            'access_notice' => 'Property access credentials and check-in instructions will be released once your Guest Registry has been verified.'
         ]
     ],
     'es' => [
@@ -157,8 +158,9 @@ return [
             'nights' => 'Duración de Estadía',
             'nights_val' => '%d noches',
             'total' => 'Total Pagado',
-            'footer' => 'Ya puede acceder a su Guía de Huéspedes personalizada ingresando su código de reserva. No olvide registrar las identificaciones de sus invitados antes del check-in.',
-            'btn_guide' => 'Abrir Guía de Bienvenida'
+            'footer' => 'En cumplimiento con las normas legales de hotelería en Colombia y las políticas de seguridad del condominio en Playa Salguero, se requiere el registro de identificación de todos los huéspedes antes de expedir las credenciales de acceso a la propiedad.',
+            'btn_registry' => 'Completar Registro de Huéspedes',
+            'access_notice' => 'Las credenciales de acceso y las instrucciones de llegada se enviarán una vez que el Registro de Huéspedes haya sido completado y verificado.'
         ]
     ],
     'fr' => [
@@ -234,8 +236,9 @@ return [
             'nights' => 'Durée du Séjour',
             'nights_val' => '%d nuits',
             'total' => 'Total Payé',
-            'footer' => 'Vous pouvez dès à présent accéder à votre Guide d\'Accueil personnalisé avec votre code de réservation. Veuillez enregistrer les pièces d\'identité des clients avant l\'arrivée.',
-            'btn_guide' => 'Ouvrir le Guide d\'Accueil'
+            'footer' => 'Conformément aux réglementations hôtelières colombiennes et aux exigences de sécurité de la copropriété à Playa Salguero, l\'enregistrement complet de tous les occupants est obligatoire avant l\'émission des codes d\'accès à la propriété.',
+            'btn_registry' => 'Remplir le registre des voyageurs',
+            'access_notice' => 'Les identifiants d\'accès et les instructions d\'arrivée vous seront transmis après validation du registre des voyageurs.'
         ]
     ],
     'it' => [
@@ -311,8 +314,9 @@ return [
             'nights' => 'Durata del Soggiorno',
             'nights_val' => '%d notti',
             'total' => 'Totale Pagato',
-            'footer' => 'Ora puoi accedere alla tua Guida di Benvenuto personalizzata inserendo il tuo codice di prenotazione. Ricorda di registrare i documenti degli ospiti prima dell\'arrivo.',
-            'btn_guide' => 'Apri la Guida di Benvenuto'
+            'footer' => 'In conformità alle normative alberghiere colombiane e ai requisiti di sicurezza del condominio a Playa Salguero, è richiesta la registrazione completa di tutti gli ospiti prima del rilascio delle credenziali di accesso.',
+            'btn_registry' => 'Completa il registro degli ospiti',
+            'access_notice' => 'Le credenziali di accesso e le istruzioni di arrivo saranno trasmesse dopo la verifica del registro degli ospiti.'
         ]
     ],
     'de' => [
@@ -388,8 +392,9 @@ return [
             'nights' => 'Aufenthaltsdauer',
             'nights_val' => '%d Nächte',
             'total' => 'Bezahlter Gesamtbetrag',
-            'footer' => 'Sie können nun mit Ihrem Buchungscode auf Ihren personalisierten Willkommens-Guide zugreifen. Bitte registrieren Sie die Identifikationsdaten der Gäste vor dem Check-in.',
-            'btn_guide' => 'Willkommens-Guide öffnen'
+            'footer' => 'Gemäß den kolumbianischen Gastgewerbevorschriften und den Sicherheitsanforderungen der Wohnanlage in Playa Salguero müssen alle anreisenden Gäste registriert sein, bevor Zugangsberechtigungen für die Unterkunft erteilt werden können.',
+            'btn_registry' => 'Gästeregistrierung ausfüllen',
+            'access_notice' => 'Die Zugangsdaten und Anreisehinweise werden nach Prüfung des ausgefüllten Gästeregisters freigegeben.'
         ]
     ],
     'ja' => [
@@ -465,8 +470,9 @@ return [
             'nights' => '宿泊期間',
             'nights_val' => '%d 泊',
             'total' => 'お支払い金額',
-            'footer' => 'お部屋のウェルカムガイドは、上記の予約コードを入力することでアクセス可能です。チェックインまでに同伴者全員のご登録（ゲスト登録）をお願いいたします。',
-            'btn_guide' => 'ウェルカムガイドを開く'
+            'footer' => 'コロンビアの宿泊施設関連法規およびプラヤ・サルゲロのマンション管理組合セキュリティ規則に基づき、入室用暗証番号を発行する前に、すべてのご宿泊者の本人確認（宿泊者名簿登録）が義務付けられております。',
+            'btn_registry' => '宿泊者名簿に登録する',
+            'access_notice' => '入室用暗証番号およびチェックイン手順は、宿泊者名簿の確認完了後にご案内いたします。'
         ]
     ]
 ];
