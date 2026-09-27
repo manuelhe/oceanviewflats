@@ -13,8 +13,11 @@ if (count(get_included_files()) === 1 && !defined('ALLOW_ICAL_RUN')) {
     define('ALLOW_ICAL_RUN', true);
 }
 
-// 2. Load Shared Utilities & Configuration
+// 2. Load Composer Autoloader & Shared Utilities
+require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
+
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 
 // Enforce security headers & CORS policy dynamically
 enforce_security_headers_and_cors(['GET', 'OPTIONS']);
@@ -38,26 +41,16 @@ if (!in_array($propertyId, ['1606', '1707'])) {
 
 // 4. Initialize PDO Connection using shared library
 try {
-    $pdo = get_db_connection($config['db']);
+    $pdo = $GLOBALS['TEST_PDO'] ?? get_db_connection($config['db']);
 } catch (PDOException $e) {
     http_response_code(500);
     exit("Internal Server Error: Database offline.");
 }
 
-// 5. Fetch Active Direct Bookings (Option B: Confirmed AND active pending holds < 10 minutes)
+// 5. Fetch Active Direct Bookings via Authoritative Reservation Repository (ADR 0003 Dynamic Hold Windows)
 try {
-    $stmt = $pdo->prepare("
-        SELECT `reservation_uid`, `check_in`, `check_out`, `created_at`
-        FROM `reservations`
-        WHERE `property_id` = :property_id
-          AND (
-              `status` = 'confirmed'
-              OR
-              (`status` = 'pending_payment' AND `created_at` > NOW() - INTERVAL 10 MINUTE)
-          )
-    ");
-    $stmt->execute(['property_id' => $propertyId]);
-    $bookings = $stmt->fetchAll();
+    $repository = new PdoReservationRepository($pdo);
+    $activeReservations = $repository->findActiveByProperty($propertyId);
 } catch (Exception $e) {
     http_response_code(500);
     exit("Internal Server Error: Failed to fetch calendar records.");
@@ -85,11 +78,11 @@ echo "PRODID:-//OceanViewFlats//Direct Booking Sync//EN\r\n";
 echo "CALSCALE:GREGORIAN\r\n";
 echo "METHOD:PUBLISH\r\n";
 
-foreach ($bookings as $booking) {
-    $uid = $booking['reservation_uid'] . '@oceanviewflats.com';
-    $dtstamp = formatICalDateTime($booking['created_at']);
-    $dtstart = formatICalDate($booking['check_in']);
-    $dtend = formatICalDate($booking['check_out']);
+foreach ($activeReservations as $res) {
+    $uid = $res->reservationUid . '@oceanviewflats.com';
+    $dtstamp = formatICalDateTime($res->createdAt->format('Y-m-d H:i:s'));
+    $dtstart = formatICalDate($res->checkIn);
+    $dtend = formatICalDate($res->checkOut);
 
     echo "BEGIN:VEVENT\r\n";
     echo "UID:" . $uid . "\r\n";

@@ -54,4 +54,15 @@ interface ReservationRepositoryInterface
         ?string $paymentStatus = null,
         ?string $paymentDetail = null
     ): ?Reservation;
+
+    /**
+     * Atomically validates that no active reservation overlaps the requested dates and persists the hold.
+     * Prevents race conditions via database-level transaction locks.
+     */
+    public function holdAtomic(
+        Reservation $reservation,
+        ?DateTimeImmutable $now = null,
+        int $standardHoldMinutes = Reservation::DEFAULT_STANDARD_HOLD_MINUTES,
+        int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
+    ): Reservation;
 }

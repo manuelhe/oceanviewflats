@@ -36,6 +36,25 @@ interface ReservationLedgerInterface
     ): array;
 
     /**
+     * Finds the first overlapping ephemeral channel block, or null if none.
+     */
+    public function findChannelConflict(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?ChannelBlock;
+
+    /**
+     * Finds the first overlapping active direct reservation, or null if none.
+     */
+    public function findReservationConflict(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut,
+        ?DateTimeImmutable $now = null
+    ): ?Reservation;
+
+    /**
      * Returns all blocked night dates (YYYY-MM-DD) for a property, merging ephemeral channel blocks
      * and active direct reservations.
      *
