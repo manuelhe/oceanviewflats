@@ -11,6 +11,9 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
+use OceanViewFlats\Domain\Fulfillment\BookingFulfillment;
+use OceanViewFlats\Domain\Fulfillment\GoogleSheetWebhookSync;
+use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
@@ -274,38 +277,30 @@ if ($pdo !== null) {
     }
 }
 
-// Dispatch to Google Sheet Logger WebApp
-$webhook_url = GOOGLE_SHEET_WEBAPP_URL;
-if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
-    $sheetPayload = [
-        'timestamp' => date('Y-m-d H:i:s'),
-        'reservation_uid' => $uid,
-        'property' => $propertyId,
-        'check_in' => $checkInStr,
-        'check_out' => $checkOutStr,
-        'guest_name' => $guestName,
-        'guest_email' => $guestEmail,
-        'guest_phone' => $guestPhone,
-        'total_price' => $serverTotalCop,
-        'status' => $reservationStatus,
+// Post-settlement fulfillment & notifications
+if ($reservationStatus === 'confirmed') {
+    $fulfillment = BookingFulfillment::createDefault();
+    $fulfillment->fulfillConfirmation($reservation, [
         'payment_id' => $paymentId,
         'payment_status' => $paymentStatus
-    ];
-    $sh = curl_init($webhook_url);
-    curl_setopt($sh, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($sh, CURLOPT_POST, true);
-    curl_setopt($sh, CURLOPT_POSTFIELDS, json_encode($sheetPayload));
-    curl_setopt($sh, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($sh, CURLOPT_TIMEOUT, 8);
-    curl_exec($sh);
-    curl_close($sh);
-}
+    ]);
+} else {
+    // Synchronize pending hold to Google Sheets
+    $sheetSync = GoogleSheetWebhookSync::createFromEnv();
+    $sheetSync->sync($reservation, [
+        'payment_id' => $paymentId,
+        'payment_status' => $paymentStatus
+    ]);
 
-// Formatting total text currency
-$copFormatter = '$' . number_get_formatted_amount($serverTotalCop) . ' COP';
+    // Dispatch pending inquiry / voucher hold email (no access credentials per ADR 0001)
+    $mailSender = new PhpMailSender();
+    $copFormatter = '$' . number_get_formatted_amount($serverTotalCop) . ' COP';
+    $safeGuestName = htmlspecialchars($guestName, ENT_QUOTES, 'UTF-8');
+    $safePropertyId = htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8');
+    $safeUid = htmlspecialchars($uid, ENT_QUOTES, 'UTF-8');
+    $safeGuestPhone = htmlspecialchars($guestPhone, ENT_QUOTES, 'UTF-8');
 
-// Prepare Dynamic HTML Emails
-$html_message = "
+    $html_message = <<<HTML
 <!DOCTYPE html>
 <html>
 <head>
@@ -321,57 +316,42 @@ $html_message = "
     .item-row:last-child { border-bottom: none; }
     .total-row { display: flex; justify-content: space-between; padding-top: 16px; margin-top: 16px; border-top: 2px solid #cbd5e1; font-size: 18px; font-weight: 800; }
     .footer { text-align: center; padding: 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 13px; color: #64748b; }
-    .btn { display: inline-block; padding: 14px 28px; background-color: #10b981; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-weight: 700; margin-top: 20px; box-shadow: 0 4px 6px -1px rgba(16,185,129,0.2); }
+    .footer-note { font-size: 14px; color: #475569; margin-top: 20px; }
   </style>
 </head>
 <body>
   <div class='container'>
     <div class='header'>
-      <h1>" . ($reservationStatus === 'confirmed' ? $t_web['title'] : $t['email_title']) . "</h1>
+      <h1>{$t['email_title']}</h1>
     </div>
     <div class='content'>
-      <p>" . sprintf($reservationStatus === 'confirmed' ? $t_web['intro'] : $t['email_intro'], $guestName) . "</p>
-      <p>" . ($reservationStatus === 'confirmed' ? $t_web['desc'] : $t['email_received']) . "</p>
+      <p>Dear {$safeGuestName},</p>
+      <p>{$t['email_received']}</p>
       
       <div class='summary-card'>
         <div class='summary-title'>{$t['email_summary']}</div>
-        <div class='item-row'><span>{$t['email_property']}</span><strong>Apto {$propertyId}</strong></div>
-        <div class='item-row'><span>{$t['email_code']}</span><strong>{$uid}</strong></div>
-        <div class='item-row'><span>{$t_web['nights']}</span><strong>" . sprintf($t['email_nights'], $datesCount) . " ({$checkInStr} / {$checkOutStr})</strong></div>
-        <div class='item-row'><span>Guest Phone</span><strong>{$guestPhone}</strong></div>
-        <div class='total-row'><span>{$t_web['total']}</span><strong>{$copFormatter}</strong></div>
-      </div>";
-
-if ($reservationStatus === 'confirmed') {
-    $guideUrl = "https://www.oceanviewflats.com/guide/?code={$uid}&property={$propertyId}&lang={$lang}";
-    $html_message .= "<p class='footer-note'>{$t_web['footer']}</p>";
-    $html_message .= "<div style='text-align: center;'><a href='{$guideUrl}' class='btn'>{$t_web['btn_guide']}</a></div>";
-} else {
-    $html_message .= "<p class='footer-note'>{$t['email_footer']}</p>";
-}
-
-$html_message .= "
+        <div class='item-row'><span>{$t['email_property']}</span><strong>Apto {$safePropertyId}</strong></div>
+        <div class='item-row'><span>{$t['email_code']}</span><strong>{$safeUid}</strong></div>
+        <div class='item-row'><span>Stay Duration</span><strong>{$datesCount} nights ({$checkInStr} / {$checkOutStr})</strong></div>
+        <div class='item-row'><span>Guest Phone</span><strong>{$safeGuestPhone}</strong></div>
+        <div class='total-row'><span>{$t['email_total']}</span><strong>{$copFormatter}</strong></div>
+      </div>
+      <p class='footer-note'>{$t['email_footer']}</p>
     </div>
     <div class='footer'>
-      &copy; " . date('Y') . " OceanViewFlats. All rights reserved.
+      &copy; 2026 OceanViewFlats. All rights reserved.
     </div>
   </div>
 </body>
 </html>
-";
+HTML;
 
-$headers = "MIME-Version: 1.0\r\n";
-$headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-$headers .= "From: OceanViewFlats <no-reply@oceanviewflats.com>\r\n";
-$headers .= "Reply-To: rentals@oceanviewflats.com\r\n";
-$headers .= "X-Mailer: PHP/" . phpversion();
+    $subjectHost = "BOOKING INQUIRY: Prop $propertyId ($guestName) - [" . strtoupper($lang) . "]";
+    $mailSender->send(RECIPIENT_EMAIL, $subjectHost, $html_message);
 
-// Email deliveries
-$subjectHost = ($reservationStatus === 'confirmed' ? "BOOKING PAID & CONFIRMED: " : "BOOKING INQUIRY: ") . "Prop $propertyId ($guestName) - [" . strtoupper($lang) . "]";
-mail(RECIPIENT_EMAIL, $subjectHost, $html_message, $headers);
-
-$subjectGuest = sprintf($reservationStatus === 'confirmed' ? $t_web['subject'] : $t['email_subject_guest'], $propertyId);
-mail($guestEmail, $subjectGuest, $html_message, $headers);
+    $subjectGuest = sprintf($t['email_subject_guest'], $propertyId);
+    $mailSender->send($guestEmail, $subjectGuest, $html_message);
+}
 
 // Build response details based on the payment method category
 $responseDetails = [

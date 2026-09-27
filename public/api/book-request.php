@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
+use OceanViewFlats\Domain\Fulfillment\GoogleSheetWebhookSync;
+use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
@@ -169,22 +171,22 @@ if (abs($serverTotalCop - $clientPriceCop) > 1.0) {
 $uid = 'ovf_' . bin2hex(random_bytes(4)); // Safe unique reservation code
 $dbLogged = false;
 
+$reservation = new Reservation(
+    reservationUid: $uid,
+    propertyId: $propertyId,
+    guestName: $guestName,
+    guestEmail: $guestEmail,
+    guestPhone: $guestPhone,
+    checkIn: $checkInStr,
+    checkOut: $checkOutStr,
+    totalPrice: (float)$serverTotalCop,
+    status: ReservationStatus::PENDING_PAYMENT,
+    lang: $lang,
+    createdAt: new DateTimeImmutable()
+);
+
 if ($pdo !== null) {
     try {
-        $reservation = new Reservation(
-            reservationUid: $uid,
-            propertyId: $propertyId,
-            guestName: $guestName,
-            guestEmail: $guestEmail,
-            guestPhone: $guestPhone,
-            checkIn: $checkInStr,
-            checkOut: $checkOutStr,
-            totalPrice: (float)$serverTotalCop,
-            status: ReservationStatus::PENDING_PAYMENT,
-            lang: $lang,
-            createdAt: new DateTimeImmutable()
-        );
-
         $repository = new PdoReservationRepository($pdo);
         $repository->save($reservation);
         $dbLogged = true;
@@ -194,39 +196,8 @@ if ($pdo !== null) {
 }
 
 // 9. Forward Details to Google Sheet webhook
-$sheetSuccess = false;
-$webhook_url = GOOGLE_SHEET_WEBAPP_URL;
-if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
-    $sheetPayload = [
-        'timestamp' => date('Y-m-d H:i:s'),
-        'reservation_uid' => $uid,
-        'property' => $propertyId,
-        'check_in' => $checkInStr,
-        'check_out' => $checkOutStr,
-        'guest_name' => $guestName,
-        'guest_email' => $guestEmail,
-        'guest_phone' => $guestPhone,
-        'total_price' => $serverTotalCop,
-        'status' => 'pending_payment'
-    ];
-
-    $ch = curl_init($webhook_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($sheetPayload));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'User-Agent: OceanViewFlats Direct Booking PHP'
-    ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
-    $res = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code === 200) {
-        $sheetSuccess = true;
-    }
-}
+$sheetSync = GoogleSheetWebhookSync::createFromEnv();
+$sheetSuccess = $sheetSync->sync($reservation);
 
 // 10. Send Structured Emails (Host & Guest)
 $copFormatter = "$ " . number_format($serverTotalCop, 0, ',', '.') . " COP";
@@ -296,20 +267,16 @@ $html_message = "
 </html>
 ";
 
-// Secure headers for multipart HTML delivery
-$headers = "MIME-Version: 1.0\r\n";
-$headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-$headers .= "From: OceanViewFlats <no-reply@oceanviewflats.com>\r\n";
-$headers .= "Reply-To: rentals@oceanviewflats.com\r\n";
-$headers .= "X-Mailer: PHP/" . phpversion();
+// Dispatch via PhpMailSender
+$mailSender = new PhpMailSender();
 
 // Send to host
 $subjectHost = "NEW DIRECT BOOKING REQUEST: Prop $propertyId ($guestName) - [" . strtoupper($lang) . "]";
-mail(RECIPIENT_EMAIL, $subjectHost, $html_message, $headers);
+$mailSender->send(RECIPIENT_EMAIL, $subjectHost, $html_message);
 
 // Send to guest as receipt (fully localized!)
 $subjectGuest = sprintf($t['email_subject_guest'], $propertyId);
-mail($guestEmail, $subjectGuest, $html_message, $headers);
+$mailSender->send($guestEmail, $subjectGuest, $html_message);
 
 // Output successful response to client - fully localized!
 $localizedMessage = "
