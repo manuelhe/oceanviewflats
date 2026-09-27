@@ -13,6 +13,10 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use OceanViewFlats\Domain\Quote\QuoteEngine;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationLedger;
+use OceanViewFlats\Domain\Reservation\ReservationStatus;
 
 // Load central utilities & configuration
 require_once __DIR__ . '/utils.php';
@@ -112,64 +116,29 @@ if ($checkIn < strtotime(date('Y-m-d'))) {
     send_json_response(false, $t['err_dates_past']);
 }
 
-// 6. Overlap Booking Check Against Cache and Database
-// A: Check Airbnb iCal Cache
-$cacheFile = __DIR__ . '/../cache/avail_' . $propertyId . '.json';
-$blockedDates = [];
-if (file_exists($cacheFile)) {
-    $cacheContent = @file_get_contents($cacheFile);
-    if ($cacheContent !== false) {
-        $blockedDates = json_decode($cacheContent, true) ?: [];
-    }
-}
-
-$requestedNights = [];
-$curr = $checkIn;
-while ($curr < $checkOut) {
-    $dateStr = date('Y-m-d', $curr);
-    $requestedNights[] = $dateStr;
-    if (in_array($dateStr, $blockedDates, true)) {
-        send_json_response(false, sprintf($t['err_overlap_airbnb'], $dateStr));
-    }
-    $curr = strtotime("+1 day", $curr);
-}
-
-// B: Establish Database Connection and check local table
+// 6. Overlap Booking Check Against Cache and Database via ReservationLedger
 $pdo = null;
-try {
-    $dsn = "mysql:host=" . $config['db']['host'] . ";charset=utf8mb4";
-    $pdo = new PDO($dsn, $config['db']['user'], $config['db']['pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-
-    // Create database and tables automatically if missing
-    $dbname = $config['db']['dbname'];
-    $pdo->exec("USE `$dbname`");
-
-    // Query for overlapping local reservations that are NOT cancelled
-    $stmt = $pdo->prepare("
-        SELECT id FROM `reservations`
-        WHERE `property_id` = :prop_id
-          AND `status` != 'cancelled'
-          AND (
-            (`check_in` <= :check_in AND `check_out` > :check_in) OR
-            (`check_in` < :check_out AND `check_out` >= :check_out) OR
-            (:check_in <= `check_in` AND :check_out >= `check_out`)
-          )
-    ");
-    $stmt->execute([
-        'prop_id' => $propertyId,
-        'check_in' => $checkInStr,
-        'check_out' => $checkOutStr
-    ]);
-    if ($stmt->fetch()) {
-        send_json_response(false, $t['err_overlap_db']);
+if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
+    try {
+        $pdo = get_db_connection($config['db']);
+    } catch (PDOException $e) {
+        error_log("Direct booking MySQL connection failed: " . $e->getMessage());
     }
-} catch (PDOException $e) {
-    // If the database connection fails, log locally but proceed with CSV calculations and email routing (high reliability)
-    error_log("Direct booking MySQL connection failed: " . $e->getMessage());
+}
+
+$cacheDir = __DIR__ . '/../cache';
+$ledger = ReservationLedger::createDefault($pdo, $cacheDir);
+
+// A: Ephemeral channel blocks check (ADR 0002)
+$channelConflict = $ledger->findChannelConflict($propertyId, $checkInStr, $checkOutStr);
+if ($channelConflict !== null) {
+    send_json_response(false, sprintf($t['err_overlap_airbnb'], $channelConflict->startDate));
+}
+
+// B: Active direct reservations check with dynamic hold windows (ADR 0003)
+$resConflict = $ledger->findReservationConflict($propertyId, $checkInStr, $checkOutStr);
+if ($resConflict !== null) {
+    send_json_response(false, $t['err_overlap_db']);
 }
 
 // 7. Authoritative Quote Computation via QuoteEngine (ADR 0004)
@@ -202,23 +171,24 @@ $dbLogged = false;
 
 if ($pdo !== null) {
     try {
-        $stmt = $pdo->prepare("
-            INSERT INTO `reservations` (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, lang)
-            VALUES (:uid, :prop, :name, :email, :phone, :check_in, :check_out, :price, 'pending_payment', :lang)
-        ");
-        $stmt->execute([
-            'uid' => $uid,
-            'prop' => $propertyId,
-            'name' => $guestName,
-            'email' => $guestEmail,
-            'phone' => $guestPhone,
-            'check_in' => $checkInStr,
-            'check_out' => $checkOutStr,
-            'price' => $serverTotalCop,
-            'lang' => $lang
-        ]);
+        $reservation = new Reservation(
+            reservationUid: $uid,
+            propertyId: $propertyId,
+            guestName: $guestName,
+            guestEmail: $guestEmail,
+            guestPhone: $guestPhone,
+            checkIn: $checkInStr,
+            checkOut: $checkOutStr,
+            totalPrice: (float)$serverTotalCop,
+            status: ReservationStatus::PENDING_PAYMENT,
+            lang: $lang,
+            createdAt: new DateTimeImmutable()
+        );
+
+        $repository = new PdoReservationRepository($pdo);
+        $repository->save($reservation);
         $dbLogged = true;
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         error_log("Database insertion failed: " . $e->getMessage());
     }
 }

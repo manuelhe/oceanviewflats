@@ -12,6 +12,10 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use OceanViewFlats\Domain\Quote\QuoteEngine;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationLedger;
+use OceanViewFlats\Domain\Reservation\ReservationStatus;
 
 // Load central utilities & configuration
 require_once __DIR__ . '/utils.php';
@@ -101,61 +105,30 @@ if ($checkIn < strtotime(date('Y-m-d'))) {
     send_json_response(false, $t['err_dates_past']);
 }
 
-// Overlap check: Airbnb Cache iCal
-$cacheFile = __DIR__ . '/../cache/avail_' . $propertyId . '.json';
-$blockedDates = [];
-if (file_exists($cacheFile)) {
-    $cacheContent = @file_get_contents($cacheFile);
-    if ($cacheContent !== false) {
-        $blockedDates = json_decode($cacheContent, true) ?: [];
-    }
-}
-
-$requestedNights = [];
-$curr = $checkIn;
-while ($curr < $checkOut) {
-    $dateStr = date('Y-m-d', $curr);
-    $requestedNights[] = $dateStr;
-    if (in_array($dateStr, $blockedDates, true)) {
-        send_json_response(false, sprintf($t['err_overlap_airbnb'], $dateStr));
-    }
-    $curr = strtotime("+1 day", $curr);
-}
-
 // Establishing DB Connection
 $pdo = null;
-try {
-    $dsn = "mysql:host=" . $config['db']['host'] . ";charset=utf8mb4";
-    $pdo = new PDO($dsn, $config['db']['user'], $config['db']['pass'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-
-    $dbname = $config['db']['dbname'];
-    $pdo->exec("USE `$dbname`");
-
-    // Double-Booking overlapping reservations check
-    $stmt = $pdo->prepare("
-        SELECT id FROM `reservations`
-        WHERE `property_id` = :prop_id
-          AND `status` != 'cancelled'
-          AND (
-            (`check_in` <= :check_in AND `check_out` > :check_in) OR
-            (`check_in` < :check_out AND `check_out` >= :check_out) OR
-            (:check_in <= `check_in` AND :check_out >= `check_out`)
-          )
-    ");
-    $stmt->execute([
-        'prop_id' => $propertyId,
-        'check_in' => $checkInStr,
-        'check_out' => $checkOutStr
-    ]);
-    if ($stmt->fetch()) {
-        send_json_response(false, $t['err_overlap_db']);
+if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
+    try {
+        $pdo = get_db_connection($config['db']);
+    } catch (PDOException $e) {
+        error_log("Database connection failed in payment.php: " . $e->getMessage());
     }
-} catch (PDOException $e) {
-    error_log("Database execution/migration failed in payment.php: " . $e->getMessage());
+}
+
+// Authoritative Availability & Double-Booking Check via ReservationLedger
+$cacheDir = __DIR__ . '/../cache';
+$ledger = ReservationLedger::createDefault($pdo, $cacheDir);
+
+// 1. Ephemeral channel blocks check (ADR 0002)
+$channelConflict = $ledger->findChannelConflict($propertyId, $checkInStr, $checkOutStr);
+if ($channelConflict !== null) {
+    send_json_response(false, sprintf($t['err_overlap_airbnb'], $channelConflict->startDate));
+}
+
+// 2. Active direct reservations check with dynamic hold windows (ADR 0003)
+$resConflict = $ledger->findReservationConflict($propertyId, $checkInStr, $checkOutStr);
+if ($resConflict !== null) {
+    send_json_response(false, $t['err_overlap_db']);
 }
 
 // Authoritative Quote Computation via QuoteEngine (ADR 0004)
@@ -270,33 +243,33 @@ $paymentStatus = $mpResponse['status'] ?? 'pending'; // approved, pending, rejec
 $paymentMethodId = $mpResponse['payment_method_id'] ?? '';
 $reservationStatus = $paymentStatus === 'approved' ? 'confirmed' : 'pending_payment';
 
-// Save the main booking reservation directly to SQLite/MySQL
+// Persist reservation via authoritative Reservation Ledger repository
 if ($pdo !== null) {
     try {
-        $stmt = $pdo->prepare("
-            INSERT INTO `reservations` (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, lang, mercadopago_payment_id, payment_status, payment_method_id)
-            VALUES (:uid, :prop, :name, :email, :phone, :check_in, :check_out, :price, :status, :lang, :pay_id, :pay_status, :pay_method)
-        ");
-        $stmt->execute([
-            'uid' => $uid,
-            'prop' => $propertyId,
-            'name' => $guestName,
-            'email' => $guestEmail,
-            'phone' => $guestPhone,
-            'check_in' => $checkInStr,
-            'check_out' => $checkOutStr,
-            'price' => $serverTotalCop,
-            'status' => $reservationStatus,
-            'lang' => $lang,
-            'pay_id' => $paymentId,
-            'pay_status' => $paymentStatus,
-            'pay_method' => $paymentMethodId
-        ]);
+        $reservation = new Reservation(
+            reservationUid: $uid,
+            propertyId: $propertyId,
+            guestName: $guestName,
+            guestEmail: $guestEmail,
+            guestPhone: $guestPhone,
+            checkIn: $checkInStr,
+            checkOut: $checkOutStr,
+            totalPrice: (float)$serverTotalCop,
+            status: ReservationStatus::from($reservationStatus),
+            paymentMethodId: $paymentMethodId !== '' ? $paymentMethodId : null,
+            mercadopagoPaymentId: $paymentId !== '' ? $paymentId : null,
+            paymentStatus: $paymentStatus,
+            lang: $lang,
+            createdAt: new DateTimeImmutable()
+        );
+
+        $repository = new PdoReservationRepository($pdo);
+        $repository->save($reservation);
 
         // Insert idempotency shield logs
         $idemStmt = $pdo->prepare("INSERT INTO `payment_idempotency` (idempotency_key, payment_id) VALUES (:key, :pay_id)");
         $idemStmt->execute(['key' => $uid, 'pay_id' => $paymentId]);
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         error_log("DB Booking insertion failed in payment.php: " . $e->getMessage());
     }
 }

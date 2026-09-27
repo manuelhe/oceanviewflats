@@ -110,6 +110,34 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
         return $updated;
     }
 
+    public function holdAtomic(
+        Reservation $reservation,
+        ?DateTimeImmutable $now = null,
+        int $standardHoldMinutes = Reservation::DEFAULT_STANDARD_HOLD_MINUTES,
+        int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
+    ): Reservation {
+        $overlapping = $this->findOverlappingActive(
+            propertyId: $reservation->propertyId,
+            checkIn: $reservation->checkIn,
+            checkOut: $reservation->checkOut,
+            now: $now,
+            standardHoldMinutes: $standardHoldMinutes,
+            voucherHoldHours: $voucherHoldHours
+        );
+
+        if (!empty($overlapping)) {
+            $conflict = $overlapping[0];
+            throw ReservationConflictException::forDates(
+                $reservation->propertyId,
+                $reservation->checkIn,
+                $reservation->checkOut,
+                sprintf('Dates overlap active direct reservation %s', $conflict->reservationUid)
+            );
+        }
+
+        return $this->save($reservation);
+    }
+
     /**
      * Helper for test state inspection.
      *

@@ -150,7 +150,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         string $checkOut,
         ?DateTimeImmutable $now = null,
         int $standardHoldMinutes = Reservation::DEFAULT_STANDARD_HOLD_MINUTES,
-        int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
+        int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS,
+        bool $forUpdate = false
     ): array {
         $reference = $now ?? new DateTimeImmutable();
         $standardThreshold = $reference->sub(new DateInterval("PT{$standardHoldMinutes}M"))->format('Y-m-d H:i:s');
@@ -173,7 +174,7 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                   )
               )
               AND (`check_in` < :check_out AND `check_out` > :check_in)
-            ORDER BY `check_in` ASC";
+            ORDER BY `check_in` ASC" . ($forUpdate ? ' FOR UPDATE' : '');
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
@@ -191,6 +192,45 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         }
 
         return $reservations;
+    }
+
+    public function holdAtomic(
+        Reservation $reservation,
+        ?DateTimeImmutable $now = null,
+        int $standardHoldMinutes = Reservation::DEFAULT_STANDARD_HOLD_MINUTES,
+        int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
+    ): Reservation {
+        $this->pdo->beginTransaction();
+        try {
+            $overlapping = $this->findOverlappingActive(
+                propertyId: $reservation->propertyId,
+                checkIn: $reservation->checkIn,
+                checkOut: $reservation->checkOut,
+                now: $now,
+                standardHoldMinutes: $standardHoldMinutes,
+                voucherHoldHours: $voucherHoldHours,
+                forUpdate: true
+            );
+
+            if (!empty($overlapping)) {
+                $conflict = $overlapping[0];
+                throw ReservationConflictException::forDates(
+                    $reservation->propertyId,
+                    $reservation->checkIn,
+                    $reservation->checkOut,
+                    sprintf('Dates overlap active direct reservation %s', $conflict->reservationUid)
+                );
+            }
+
+            $saved = $this->save($reservation);
+            $this->pdo->commit();
+            return $saved;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     public function updateStatus(

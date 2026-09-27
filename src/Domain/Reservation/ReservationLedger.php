@@ -22,13 +22,19 @@ final class ReservationLedger implements ReservationLedgerInterface
         private readonly int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
     ) {}
 
-    public static function createDefault(PDO $pdo, ?string $cacheDir = null): self
+    public static function createDefault(?PDO $pdo = null, ?string $cacheDir = null): self
     {
+        $repository = $pdo !== null
+            ? new PdoReservationRepository($pdo)
+            : new InMemoryReservationRepository();
+
+        $channelBlockSource = $cacheDir !== null
+            ? new FileCacheChannelBlockSource($cacheDir)
+            : FileCacheChannelBlockSource::createDefault();
+
         return new self(
-            repository: new PdoReservationRepository($pdo),
-            channelBlockSource: $cacheDir !== null
-                ? new FileCacheChannelBlockSource($cacheDir)
-                : FileCacheChannelBlockSource::createDefault()
+            repository: $repository,
+            channelBlockSource: $channelBlockSource
         );
     }
 
@@ -93,6 +99,36 @@ final class ReservationLedger implements ReservationLedgerInterface
         return $reasons;
     }
 
+    public function findChannelConflict(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?ChannelBlock {
+        foreach ($this->channelBlockSource->getBlocks($propertyId) as $block) {
+            if ($block->overlaps($checkIn, $checkOut)) {
+                return $block;
+            }
+        }
+        return null;
+    }
+
+    public function findReservationConflict(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut,
+        ?DateTimeImmutable $now = null
+    ): ?Reservation {
+        $conflicts = $this->repository->findOverlappingActive(
+            propertyId: $propertyId,
+            checkIn: $checkIn,
+            checkOut: $checkOut,
+            now: $now,
+            standardHoldMinutes: $this->standardHoldMinutes,
+            voucherHoldHours: $this->voucherHoldHours
+        );
+        return $conflicts[0] ?? null;
+    }
+
     public function getBlockedNights(
         string $propertyId,
         ?DateTimeImmutable $now = null
@@ -125,24 +161,46 @@ final class ReservationLedger implements ReservationLedgerInterface
         Reservation $reservation,
         ?DateTimeImmutable $now = null
     ): Reservation {
-        $conflicts = $this->getConflictReasons(
-            propertyId: $reservation->propertyId,
-            checkIn: $reservation->checkIn,
-            checkOut: $reservation->checkOut,
-            now: $now
-        );
-
-        if (!empty($conflicts)) {
+        // 1. Verify date validity
+        $in = strtotime($reservation->checkIn);
+        $out = strtotime($reservation->checkOut);
+        if ($in === false || $out === false || $in >= $out) {
             throw ReservationConflictException::forDates(
                 propertyId: $reservation->propertyId,
                 checkIn: $reservation->checkIn,
                 checkOut: $reservation->checkOut,
-                conflictReason: implode('; ', $conflicts)
+                conflictReason: 'Check-out date must be after check-in date'
             );
         }
 
-        // Ephemeral channel blocks were checked in memory, but NEVER written to the database (ADR 0002)
-        return $this->repository->save($reservation);
+        // 2. Ephemeral channel blocks checked in-memory (ADR 0002)
+        $channelConflict = $this->findChannelConflict(
+            $reservation->propertyId,
+            $reservation->checkIn,
+            $reservation->checkOut
+        );
+        if ($channelConflict !== null) {
+            throw ReservationConflictException::forDates(
+                propertyId: $reservation->propertyId,
+                checkIn: $reservation->checkIn,
+                checkOut: $reservation->checkOut,
+                conflictReason: sprintf(
+                    'Dates overlap external %s channel block (%s to %s)',
+                    $channelConflict->source,
+                    $channelConflict->startDate,
+                    $channelConflict->endDate
+                )
+            );
+        }
+
+        // 3. Atomically check overlapping reservations and hold in repository
+        // Never writes channel blocks to the database (ADR 0002), prevents race conditions
+        return $this->repository->holdAtomic(
+            reservation: $reservation,
+            now: $now,
+            standardHoldMinutes: $this->standardHoldMinutes,
+            voucherHoldHours: $this->voucherHoldHours
+        );
     }
 
     public function confirm(
