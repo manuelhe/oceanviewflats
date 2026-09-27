@@ -37,6 +37,7 @@ use OpenApi\Attributes as OA;
     description: 'Local Development Server'
 )]
 #[OA\Tag(name: 'Availability', description: 'Real-time calendar availability and iCal feeds synchronization')]
+#[OA\Tag(name: 'Quotation', description: 'Authoritative in-process stay quotation and fee calculations')]
 #[OA\Tag(name: 'Booking', description: 'Direct booking requests, date validations, and quotation processing')]
 #[OA\Tag(name: 'Payments', description: 'Mercado Pago Checkout Bricks and server-to-server transaction processor')]
 #[OA\Tag(name: 'Webhooks', description: 'Asynchronous payment status notifications and IPN listener')]
@@ -144,6 +145,51 @@ class PaymentPayerSchema {}
     ]
 )]
 class PaymentTransactionResultSchema {}
+
+#[OA\Schema(
+    schema: 'QuoteNightBreakdown',
+    description: 'Individual night rate and tier classification breakdown',
+    properties: [
+        new OA\Property(property: 'date', type: 'string', format: 'date', example: '2026-06-01'),
+        new OA\Property(property: 'rateCop', type: 'number', format: 'float', example: 350000),
+        new OA\Property(property: 'tier', type: 'string', nullable: true, example: '2026-01-01_2026-12-14')
+    ]
+)]
+class QuoteNightBreakdownSchema {}
+
+#[OA\Schema(
+    schema: 'QuoteData',
+    description: 'Authoritative calculated stay quotation details',
+    properties: [
+        new OA\Property(property: 'property_id', type: 'string', enum: ['1606', '1707'], example: '1606'),
+        new OA\Property(property: 'check_in', type: 'string', format: 'date', example: '2026-06-01'),
+        new OA\Property(property: 'check_out', type: 'string', format: 'date', example: '2026-06-04'),
+        new OA\Property(property: 'nights_count', type: 'integer', example: 3),
+        new OA\Property(
+            property: 'nights',
+            type: 'array',
+            items: new OA\Items(ref: '#/components/schemas/QuoteNightBreakdown')
+        ),
+        new OA\Property(property: 'accommodation_total_cop', type: 'number', format: 'float', example: 1050000),
+        new OA\Property(property: 'cleaning_fee_cop', type: 'number', format: 'float', example: 80000),
+        new OA\Property(property: 'resort_fee_cop', type: 'number', format: 'float', example: 20000),
+        new OA\Property(property: 'total_cop', type: 'number', format: 'float', example: 1150000),
+        new OA\Property(property: 'minimum_stay_required', type: 'integer', example: 2),
+        new OA\Property(property: 'is_valid', type: 'boolean', example: true),
+        new OA\Property(property: 'violation_reason', type: 'string', nullable: true, example: null)
+    ]
+)]
+class QuoteDataSchema {}
+
+#[OA\Schema(
+    schema: 'QuoteResponse',
+    description: 'Successful quotation response envelope',
+    properties: [
+        new OA\Property(property: 'success', type: 'boolean', example: true),
+        new OA\Property(property: 'data', ref: '#/components/schemas/QuoteData')
+    ]
+)]
+class QuoteResponseSchema {}
 
 // =============================================================================
 // API Endpoints Specification
@@ -586,4 +632,63 @@ class ICalEndpoints
         ]
     )]
     public function exportICal(): void {}
+}
+
+class QuoteEndpoints
+{
+    #[OA\Get(
+        path: '/quote.php',
+        operationId: 'getQuote',
+        summary: 'Calculate authoritative stay quotation',
+        description: 'Computes night-by-night seasonal pricing, enforces strict multi-tier maximum minimum stays, and includes centralized cleaning and resort fees per ADR 0004.',
+        tags: ['Quotation'],
+        parameters: [
+            new OA\Parameter(
+                name: 'property_id',
+                in: 'query',
+                description: 'Property identifier (1606 or 1707)',
+                required: true,
+                schema: new OA\Schema(type: 'string', enum: ['1606', '1707'], example: '1606')
+            ),
+            new OA\Parameter(
+                name: 'check_in',
+                in: 'query',
+                description: 'Check-in date in YYYY-MM-DD format',
+                required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-06-01')
+            ),
+            new OA\Parameter(
+                name: 'check_out',
+                in: 'query',
+                description: 'Check-out date in YYYY-MM-DD format',
+                required: true,
+                schema: new OA\Schema(type: 'string', format: 'date', example: '2026-06-04')
+            )
+        ],
+        responses: [
+            new OA\Response(
+                response: 200,
+                description: 'Authoritative quotation calculation result',
+                content: new OA\JsonContent(ref: '#/components/schemas/QuoteResponse')
+            ),
+            new OA\Response(
+                response: 400,
+                description: 'Invalid date parameters, inverted date span, or unknown property',
+                content: new OA\JsonContent(ref: '#/components/schemas/ErrorResponse')
+            ),
+            new OA\Response(
+                response: 405,
+                description: 'Method Not Allowed'
+            ),
+            new OA\Response(
+                response: 429,
+                description: 'Rate limit exceeded'
+            ),
+            new OA\Response(
+                response: 500,
+                description: 'Server configuration or calculation error'
+            )
+        ]
+    )]
+    public function calculateQuote(): void {}
 }

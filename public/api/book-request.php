@@ -10,6 +10,10 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
+
+use OceanViewFlats\Domain\Quote\QuoteEngine;
+
 // Load central utilities & configuration
 require_once __DIR__ . '/utils.php';
 $config = require __DIR__ . '/config.php';
@@ -168,56 +172,23 @@ try {
     error_log("Direct booking MySQL connection failed: " . $e->getMessage());
 }
 
-// 7. Night-by-Night Pricing Resolution via prices.csv
-$csvPath = __DIR__ . '/../data/prices.csv';
-$pricesData = [];
-if (file_exists($csvPath)) {
-    $csvFile = fopen($csvPath, 'r');
-    if ($csvFile !== false) {
-        $headers = fgetcsv($csvFile);
-        while (($row = fgetcsv($csvFile)) !== false) {
-            if (count($row) >= 5) {
-                $pricesData[] = [
-                    'property_id' => $row[0],
-                    'start_date' => $row[1],
-                    'end_date' => $row[2],
-                    'nightly_rate_cop' => (float)$row[3],
-                    'minimum_stay' => (int)$row[4]
-                ];
-            }
-        }
-        fclose($csvFile);
-    }
+// 7. Authoritative Quote Computation via QuoteEngine (ADR 0004)
+try {
+    $quoteEngine = QuoteEngine::createDefault();
+    $quote = $quoteEngine->quote($propertyId, $checkInStr, $checkOutStr);
+} catch (InvalidArgumentException $e) {
+    send_json_response(false, $t['err_dates_invalid']);
 }
 
-// Compute total nightly rate
-$accommodationTotal = 0.0;
-$minimumStayRequired = 2; // Default minimum
-$datesCount = count($requestedNights);
-
-foreach ($requestedNights as $night) {
-    // Find matching tier
-    $tierFound = null;
-    foreach ($pricesData as $tier) {
-        if ($tier['property_id'] === $propertyId && $night >= $tier['start_date'] && $night <= $tier['end_date']) {
-            $tierFound = $tier;
-            break;
-        }
-    }
-    $rate = $tierFound ? $tierFound['nightly_rate_cop'] : ($propertyId === '1707' ? 450000.0 : 350000.0);
-    if ($tierFound) {
-        $minimumStayRequired = max($minimumStayRequired, $tierFound['minimum_stay']);
-    }
-    $accommodationTotal += $rate;
+if (!$quote->isValid()) {
+    send_json_response(false, sprintf($t['err_min_stay'], $quote->minimumStayRequired(), $quote->nightsCount()));
 }
 
-if ($datesCount < $minimumStayRequired) {
-    send_json_response(false, sprintf($t['err_min_stay'], $minimumStayRequired, $datesCount));
-}
-
-$cleaningFee = $propertyId === '1707' ? 100000.0 : 80000.0;
-$resortFee = 20000.0;
-$serverTotalCop = $accommodationTotal + $cleaningFee + $resortFee;
+$datesCount = $quote->nightsCount();
+$accommodationTotal = $quote->accommodationTotalCop();
+$cleaningFee = $quote->cleaningFeeCop();
+$resortFee = $quote->resortFeeCop();
+$serverTotalCop = $quote->totalCop();
 
 // Security verification: compare computed total against client total
 if (abs($serverTotalCop - $clientPriceCop) > 1.0) {
