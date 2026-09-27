@@ -7,7 +7,12 @@
 declare(strict_types=1);
 
 // 1. Load Shared Utilities & Configuration
+require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
+
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+
+$config = require __DIR__ . '/config.php';
 
 // Load Unified Translations
 $all_translations = require __DIR__ . '/translations.php';
@@ -62,6 +67,7 @@ if ($captcha_check !== true) {
 }
 
 // 5. Validate Stay Details
+$reservation_code = clean_input($_POST['reservation_code'] ?? $_POST['code'] ?? '');
 $property = clean_input($_POST['property'] ?? '');
 $check_in = clean_input($_POST['check_in'] ?? '');
 $check_out = clean_input($_POST['check_out'] ?? '');
@@ -143,6 +149,7 @@ if (file_exists($backup_path)) {
 }
 $new_entry = [
     'timestamp' => date('Y-m-d H:i:s'),
+    'reservation_code' => $reservation_code,
     'property' => $property,
     'check_in' => $check_in,
     'check_out' => $check_out,
@@ -153,6 +160,59 @@ $new_entry = [
 ];
 $backup_data[] = $new_entry;
 @file_put_contents($backup_path, json_encode($backup_data, JSON_PRETTY_PRINT), LOCK_EX);
+
+// 8.1 Database Persistence & ADR 0001 Registry Completion
+$pdo = null;
+if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
+    try {
+        $pdo = get_db_connection($config['db']);
+    } catch (PDOException $e) {
+        error_log('Registry DB connection error: ' . $e->getMessage());
+    }
+}
+
+$matchedUid = $reservation_code;
+if ($pdo !== null) {
+    try {
+        $repo = new PdoReservationRepository($pdo);
+        if ($reservation_code !== '') {
+            $updatedRes = $repo->markRegistryCompleted($reservation_code);
+            if ($updatedRes !== null) {
+                $matchedUid = $updatedRes->reservationUid;
+            }
+        } elseif ($property !== '' && $check_in !== '' && $check_out !== '') {
+            $matched = $repo->findByPropertyAndDates($property, $check_in, $check_out);
+            if ($matched !== null) {
+                $repo->markRegistryCompleted($matched->reservationUid);
+                $matchedUid = $matched->reservationUid;
+            }
+        }
+
+        // Record structured entry in guest_registries table
+        $stmtReg = $pdo->prepare("
+            INSERT INTO `guest_registries` (
+                `reservation_uid`, `property_id`, `check_in`, `check_out`,
+                `guest_count`, `guests_payload`, `car_plates`, `car_model`, `ip_address`
+            ) VALUES (
+                :reservation_uid, :property_id, :check_in, :check_out,
+                :guest_count, :guests_payload, :car_plates, :car_model, :ip_address
+            )
+        ");
+        $stmtReg->execute([
+            ':reservation_uid' => $matchedUid ?: ('unmatched_' . bin2hex(random_bytes(4))),
+            ':property_id' => $property ?: 'unknown',
+            ':check_in' => $check_in ?: date('Y-m-d'),
+            ':check_out' => $check_out ?: date('Y-m-d', strtotime('+1 day')),
+            ':guest_count' => count($guests),
+            ':guests_payload' => json_encode($guests, JSON_UNESCAPED_UNICODE),
+            ':car_plates' => $car_plates ?: null,
+            ':car_model' => $car_model ?: null,
+            ':ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
+        ]);
+    } catch (Throwable $e) {
+        error_log('Guest registry DB logging error: ' . $e->getMessage());
+    }
+}
 
 // 9. Forward to Google Spreadsheet Web App (if configured)
 $google_sheet_success = false;
@@ -225,8 +285,14 @@ $headers = [
 // Send the mail
 $mail_sent = mail(RECIPIENT_EMAIL, $subject, $email_body, $headers);
 
+$guideUrl = $matchedUid ? "/guide/?code={$matchedUid}&lang={$lang}" : "/guide/?lang={$lang}";
+$extraResponse = [
+    'reservation_code' => $matchedUid,
+    'guide_url' => $guideUrl,
+];
+
 if ($mail_sent) {
-    send_json_response(true, $t['msg_success']);
+    send_json_response(true, $t['msg_success'], $extraResponse);
 } else {
-    send_json_response(true, $t['msg_success_backed_up']);
+    send_json_response(true, $t['msg_success_backed_up'], $extraResponse);
 }

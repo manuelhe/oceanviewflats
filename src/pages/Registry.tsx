@@ -3,7 +3,7 @@ import { AppProps } from '../types';
 import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { dict } from '../i18n/dict';
-import { Users, Calendar, ShieldCheck, Plus, Trash2, Car, User, FileText, CheckCircle2, Building, ShieldAlert } from 'lucide-react';
+import { Users, Calendar, ShieldCheck, Plus, Trash2, Car, User, FileText, CheckCircle2, Building, ShieldAlert, ArrowRight } from 'lucide-react';
 
 export default function Registry({ lang, assetPrefix = '../' }: AppProps) {
   const t = dict[lang];
@@ -109,10 +109,18 @@ export default function Registry({ lang, assetPrefix = '../' }: AppProps) {
               <p className="text-slate-600 max-w-xl mx-auto leading-relaxed text-sm md:text-base font-light">
                 {t.registryWarmMsg}
               </p>
-              <div className="pt-4">
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <a 
+                  id="btn-unlocked-guide"
+                  href={`${assetPrefix}guide/${lang === 'en' ? 'index.html' : `${lang}.html`}`} 
+                  className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white px-8 py-3.5 rounded-full font-bold shadow-lg transition-all transform hover:scale-[1.02]"
+                >
+                  <span>{t.registryBtnViewGuide}</span>
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </a>
                 <a 
                   href={`${assetPrefix}${lang === 'en' ? '' : `${lang}.html`}`} 
-                  className="inline-block bg-slate-900 hover:bg-slate-800 text-white px-8 py-3 rounded-full font-bold shadow-md transition-all transform hover:scale-[1.02]"
+                  className="w-full sm:w-auto inline-block bg-slate-100 hover:bg-slate-200 text-slate-800 px-6 py-3.5 rounded-full font-semibold transition-all"
                 >
                   Return to Home
                 </a>
@@ -130,6 +138,7 @@ export default function Registry({ lang, assetPrefix = '../' }: AppProps) {
               <input type="hidden" name="property" id="hidden-property" />
               <input type="hidden" name="check_in" id="hidden-check-in" />
               <input type="hidden" name="check_out" id="hidden-check-out" />
+              <input type="hidden" name="reservation_code" id="hidden-reservation-code" />
               
               {/* Honeypot field (hidden from users) */}
               <div className="sr-only">

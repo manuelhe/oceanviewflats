@@ -145,13 +145,22 @@ export default function Guide({ lang, assetPrefix = '../' }: AppProps) {
                 </div>
 
                 {/* Right Side: Key Lock Code */}
-                <div className="bg-gradient-to-br from-amber-500/10 to-amber-600/[0.03] rounded-3xl p-5 md:p-6 border border-amber-500/15 flex flex-col justify-between">
+                <div 
+                  id="door-code-card"
+                  className="bg-gradient-to-br from-amber-500/10 to-amber-600/[0.03] rounded-3xl p-5 md:p-6 border border-amber-500/15 flex flex-col justify-between"
+                  data-msg-locked={t.guideCredentialsLocked}
+                  data-msg-locked-desc={t.guideCredentialsLockedDesc}
+                  data-msg-action-unlock={t.guideActionUnlock}
+                  data-msg-verifying={t.guideCredentialsVerifying}
+                  data-msg-not-found={t.guideNoReservationFound}
+                  data-msg-copied={t.guideCopySuccess}
+                >
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-bold uppercase tracking-wider text-amber-700/80 block">
                         {t.guideCodeLabel}
                       </span>
-                      <span className="p-1.5 bg-amber-500/15 text-amber-700 rounded-lg shrink-0">
+                      <span id="door-lock-icon" className="p-1.5 bg-amber-500/15 text-amber-700 rounded-lg shrink-0">
                         <Lock className="w-4 h-4" />
                       </span>
                     </div>
@@ -169,9 +178,28 @@ export default function Guide({ lang, assetPrefix = '../' }: AppProps) {
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
+
+                    {/* Gated locked credential banner */}
+                    <div id="credential-locked-notice" className="hidden p-3.5 bg-amber-500/15 border border-amber-500/30 rounded-2xl space-y-2 mt-2">
+                      <div className="flex items-center space-x-1.5 text-amber-900 font-bold text-xs">
+                        <Lock className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        <span id="credential-locked-title">{t.guideCredentialsLocked}</span>
+                      </div>
+                      <p id="credential-locked-desc" className="text-[11px] text-amber-800/90 leading-relaxed">
+                        {t.guideCredentialsLockedDesc}
+                      </p>
+                      <a 
+                        id="credential-locked-btn" 
+                        href="#guide-registry-banner" 
+                        className="inline-flex items-center space-x-1 text-xs font-bold text-white bg-[#FF5A5F] hover:bg-[#FF444A] px-3.5 py-1.5 rounded-xl transition-all shadow-xs"
+                      >
+                        <span>{t.guideActionUnlock}</span>
+                        <ArrowRight className="w-3 h-3 ml-1" />
+                      </a>
+                    </div>
                   </div>
 
-                  <p className="text-xs text-amber-800/80 leading-relaxed font-medium mt-4 bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
+                  <p id="door-code-instructions" className="text-xs text-amber-800/80 leading-relaxed font-medium mt-4 bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
                     💡 {t.guideCodeInstructions}
                   </p>
                 </div>
@@ -293,13 +321,22 @@ export default function Guide({ lang, assetPrefix = '../' }: AppProps) {
           <div className="lg:col-span-4 space-y-8">
             
             {/* Wifi details card */}
-            <section className="bg-white rounded-3xl p-6 shadow-md border border-slate-100 relative overflow-hidden">
+            <section 
+              id="wifi-card"
+              className="bg-white rounded-3xl p-6 shadow-md border border-slate-100 relative overflow-hidden"
+              data-msg-locked={t.guideCredentialsLocked}
+            >
               <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/5 rounded-full blur-xl pointer-events-none"></div>
               
               <h2 className="text-lg font-extrabold text-slate-900 mb-4 flex items-center space-x-2 pb-3 border-b border-slate-50">
                 <Wifi className="w-5 h-5 text-sky-500" />
                 <span>{t.guideWifiTitle}</span>
               </h2>
+
+              <div id="wifi-locked-notice" className="hidden p-3 mb-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 font-medium flex items-center space-x-2">
+                <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>{t.guideCredentialsLocked}</span>
+              </div>
 
               <div className="space-y-4">
                 <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 relative group">

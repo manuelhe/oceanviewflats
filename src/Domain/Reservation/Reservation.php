@@ -36,7 +36,9 @@ final class Reservation
         public readonly ?string $paymentDetail = null,
         public readonly string $lang = 'en',
         public readonly ?DateTimeImmutable $createdAt = null,
-        public readonly ?DateTimeImmutable $updatedAt = null
+        public readonly ?DateTimeImmutable $updatedAt = null,
+        public readonly bool $registryCompleted = false,
+        public readonly ?DateTimeImmutable $registryCompletedAt = null
     ) {
         if ($this->reservationUid === '') {
             throw new InvalidArgumentException('Reservation UID cannot be empty');
@@ -150,7 +152,39 @@ final class Reservation
             paymentDetail: $paymentDetail ?? $this->paymentDetail,
             lang: $this->lang,
             createdAt: $this->createdAt,
-            updatedAt: $updatedAt ?? new DateTimeImmutable()
+            updatedAt: $updatedAt ?? new DateTimeImmutable(),
+            registryCompleted: $this->registryCompleted,
+            registryCompletedAt: $this->registryCompletedAt
+        );
+    }
+
+    /**
+     * Creates an updated clone marking the guest registry as completed (ADR 0001).
+     */
+    public function withRegistryCompleted(?DateTimeImmutable $completedAt = null): self
+    {
+        $timestamp = $completedAt ?? new DateTimeImmutable();
+        return new self(
+            reservationUid: $this->reservationUid,
+            propertyId: $this->propertyId,
+            guestName: $this->guestName,
+            guestEmail: $this->guestEmail,
+            guestPhone: $this->guestPhone,
+            checkIn: $this->checkIn,
+            checkOut: $this->checkOut,
+            totalPrice: $this->totalPrice,
+            status: $this->status,
+            paymentMethodId: $this->paymentMethodId,
+            id: $this->id,
+            mercadopagoPreferenceId: $this->mercadopagoPreferenceId,
+            mercadopagoPaymentId: $this->mercadopagoPaymentId,
+            paymentStatus: $this->paymentStatus,
+            paymentDetail: $this->paymentDetail,
+            lang: $this->lang,
+            createdAt: $this->createdAt,
+            updatedAt: $this->updatedAt,
+            registryCompleted: true,
+            registryCompletedAt: $timestamp
         );
     }
 
@@ -176,6 +210,8 @@ final class Reservation
             'payment_status' => $this->paymentStatus,
             'payment_detail' => $this->paymentDetail,
             'lang' => $this->lang,
+            'registry_completed' => $this->registryCompleted,
+            'registry_completed_at' => $this->registryCompletedAt?->format('Y-m-d H:i:s'),
             'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
         ];
