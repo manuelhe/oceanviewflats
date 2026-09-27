@@ -568,6 +568,62 @@ paths:
           description: 'Rate limit exceeded'
         '500':
           description: 'Database or server configuration error'
+  /quote.php:
+    get:
+      tags:
+        - Quotation
+      summary: 'Calculate authoritative stay quotation'
+      description: 'Computes night-by-night seasonal pricing, enforces strict multi-tier maximum minimum stays, and includes centralized cleaning and resort fees per ADR 0004.'
+      operationId: getQuote
+      parameters:
+        -
+          name: property_id
+          in: query
+          description: 'Property identifier (1606 or 1707)'
+          required: true
+          schema:
+            type: string
+            enum:
+              - '1606'
+              - '1707'
+            example: '1606'
+        -
+          name: check_in
+          in: query
+          description: 'Check-in date in YYYY-MM-DD format'
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2026-06-01'
+        -
+          name: check_out
+          in: query
+          description: 'Check-out date in YYYY-MM-DD format'
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2026-06-04'
+      responses:
+        '200':
+          description: 'Authoritative quotation calculation result'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+        '400':
+          description: 'Invalid date parameters, inverted date span, or unknown property'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '405':
+          description: 'Method Not Allowed'
+        '429':
+          description: 'Rate limit exceeded'
+        '500':
+          description: 'Server configuration or calculation error'
 components:
   schemas:
     CaptchaChallenge:
@@ -724,10 +780,89 @@ components:
           example: 'https://www.mercadopago.com.co/payments/1234567890/ticket'
           nullable: true
       type: object
+    QuoteNightBreakdown:
+      description: 'Individual night rate and tier classification breakdown'
+      properties:
+        date:
+          type: string
+          format: date
+          example: '2026-06-01'
+        rateCop:
+          type: number
+          format: float
+          example: 350000
+        tier:
+          type: string
+          example: 2026-01-01_2026-12-14
+          nullable: true
+      type: object
+    QuoteData:
+      description: 'Authoritative calculated stay quotation details'
+      properties:
+        property_id:
+          type: string
+          enum:
+            - '1606'
+            - '1707'
+          example: '1606'
+        check_in:
+          type: string
+          format: date
+          example: '2026-06-01'
+        check_out:
+          type: string
+          format: date
+          example: '2026-06-04'
+        nights_count:
+          type: integer
+          example: 3
+        nights:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteNightBreakdown'
+        accommodation_total_cop:
+          type: number
+          format: float
+          example: 1050000
+        cleaning_fee_cop:
+          type: number
+          format: float
+          example: 80000
+        resort_fee_cop:
+          type: number
+          format: float
+          example: 20000
+        total_cop:
+          type: number
+          format: float
+          example: 1150000
+        minimum_stay_required:
+          type: integer
+          example: 2
+        is_valid:
+          type: boolean
+          example: true
+        violation_reason:
+          type: string
+          example: null
+          nullable: true
+      type: object
+    QuoteResponse:
+      description: 'Successful quotation response envelope'
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/QuoteData'
+      type: object
 tags:
   -
     name: Availability
     description: 'Real-time calendar availability and iCal feeds synchronization'
+  -
+    name: Quotation
+    description: 'Authoritative in-process stay quotation and fee calculations'
   -
     name: Booking
     description: 'Direct booking requests, date validations, and quotation processing'
