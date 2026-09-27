@@ -72,3 +72,17 @@
 ### 🔗 Absolute Asset Prefix Propagation
 - Since generated outputs map to both root and nested folder structures, compile-time relative links will break if absolute paths are utilized.
 - **Rule**: Always pass down the calculated `assetPrefix` prop through all React modules and prepend it to every relative link to ensure local preview and subdirectory durability.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues for `manuelhe/oceanviewflats` using the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical five-role triage vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context documentation layout (`CONTEXT.md` and `docs/adr/` at repo root). See `docs/agents/domain.md`.
