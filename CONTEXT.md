@@ -31,8 +31,16 @@ The base monetary charge for a single Night at a specific Property, dynamically 
 _Avoid_: Daily Price, Base Fee, Night Cost
 
 **Quote**:
-The calculated total monetary charge for a specific Reservation, computed by aggregating each Night's Nightly Rate across the requested stay.
+The calculated, authoritative monetary assessment for a specific Reservation, consisting of the itemized aggregation of each Night's Nightly Rate, plus the mandatory Cleaning Fee and Resort Fee, settling in Settlement Currency (COP).
 _Avoid_: Estimate, Bill, Total Price, Cost
+
+**Cleaning Fee**:
+A mandatory, flat per-reservation surcharge assessed on every Direct Reservation to cover property preparation and sanitation between Guest stays, established per Property.
+_Avoid_: Sanitation Charge, Maid Fee, Turnover Fee
+
+**Resort Fee**:
+A mandatory, flat per-reservation administrative and amenities surcharge assessed on every Direct Reservation for building and common-area facilities maintenance.
+_Avoid_: Community Fee, Building Fee, Service Surcharge
 
 **Settlement Currency**:
 The authoritative currency for all pricing, quotations, and financial transactions, which is Colombian Pesos (COP). Any foreign currencies presented in interfaces are non-authoritative reference conversions.
