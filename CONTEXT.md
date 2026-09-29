@@ -46,6 +46,10 @@ _Avoid_: Community Fee, Building Fee, Service Surcharge
 The authoritative currency for all pricing, quotations, and financial transactions, which is Colombian Pesos (COP). Any foreign currencies presented in interfaces are non-authoritative reference conversions.
 _Avoid_: Base Currency, Currency Code, FX
 
+**Seasonal Rate Tier**:
+A contiguous calendar date window assigned a customized Nightly Rate and minimum stay requirement for a specific Property, taking precedence over default baseline pricing.
+_Avoid_: Price Tier, Custom Rate, Rate Rule, Season Block, Pricing Period
+
 ### Reservations
 
 **Reservation**:

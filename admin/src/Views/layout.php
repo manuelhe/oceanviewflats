@@ -34,6 +34,9 @@
                     <a href="/bookings/manual" class="px-3 py-2 rounded-md text-sm font-medium <?= ($currentRoute ?? '') === '/bookings/manual' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' ?>">
                         Manual Booking
                     </a>
+                    <a href="/rates" class="px-3 py-2 rounded-md text-sm font-medium <?= ($currentRoute ?? '') === '/rates' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' ?>">
+                        Rates
+                    </a>
                 </nav>
             </div>
             <div class="flex items-center space-x-4">
