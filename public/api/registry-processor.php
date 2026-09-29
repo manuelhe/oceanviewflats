@@ -150,7 +150,7 @@ if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
 
 $matchedUid = $reservation_code;
 $guestPhone = '';
-$primaryGuestDoc = (string) ($guests[0]['doc_num'] ?? '');
+$primaryGuestDoc = (string)$guests[0]['doc_num'];
 
 if ($pdo !== null) {
     try {
@@ -231,6 +231,7 @@ $backup_data[] = $new_entry;
 
 // 9. Forward to Google Spreadsheet Web App (if configured)
 $google_sheet_success = false;
+$http_code = 0;
 $webhook_url = GOOGLE_SHEET_WEBAPP_URL;
 if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
     $ch = curl_init($webhook_url);

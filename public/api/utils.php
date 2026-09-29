@@ -50,8 +50,9 @@ function strip_newlines(string $str): string {
  * @param bool $success Operation status.
  * @param string $message Narrative text response.
  * @param array $extra Optional key-value pairs to merge into response.
+ * @return never
  */
-function send_json_response(bool $success, string $message, array $extra = []): void {
+function send_json_response(bool $success, string $message, array $extra = []): never {
     if (!headers_sent()) {
         header('Content-Type: application/json; charset=utf-8');
     }
@@ -260,10 +261,11 @@ function enforce_referer_check(array $allowedHosts = ['oceanviewflats.com', 'loc
  * Supports: 'en', 'es', 'fr', 'it', 'de', 'ja'.
  * Falls back to 'en' if missing, empty, or invalid.
  * 
+ * @param string|null $explicitLang Optional explicit language code to validate.
  * @return string The validated lang code.
  */
-function get_validated_lang(): string {
-    $lang = $_POST['lang'] ?? $_GET['lang'] ?? 'en';
+function get_validated_lang(?string $explicitLang = null): string {
+    $lang = ($explicitLang !== null && $explicitLang !== '') ? $explicitLang : ($_POST['lang'] ?? $_GET['lang'] ?? 'en');
     if (is_array($lang)) {
         return 'en';
     }

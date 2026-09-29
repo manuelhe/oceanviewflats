@@ -58,15 +58,13 @@ final class FileCacheChannelBlockSource implements ChannelBlockSourceInterface
             }
         }
 
-        if ($rangeStart !== null && $prevDate !== null) {
-            $rangeEnd = (new DateTimeImmutable($prevDate))->modify('+1 day')->format('Y-m-d');
-            $blocks[] = new ChannelBlock(
-                propertyId: $propertyId,
-                startDate: $rangeStart,
-                endDate: $rangeEnd,
-                source: 'airbnb'
-            );
-        }
+        $rangeEnd = (new DateTimeImmutable($prevDate))->modify('+1 day')->format('Y-m-d');
+        $blocks[] = new ChannelBlock(
+            propertyId: $propertyId,
+            startDate: $rangeStart,
+            endDate: $rangeEnd,
+            source: 'airbnb'
+        );
 
         return $blocks;
     }
