@@ -78,6 +78,16 @@ final class Response
         return $this->headers;
     }
 
+    public function getHeader(string $name, ?string $default = null): ?string
+    {
+        foreach ($this->headers as $key => $value) {
+            if (strcasecmp($key, $name) === 0) {
+                return $value;
+            }
+        }
+        return $default;
+    }
+
     public function isRedirect(): bool
     {
         return isset($this->headers['Location']) || isset($this->headers['HX-Redirect']);

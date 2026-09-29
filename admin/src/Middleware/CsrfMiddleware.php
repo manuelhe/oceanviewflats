@@ -30,8 +30,8 @@ final class CsrfMiddleware
             return null;
         }
 
-        // 3. Extract token from HTMX header or fallback HTML form POST field
-        $clientToken = (string) ($request->getHeader('HX-CSRF-TOKEN') ?? $request->getPost('csrf_token') ?? '');
+        // 3. Extract token from HTMX header, standard X-CSRF-Token header, or fallback HTML form POST field
+        $clientToken = (string) ($request->getHeader('HX-CSRF-TOKEN') ?? $request->getHeader('X-CSRF-TOKEN') ?? $request->getPost('csrf_token') ?? '');
         $sessionToken = (string) $session['csrf_token'];
 
         // 4. Validate constant-time equality

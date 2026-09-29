@@ -1,0 +1,422 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OceanViewFlats\Admin\Tests\Controller;
+
+use OceanViewFlats\Admin\Audit\AuditLogger;
+use OceanViewFlats\Admin\Controller\RateController;
+use OceanViewFlats\Admin\Http\Request;
+use OceanViewFlats\Admin\Repository\AdminRateRepository;
+use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Quote\PdoRateSource;
+use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
+use PDO;
+use PHPUnit\Framework\TestCase;
+
+final class RateControllerTest extends TestCase
+{
+    private PDO $pdo;
+    private AdminRateRepository $rateRepository;
+    private PdoRateSource $rateSource;
+    private ViewRenderer $viewRenderer;
+    private AuditLogger $auditLogger;
+    private PropertyRatesConfig $ratesConfig;
+    private RateController $controller;
+    private string $tempCsvPath;
+
+    /**
+     * @var array<string, mixed>
+     */
+    private array $session;
+
+    protected function setUp(): void
+    {
+        $this->pdo = new PDO('sqlite::memory:', null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+
+        $this->pdo->exec('
+            CREATE TABLE admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE
+            );
+
+            CREATE TABLE property_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                property_id TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                season_name TEXT NOT NULL,
+                price_per_night REAL NOT NULL,
+                min_stay INTEGER NOT NULL DEFAULT 2,
+                cleaning_fee REAL NOT NULL DEFAULT 0.0,
+                resort_fee REAL NOT NULL DEFAULT 0.0,
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE admin_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                payload_before TEXT DEFAULT NULL,
+                payload_after TEXT DEFAULT NULL,
+                admin_user_id INTEGER DEFAULT NULL,
+                ip_address TEXT DEFAULT NULL,
+                user_agent TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            INSERT INTO admin_users (id, name, email) VALUES (1, "Manuel Admin", "admin@oceanviewflats.com");
+        ');
+
+        $this->ratesConfig = PropertyRatesConfig::createDefault();
+        $this->rateRepository = new AdminRateRepository($this->pdo, $this->ratesConfig);
+        $this->rateSource = new PdoRateSource($this->pdo);
+        $this->viewRenderer = new ViewRenderer(dirname(__DIR__, 2) . '/src/Views');
+        $this->auditLogger = new AuditLogger($this->pdo);
+
+        $this->tempCsvPath = sys_get_temp_dir() . '/test_prices_' . uniqid() . '.csv';
+        file_put_contents($this->tempCsvPath, implode("\n", [
+            'property_id,start_date,end_date,nightly_rate_cop,min_stay',
+            '1606,2026-01-01,2026-06-30,350000,2',
+            '1606,2026-12-15,2027-01-15,550000,4',
+            '1707,2026-01-01,2026-12-31,450000,2',
+        ]));
+
+        $this->controller = new RateController(
+            rateRepository: $this->rateRepository,
+            rateSource: $this->rateSource,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ratesConfig: $this->ratesConfig,
+            csvPath: $this->tempCsvPath
+        );
+
+        $this->session = [
+            'admin_user_id' => 1,
+            'admin_user_name' => 'Manuel Admin',
+            'admin_user_email' => 'admin@oceanviewflats.com',
+            'admin_user_role' => 'admin',
+            'csrf_token' => 'test-csrf-token',
+        ];
+    }
+
+    protected function tearDown(): void
+    {
+        if (file_exists($this->tempCsvPath)) {
+            unlink($this->tempCsvPath);
+        }
+    }
+
+    public function testIndexRendersFullPageForDirectGet(): void
+    {
+        $request = new Request('GET', '/rates', query: ['property_id' => '1606', 'year' => '2026']);
+        $response = $this->controller->index($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Seasonal Pricing & Rates', $body);
+        $this->assertStringContainsString('Apartment 1606', $body);
+        $this->assertStringContainsString('Apartment 1707', $body);
+        $this->assertStringContainsString('id="rates-content"', $body);
+        $this->assertStringContainsString('id="modal-container"', $body);
+    }
+
+    public function testIndexRendersPartialForHtmxRequest(): void
+    {
+        $request = new Request(
+            'GET',
+            '/rates',
+            query: ['property_id' => '1707', 'year' => '2026'],
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+        $response = $this->controller->index($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Should NOT contain the layout navbar or outer shell
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $body);
+        $this->assertStringNotContainsString('<body', $body);
+
+        // Should contain timeline and table
+        $this->assertStringContainsString('Seasonal Timeline & Coverage', $body);
+        $this->assertStringContainsString('Configured Seasonal Tiers', $body);
+    }
+
+    public function testNewTierRendersCreationModal(): void
+    {
+        $request = new Request('GET', '/rates/new', query: ['property_id' => '1606', 'start_date' => '2026-07-01', 'end_date' => '2026-07-31']);
+        $response = $this->controller->newTier($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Create Seasonal Rate Tier', $body);
+        $this->assertStringContainsString('name="season_name"', $body);
+        $this->assertStringContainsString('2026-07-01', $body);
+        $this->assertStringContainsString('2026-07-31', $body);
+    }
+
+    public function testCreateValidatesRequiredFieldsAndReturns422(): void
+    {
+        // Missing season name
+        $request = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => '',
+            'start_date' => '2026-06-01',
+            'end_date' => '2026-06-30',
+            'price_per_night' => '350000',
+            'min_stay' => '2',
+        ]);
+
+        $response = $this->controller->create($request, $this->session);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Season name is required', $response->getBody());
+        $this->assertSame('#modal-container', $response->getHeader('HX-Retarget'));
+    }
+
+    public function testCreateValidatesDateOrderAndReturns422(): void
+    {
+        // start_date >= end_date
+        $request = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => 'Inverted Dates',
+            'start_date' => '2026-06-30',
+            'end_date' => '2026-06-01',
+            'price_per_night' => '350000',
+            'min_stay' => '2',
+        ]);
+
+        $response = $this->controller->create($request, $this->session);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Start date must be strictly before end date', $response->getBody());
+    }
+
+    public function testCreateValidatesPriceAndMinStayAndReturns422(): void
+    {
+        // zero price
+        $request = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => 'Free Stay',
+            'start_date' => '2026-06-01',
+            'end_date' => '2026-06-15',
+            'price_per_night' => '0',
+            'min_stay' => '2',
+        ]);
+
+        $response = $this->controller->create($request, $this->session);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Nightly rate must be greater than zero', $response->getBody());
+
+        // zero min_stay
+        $request2 = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => 'Zero Stay',
+            'start_date' => '2026-06-01',
+            'end_date' => '2026-06-15',
+            'price_per_night' => '350000',
+            'min_stay' => '0',
+        ]);
+
+        $response2 = $this->controller->create($request2, $this->session);
+        $this->assertSame(422, $response2->getStatusCode());
+        $this->assertStringContainsString('Minimum stay must be at least 1 night', $response2->getBody());
+    }
+
+    public function testCreateRejectsOverlappingIntervalWith422(): void
+    {
+        // Pre-create tier
+        $this->rateRepository->createRate([
+            'property_id' => '1606',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-04-30',
+            'season_name' => 'Existing April',
+            'price_per_night' => 400000.0,
+            'min_stay' => 2,
+        ]);
+
+        // Attempt overlap
+        $request = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => 'Colliding Easter',
+            'start_date' => '2026-04-15',
+            'end_date' => '2026-05-15',
+            'price_per_night' => '500000',
+            'min_stay' => '3',
+        ]);
+
+        $response = $this->controller->create($request, $this->session);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('overlaps with an existing seasonal rate tier', $response->getBody());
+    }
+
+    public function testCreatePersistsTierAndRecordsAuditLog(): void
+    {
+        $request = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => 'Semana Santa',
+            'start_date' => '2026-03-25',
+            'end_date' => '2026-04-05',
+            'price_per_night' => '480000',
+            'min_stay' => '3',
+            'year' => '2026',
+        ]);
+
+        $response = $this->controller->create($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('hx-swap-oob="true"', $response->getBody());
+        $this->assertStringContainsString('Semana Santa', $response->getBody());
+
+        // Verify tier in database
+        $rates = $this->rateRepository->getRatesForProperty('1606', 2026);
+        $this->assertCount(1, $rates);
+        $this->assertSame('Semana Santa', $rates[0]['season_name']);
+        $this->assertEquals(480000.0, (float) $rates[0]['price_per_night']);
+
+        // Verify audit log
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "rate_tier_created"');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch();
+        $this->assertNotFalse($log);
+        $this->assertSame('property_rates', $log['entity_type']);
+        $this->assertSame((string) $rates[0]['id'], $log['entity_id']);
+        $this->assertSame(1, (int) $log['admin_user_id']);
+        $after = json_decode((string) $log['payload_after'], true);
+        $this->assertSame('Semana Santa', $after['season_name']);
+    }
+
+    public function testEditRendersPopulatedModalOrReturns404(): void
+    {
+        $id = $this->rateRepository->createRate([
+            'property_id' => '1707',
+            'start_date' => '2026-08-01',
+            'end_date' => '2026-08-31',
+            'season_name' => 'Feria de Flores',
+            'price_per_night' => 520000.0,
+            'min_stay' => 3,
+        ]);
+
+        $request = new Request('GET', "/rates/{$id}/edit", attributes: ['id' => (string) $id]);
+        $response = $this->controller->edit($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('Edit Seasonal Rate Tier', $response->getBody());
+        $this->assertStringContainsString('Feria de Flores', $response->getBody());
+
+        // 404 test
+        $request404 = new Request('GET', '/rates/9999/edit', attributes: ['id' => '9999']);
+        $response404 = $this->controller->edit($request404, $this->session);
+        $this->assertSame(404, $response404->getStatusCode());
+    }
+
+    public function testUpdateModifiesTierAndChecksSelfOverlap(): void
+    {
+        $id = $this->rateRepository->createRate([
+            'property_id' => '1606',
+            'start_date' => '2026-05-01',
+            'end_date' => '2026-05-31',
+            'season_name' => 'May Promo',
+            'price_per_night' => 320000.0,
+            'min_stay' => 2,
+        ]);
+
+        // Modifying within own range should not trigger self-overlap
+        $request = new Request('POST', "/rates/{$id}", attributes: ['id' => (string) $id], post: [
+            'season_name' => 'May Promo Extended',
+            'start_date' => '2026-05-05',
+            'end_date' => '2026-05-25',
+            'price_per_night' => '340000',
+            'min_stay' => '3',
+            'year' => '2026',
+        ]);
+
+        $response = $this->controller->update($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+
+        $updated = $this->rateRepository->findRateById($id);
+        $this->assertNotNull($updated);
+        $this->assertSame('May Promo Extended', $updated['season_name']);
+        $this->assertEquals(340000.0, (float) $updated['price_per_night']);
+
+        // Verify audit log
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "rate_tier_updated"');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch();
+        $this->assertNotFalse($log);
+        $this->assertSame((string) $id, $log['entity_id']);
+    }
+
+    public function testDeleteRemovesTierAndRecordsAuditLog(): void
+    {
+        $id = $this->rateRepository->createRate([
+            'property_id' => '1606',
+            'start_date' => '2026-10-01',
+            'end_date' => '2026-10-31',
+            'season_name' => 'October Fest',
+            'price_per_night' => 390000.0,
+            'min_stay' => 2,
+        ]);
+
+        $request = new Request(
+            'DELETE',
+            "/rates/{$id}",
+            attributes: ['id' => (string) $id],
+            query: ['property_id' => '1606', 'year' => '2026']
+        );
+
+        $response = $this->controller->delete($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('deleted successfully', $response->getBody());
+
+        // Verify removed
+        $this->assertNull($this->rateRepository->findRateById($id));
+
+        // Verify audit log
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "rate_tier_deleted"');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch();
+        $this->assertNotFalse($log);
+        $this->assertSame((string) $id, $log['entity_id']);
+        $before = json_decode((string) $log['payload_before'], true);
+        $this->assertSame('October Fest', $before['season_name']);
+    }
+
+    public function testSeedFromCsvImportsTiersAndRecordsAudit(): void
+    {
+        $request = new Request('POST', '/rates/seed-from-csv', post: [
+            'property_id' => '1606',
+            'year' => '2026',
+        ]);
+
+        $response = $this->controller->seedFromCsv($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('Successfully imported 3 seasonal rate tiers from prices.csv', $response->getBody());
+
+        // Verify tiers were imported
+        $rates1606 = $this->rateRepository->getRatesForProperty('1606');
+        $this->assertCount(2, $rates1606);
+
+        $rates1707 = $this->rateRepository->getRatesForProperty('1707');
+        $this->assertCount(1, $rates1707);
+
+        // Verify audit log
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "rate_tiers_seeded"');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch();
+        $this->assertNotFalse($log);
+        $after = json_decode((string) $log['payload_after'], true);
+        $this->assertSame(3, $after['seeded_count']);
+    }
+}

@@ -15,6 +15,7 @@ use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
 use OceanViewFlats\Admin\Controller\AuthController;
 use OceanViewFlats\Admin\Controller\DashboardController;
+use OceanViewFlats\Admin\Controller\RateController;
 use OceanViewFlats\Admin\Controller\ReservationController;
 use OceanViewFlats\Admin\Db\DatabaseFactory;
 use OceanViewFlats\Admin\Http\Request;
@@ -23,11 +24,15 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
+use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
+use OceanViewFlats\Domain\Quote\CsvRateSource;
+use OceanViewFlats\Domain\Quote\PdoRateSource;
+use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 
@@ -57,8 +62,18 @@ try {
     );
     $reservationRepo = new AdminReservationRepository($pdo);
     $publicSiteUrl = getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com';
-    $ledger = ReservationLedger::createDefault($pdo);
-    $quoteEngine = QuoteEngine::createDefault();
+    $ratesConfig = PropertyRatesConfig::createDefault();
+    $rateSource = new PdoRateSource($pdo, new CsvRateSource());
+    $quoteEngine = new QuoteEngine(ratesConfig: $ratesConfig, rateSource: $rateSource);
+    $rateRepo = new AdminRateRepository($pdo, $ratesConfig);
+    $rateController = new RateController(
+        rateRepository: $rateRepo,
+        rateSource: $rateSource,
+        viewRenderer: $viewRenderer,
+        auditLogger: $auditLogger,
+        ratesConfig: $ratesConfig,
+        csvPath: 'public/data/prices.csv'
+    );
     $emailRenderer = new ConfirmationEmailRenderer($publicSiteUrl);
     $emailSender = new PhpMailSender();
     $mpAccessToken = $_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: '';
@@ -102,7 +117,14 @@ try {
         ->post('/reservations/{uid}/door-code/override', [$reservationController, 'overrideDoorCode'])
         ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode'])
         ->get('/reservations/{uid}/cancel-modal', [$reservationController, 'cancelModal'])
-        ->post('/reservations/{uid}/cancel', [$reservationController, 'cancel']);
+        ->post('/reservations/{uid}/cancel', [$reservationController, 'cancel'])
+        ->get('/rates', [$rateController, 'index'])
+        ->get('/rates/new', [$rateController, 'newTier'])
+        ->post('/rates', [$rateController, 'create'])
+        ->get('/rates/{id}/edit', [$rateController, 'edit'])
+        ->post('/rates/{id}', [$rateController, 'update'])
+        ->delete('/rates/{id}', [$rateController, 'delete'])
+        ->post('/rates/seed-from-csv', [$rateController, 'seedFromCsv']);
 
     // 6. Capture Request & Dispatch
     $request = Request::fromGlobals();
