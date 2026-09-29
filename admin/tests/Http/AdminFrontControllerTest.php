@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Tests\Http;
 
+use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\InMemoryIpRateLimiter;
 use OceanViewFlats\Admin\Controller\AuthController;
@@ -67,8 +68,9 @@ final class AdminFrontControllerTest extends TestCase
         $viewsPath = dirname(__DIR__, 2) . '/src/Views';
         $this->viewRenderer = new ViewRenderer($viewsPath);
 
+        $auditLogger = new AuditLogger($this->pdo);
         $authController = new AuthController(
-            pdo: $this->pdo,
+            auditLogger: $auditLogger,
             authService: $this->authService,
             viewRenderer: $this->viewRenderer
         );

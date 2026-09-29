@@ -20,11 +20,14 @@ use PDO;
  */
 final class AuthController
 {
+    private readonly AuditLogger $auditLogger;
+
     public function __construct(
-        private readonly PDO $pdo,
+        AuditLogger|PDO $auditLogger,
         private readonly AuthService $authService,
         private readonly ViewRenderer $viewRenderer
     ) {
+        $this->auditLogger = $auditLogger instanceof AuditLogger ? $auditLogger : new AuditLogger($auditLogger);
     }
 
     /**
@@ -41,19 +44,10 @@ final class AuthController
         $reason = (string) $request->getQuery('reason', '');
         $csrfToken = (string) ($session['csrf_token'] ?? '');
 
-        $html = $this->viewRenderer->render(
-            template: 'auth/login.php',
-            data: [
-                'title' => 'Sign In - Ocean View Flats Admin',
-                'csrfToken' => $csrfToken,
-                'reason' => $reason !== '' ? $reason : null,
-                'error' => null,
-                'email' => '',
-                'currentUser' => null,
-            ]
+        return $this->renderLoginView(
+            csrfToken: $csrfToken,
+            reason: $reason !== '' ? $reason : null
         );
-
-        return Response::html($html);
     }
 
     /**
@@ -82,8 +76,7 @@ final class AuthController
             // Rotate CSRF token upon successful authentication per Spec
             $session['csrf_token'] = CsrfMiddleware::generateToken();
 
-            AuditLogger::log(
-                pdo: $this->pdo,
+            $this->auditLogger->record(
                 action: 'login_success',
                 entityType: 'admin_user',
                 entityId: (string) $adminUserId,
@@ -105,8 +98,7 @@ final class AuthController
             default => 'The email address or password entered is incorrect.',
         };
 
-        AuditLogger::log(
-            pdo: $this->pdo,
+        $this->auditLogger->record(
             action: 'login_failure',
             entityType: 'auth',
             entityId: $email,
@@ -126,19 +118,14 @@ final class AuthController
 
         $csrfToken = (string) ($session['csrf_token'] ?? '');
 
-        $html = $this->viewRenderer->render(
-            template: 'auth/login.php',
-            data: [
-                'title' => 'Sign In - Ocean View Flats Admin',
-                'csrfToken' => $csrfToken,
-                'reason' => null,
-                'error' => $errorMessage,
-                'email' => $email,
-                'currentUser' => null,
-            ]
+        return $this->renderLoginView(
+            csrfToken: $csrfToken,
+            reason: null,
+            error: $errorMessage,
+            email: $email,
+            statusCode: $statusCode,
+            headers: $headers
         );
-
-        return Response::html($html, $statusCode, $headers);
     }
 
     /**
@@ -150,8 +137,7 @@ final class AuthController
     {
         if (!empty($session['admin_user_id'])) {
             $adminUserId = (int) $session['admin_user_id'];
-            AuditLogger::log(
-                pdo: $this->pdo,
+            $this->auditLogger->record(
                 action: 'logout',
                 entityType: 'admin_user',
                 entityId: (string) $adminUserId,
@@ -167,5 +153,33 @@ final class AuthController
         $session = [];
 
         return Response::redirect('/login?reason=logged_out');
+    }
+
+    /**
+     * Helper to render the login view template.
+     *
+     * @param array<string, string> $headers
+     */
+    private function renderLoginView(
+        string $csrfToken,
+        ?string $reason = null,
+        ?string $error = null,
+        string $email = '',
+        int $statusCode = 200,
+        array $headers = []
+    ): Response {
+        $html = $this->viewRenderer->render(
+            template: 'auth/login.php',
+            data: [
+                'title' => 'Sign In - Ocean View Flats Admin',
+                'csrfToken' => $csrfToken,
+                'reason' => $reason,
+                'error' => $error,
+                'email' => $email,
+                'currentUser' => null,
+            ]
+        );
+
+        return Response::html($html, $statusCode, $headers);
     }
 }

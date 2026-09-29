@@ -22,16 +22,11 @@ final class RouterTest extends TestCase
         $this->router = new Router();
     }
 
-    public function testStaticRouteRegistrationAndConstantTimeResolution(): void
+    public function testStaticRouteRegistrationAndResolution(): void
     {
         $this->router->get('/dashboard', function (Request $request, array &$session): Response {
             return Response::html('<h1>Dashboard</h1>', 200, ['X-Custom' => 'Value']);
         });
-
-        $staticRoutes = $this->router->getStaticRoutes();
-        $this->assertArrayHasKey('GET', $staticRoutes);
-        $this->assertArrayHasKey('/dashboard', $staticRoutes['GET']);
-        $this->assertEmpty($this->router->getDynamicRoutes());
 
         $session = [];
         $request = new Request('GET', '/dashboard');
@@ -42,19 +37,18 @@ final class RouterTest extends TestCase
         $this->assertSame('Value', $response->getHeaders()['X-Custom']);
     }
 
-    public function testDynamicRouteRegistrationAndRegexCompilation(): void
+    public function testDynamicRouteRegistrationAndResolutionWithNamedCaptures(): void
     {
         $this->router->get('/reservations/{uid}', function (Request $request, array &$session): Response {
             return Response::html('Reservation ' . $request->getAttribute('uid'));
         });
 
-        $dynamicRoutes = $this->router->getDynamicRoutes();
-        $this->assertArrayHasKey('GET', $dynamicRoutes);
-        $this->assertCount(1, $dynamicRoutes['GET']);
+        $session = [];
+        $request = new Request('GET', '/reservations/res-12345');
+        $response = $this->router->dispatch($request, $session);
 
-        $route = $dynamicRoutes['GET'][0];
-        $this->assertSame('#^/reservations/(?P<uid>[^/]+)$#', $route['pattern']);
-        $this->assertSame(['uid'], $route['tokens']);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('Reservation res-12345', $response->getBody());
     }
 
     public function testDynamicRouteParameterExtractionAndAttachmentToRequest(): void

@@ -126,18 +126,7 @@ final class Request
 
     public function withAttribute(string $key, mixed $value): self
     {
-        $newAttributes = $this->attributes;
-        $newAttributes[$key] = $value;
-
-        return new self(
-            method: $this->method,
-            uri: $this->uri,
-            query: $this->query,
-            post: $this->post,
-            server: $this->server,
-            cookies: $this->cookies,
-            attributes: $newAttributes
-        );
+        return $this->withAttributes([$key => $value]);
     }
 
     /**

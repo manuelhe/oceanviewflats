@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
+use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
 use OceanViewFlats\Admin\Controller\AuthController;
@@ -31,7 +32,8 @@ try {
     /** @var array{db: array{host?: string, dbname?: string, user?: string, pass?: string}} $config */
     $config = require dirname(__DIR__, 2) . '/public/api/config.php';
     $pdo = DatabaseFactory::createConnection($config['db']);
-    \OceanViewFlats\Admin\Audit\AuditLogger::setDefaultPdo($pdo);
+    AuditLogger::setDefaultPdo($pdo);
+    $auditLogger = new AuditLogger($pdo);
 
     // 3. Assemble Dependencies & Controllers
     $rateLimiter = FileIpRateLimiter::createDefault();
@@ -39,7 +41,7 @@ try {
     $viewRenderer = new ViewRenderer(dirname(__DIR__) . '/src/Views');
 
     $authController = new AuthController(
-        pdo: $pdo,
+        auditLogger: $auditLogger,
         authService: $authService,
         viewRenderer: $viewRenderer
     );

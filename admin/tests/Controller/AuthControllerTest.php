@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Tests\Controller;
 
+use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\InMemoryIpRateLimiter;
 use OceanViewFlats\Admin\Controller\AuthController;
@@ -62,9 +63,10 @@ final class AuthControllerTest extends TestCase
 
         $viewsPath = dirname(__DIR__, 2) . '/src/Views';
         $this->viewRenderer = new ViewRenderer($viewsPath);
+        $auditLogger = new AuditLogger($this->pdo);
 
         $this->controller = new AuthController(
-            pdo: $this->pdo,
+            auditLogger: $auditLogger,
             authService: $this->authService,
             viewRenderer: $this->viewRenderer
         );
@@ -409,5 +411,15 @@ final class AuthControllerTest extends TestCase
 
         $logoutResponse = $invoker([$this->controller, 'logout'], $request, $session);
         $this->assertInstanceOf(Response::class, $logoutResponse);
+    }
+
+    public function testConstructAcceptsPdoForBackwardsCompatibility(): void
+    {
+        $controller = new AuthController(
+            auditLogger: $this->pdo,
+            authService: $this->authService,
+            viewRenderer: $this->viewRenderer
+        );
+        $this->assertInstanceOf(AuthController::class, $controller);
     }
 }

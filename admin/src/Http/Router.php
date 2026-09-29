@@ -23,7 +23,7 @@ final class Router
     /**
      * Dynamic regex-compiled routes: [METHOD => list of route definitions]
      *
-     * @var array<string, list<array{pattern: string, handler: callable(Request, array<string, mixed>&): Response, tokens: list<string>}>>
+     * @var array<string, list<array{pattern: string, handler: callable(Request, array<string, mixed>&): Response}>>
      */
     private array $dynamicRoutes = [];
 
@@ -56,11 +56,9 @@ final class Router
         $normalizedPath = $this->normalizePath($path);
 
         if ($this->isDynamic($normalizedPath)) {
-            $compiled = $this->compileRoutePattern($normalizedPath);
             $this->dynamicRoutes[$method][] = [
-                'pattern' => $compiled['pattern'],
+                'pattern' => $this->compileRoutePattern($normalizedPath),
                 'handler' => $handler,
-                'tokens' => $compiled['tokens'],
             ];
         } else {
             $this->staticRoutes[$method][$normalizedPath] = $handler;
@@ -191,25 +189,6 @@ final class Router
         );
     }
 
-    /**
-     * Returns static routes lookup map for inspection.
-     *
-     * @return array<string, array<string, callable(Request, array<string, mixed>&): Response>>
-     */
-    public function getStaticRoutes(): array
-    {
-        return $this->staticRoutes;
-    }
-
-    /**
-     * Returns dynamic compiled routes list for inspection.
-     *
-     * @return array<string, list<array{pattern: string, handler: callable(Request, array<string, mixed>&): Response, tokens: list<string>}>>
-     */
-    public function getDynamicRoutes(): array
-    {
-        return $this->dynamicRoutes;
-    }
 
     /**
      * Normalizes a URI or route pattern by stripping query/hash and trailing slashes,
@@ -242,35 +221,25 @@ final class Router
 
     /**
      * Compiles a path with {param} placeholders into a regular expression with named capture groups.
-     *
-     * @return array{pattern: string, tokens: list<string>}
      */
-    private function compileRoutePattern(string $path): array
+    private function compileRoutePattern(string $path): string
     {
-        $tokens = [];
         $parts = preg_split('/(\{[a-zA-Z0-9_]+\})/', $path, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
         if ($parts === false) {
-            return [
-                'pattern' => '#^' . preg_quote($path, '#') . '$#',
-                'tokens' => [],
-            ];
+            return '#^' . preg_quote($path, '#') . '$#';
         }
 
         $regexParts = [];
         foreach ($parts as $part) {
             if (preg_match('/^\{([a-zA-Z0-9_]+)\}$/', $part, $tokenMatch) === 1) {
                 $paramName = $tokenMatch[1];
-                $tokens[] = $paramName;
                 $regexParts[] = '(?P<' . $paramName . '>[^/]+)';
             } else {
                 $regexParts[] = preg_quote($part, '#');
             }
         }
 
-        return [
-            'pattern' => '#^' . implode('', $regexParts) . '$#',
-            'tokens' => $tokens,
-        ];
+        return '#^' . implode('', $regexParts) . '$#';
     }
 
     /**
