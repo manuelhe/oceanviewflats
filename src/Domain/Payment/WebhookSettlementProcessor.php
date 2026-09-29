@@ -91,14 +91,14 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
             baseUrl: $baseUrl
         );
 
+        /** @var EmailSenderInterface $emailSender */
+        $emailSender = $options['email_sender'] ?? new PhpMailSender();
+
         /** @var BookingFulfillmentInterface $fulfillment */
-        $fulfillment = $options['fulfillment'] ?? BookingFulfillment::createDefault($hostNotificationEmail);
+        $fulfillment = $options['fulfillment'] ?? BookingFulfillment::createDefault($hostNotificationEmail, $emailSender);
 
         /** @var CancellationEmailRendererInterface $cancellationRenderer */
         $cancellationRenderer = $options['cancellation_renderer'] ?? new CancellationEmailRenderer(baseUrl: $publicSiteUrl);
-
-        /** @var EmailSenderInterface $emailSender */
-        $emailSender = $options['email_sender'] ?? new PhpMailSender();
 
         return new self(
             gateway: $gateway,

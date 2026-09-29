@@ -16,7 +16,7 @@ final class BookingFulfillment implements BookingFulfillmentInterface
         private readonly string $hostEmail = 'rentals@oceanviewflats.com'
     ) {}
 
-    public static function createDefault(?string $hostEmail = null): self
+    public static function createDefault(?string $hostEmail = null, ?EmailSenderInterface $emailSender = null): self
     {
         $resolvedHost = $hostEmail
             ?? $_ENV['RECIPIENT_EMAIL']
@@ -25,7 +25,7 @@ final class BookingFulfillment implements BookingFulfillmentInterface
             ?: (defined('RECIPIENT_EMAIL') ? constant('RECIPIENT_EMAIL') : 'rentals@oceanviewflats.com');
 
         return new self(
-            emailSender: new PhpMailSender(),
+            emailSender: $emailSender ?? new PhpMailSender(),
             spreadsheetSync: GoogleSheetWebhookSync::createFromEnv(),
             renderer: new ConfirmationEmailRenderer(),
             hostEmail: (string)$resolvedHost

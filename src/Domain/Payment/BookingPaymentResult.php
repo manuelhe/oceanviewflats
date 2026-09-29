@@ -19,14 +19,26 @@ final class BookingPaymentResult implements JsonSerializable
      * @param array<string, mixed> $extra
      * @param int $httpStatusCode
      */
+    /**
+     * @var array<string, mixed>
+     */
+    public readonly array $extra;
+
     public function __construct(
         public readonly bool $success,
         public readonly string $message,
         public readonly ?string $reservationUid = null,
         public readonly ?string $status = null,
-        public readonly array $extra = [],
+        array $extra = [],
         public readonly int $httpStatusCode = 200
     ) {
+        if ($reservationUid !== null && !isset($extra['reservation_code'])) {
+            $extra['reservation_code'] = $reservationUid;
+        }
+        if ($status !== null && !isset($extra['status'])) {
+            $extra['status'] = $status;
+        }
+        $this->extra = $extra;
     }
 
     /**
