@@ -180,6 +180,10 @@ _Avoid_: Check-in Summary, Guest Roster, Security Notification
 The communication issued only after the Guest Registry is submitted, delivering the Guest Guide link and temporal Access Credentials for physical property entry.
 _Avoid_: Key Code Email, Door PIN Message, Welcome Packet
 
+**Cancellation Notice**:
+The automated transactional communication dispatched to the Primary Guest when a Reservation is voided or cancelled, itemizing voided stay dates, financial settlement accounting (Refunded Amount vs. Policy Retention), and customer support channels.
+_Avoid_: Cancellation Receipt, Refund Email, Drop Notice
+
 ### Administration & Operations
 
 **Admin User**:
