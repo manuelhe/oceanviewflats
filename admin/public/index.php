@@ -12,6 +12,8 @@ require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
+use OceanViewFlats\Admin\Controller\AuthController;
+use OceanViewFlats\Admin\Controller\DashboardController;
 use OceanViewFlats\Admin\Db\DatabaseFactory;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
@@ -31,25 +33,38 @@ try {
     $pdo = DatabaseFactory::createConnection($config['db']);
     \OceanViewFlats\Admin\Audit\AuditLogger::setDefaultPdo($pdo);
 
-    // 3. Assemble Dependencies & Security Middlewares
+    // 3. Assemble Dependencies & Controllers
     $rateLimiter = FileIpRateLimiter::createDefault();
     $authService = new AuthService($pdo, $rateLimiter);
     $viewRenderer = new ViewRenderer(dirname(__DIR__) . '/src/Views');
 
+    $authController = new AuthController(
+        pdo: $pdo,
+        authService: $authService,
+        viewRenderer: $viewRenderer
+    );
+    $dashboardController = new DashboardController(
+        viewRenderer: $viewRenderer
+    );
+
+    // 4. Assemble Security Middlewares & Router
     $sessionMiddleware = new SessionMiddleware();
     $csrfMiddleware = new CsrfMiddleware();
     $authMiddleware = new AuthMiddleware();
 
     $router = new Router(
-        pdo: $pdo,
-        authService: $authService,
-        viewRenderer: $viewRenderer,
         sessionMiddleware: $sessionMiddleware,
         csrfMiddleware: $csrfMiddleware,
         authMiddleware: $authMiddleware
     );
 
-    // 4. Capture Request & Dispatch
+    // 5. Register Declarative Administrative Routes
+    $router->get('/login', [$authController, 'showLogin'])
+        ->post('/login', [$authController, 'login'])
+        ->get('/logout', [$authController, 'logout'])
+        ->get('/', [$dashboardController, 'index']);
+
+    // 6. Capture Request & Dispatch
     $request = Request::fromGlobals();
     $response = $router->dispatch($request, $_SESSION);
     $response->send();

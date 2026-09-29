@@ -4,14 +4,9 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Http;
 
-use OceanViewFlats\Admin\Audit\AuditLogger;
-use OceanViewFlats\Admin\Auth\AuthService;
-use OceanViewFlats\Admin\Auth\LoginResult;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
-use OceanViewFlats\Admin\Views\ViewRenderer;
-use PDO;
 
 /**
  * Front-controller router and request dispatcher for the Admin interface.
@@ -33,16 +28,10 @@ final class Router
     private array $dynamicRoutes = [];
 
     public function __construct(
-        private readonly ?PDO $pdo = null,
-        private readonly ?AuthService $authService = null,
-        private readonly ?ViewRenderer $viewRenderer = null,
         private readonly ?SessionMiddleware $sessionMiddleware = null,
         private readonly ?CsrfMiddleware $csrfMiddleware = null,
         private readonly ?AuthMiddleware $authMiddleware = null
     ) {
-        if ($this->pdo !== null && $this->authService !== null && $this->viewRenderer !== null) {
-            $this->registerCoreRoutes();
-        }
     }
 
     /**
@@ -314,188 +303,5 @@ final class Router
 
         return $allowed;
     }
-
-    /**
-     * Registers default built-in core routes for backward-compatibility.
-     */
-    private function registerCoreRoutes(): void
-    {
-        $this->get('/login', $this->handleGetLogin(...));
-        $this->post('/login', $this->handlePostLogin(...));
-        $this->get('/logout', $this->handleGetLogout(...));
-        $this->get('/', $this->handleGetDashboard(...));
-    }
-
-    /**
-     * @param array<string, mixed> $session
-     */
-    private function handleGetLogin(Request $request, array &$session): Response
-    {
-        if ($this->viewRenderer === null) {
-            throw new \LogicException('ViewRenderer is required to render login view.');
-        }
-
-        if (!empty($session['admin_user_id'])) {
-            return Response::redirect('/');
-        }
-
-        $reason = (string) $request->getQuery('reason', '');
-        $csrfToken = (string) ($session['csrf_token'] ?? '');
-
-        $html = $this->viewRenderer->render(
-            template: 'auth/login.php',
-            data: [
-                'title' => 'Sign In - Ocean View Flats Admin',
-                'csrfToken' => $csrfToken,
-                'reason' => $reason !== '' ? $reason : null,
-                'error' => null,
-                'email' => '',
-                'currentUser' => null,
-            ]
-        );
-
-        return Response::html($html);
-    }
-
-    /**
-     * @param array<string, mixed> $session
-     */
-    private function handlePostLogin(Request $request, array &$session): Response
-    {
-        if ($this->pdo === null || $this->authService === null || $this->viewRenderer === null) {
-            throw new \LogicException('PDO, AuthService, and ViewRenderer are required to handle login.');
-        }
-
-        $email = (string) $request->getPost('email', '');
-        $password = (string) $request->getPost('password', '');
-        $ip = $request->getClientIp();
-
-        $result = $this->authService->authenticate($email, $password, $ip);
-
-        if ($result->isSuccess()) {
-            SessionMiddleware::regenerateId();
-
-            $user = $result->getUser() ?? [];
-            $adminUserId = (int) ($user['id'] ?? 0);
-            $session['admin_user_id'] = $adminUserId;
-            $session['admin_user_name'] = (string) ($user['name'] ?? 'Admin');
-            $session['admin_user_email'] = (string) ($user['email'] ?? $email);
-            $session['admin_user_role'] = (string) ($user['role'] ?? 'admin');
-
-            // Rotate CSRF token upon successful authentication per Spec
-            $session['csrf_token'] = CsrfMiddleware::generateToken();
-
-            AuditLogger::log(
-                pdo: $this->pdo,
-                action: 'login_success',
-                entityType: 'admin_user',
-                entityId: (string) $adminUserId,
-                before: null,
-                after: ['email' => $email],
-                adminUserId: $adminUserId,
-                ipAddress: $ip,
-                userAgent: (string) $request->getServer('HTTP_USER_AGENT', '')
-            );
-
-            return Response::redirect('/');
-        }
-
-        // Determine error message based on failure classification
-        $errorMessage = match ($result->getStatus()) {
-            LoginResult::STATUS_ACCOUNT_LOCKED => "Account temporarily locked. Please try again in {$result->getLockoutMinutes()} minutes.",
-            LoginResult::STATUS_RATE_LIMITED => "Too many failed login attempts from this network. Please retry in {$result->getRetryAfterSeconds()} seconds.",
-            LoginResult::STATUS_ACCOUNT_DISABLED => 'This account has been deactivated. Please contact an administrator.',
-            default => 'The email address or password entered is incorrect.',
-        };
-
-        AuditLogger::log(
-            pdo: $this->pdo,
-            action: 'login_failure',
-            entityType: 'auth',
-            entityId: $email,
-            before: null,
-            after: ['status' => $result->getStatus()],
-            adminUserId: null,
-            ipAddress: $ip,
-            userAgent: (string) $request->getServer('HTTP_USER_AGENT', '')
-        );
-
-        $statusCode = $result->getStatus() === LoginResult::STATUS_RATE_LIMITED ? 429 : 401;
-        $headers = [];
-        if ($result->getStatus() === LoginResult::STATUS_RATE_LIMITED) {
-            $retryAfter = $result->getRetryAfterSeconds() > 0 ? $result->getRetryAfterSeconds() : 900;
-            $headers['Retry-After'] = (string) $retryAfter;
-        }
-
-        $csrfToken = (string) ($session['csrf_token'] ?? '');
-
-        $html = $this->viewRenderer->render(
-            template: 'auth/login.php',
-            data: [
-                'title' => 'Sign In - Ocean View Flats Admin',
-                'csrfToken' => $csrfToken,
-                'reason' => null,
-                'error' => $errorMessage,
-                'email' => $email,
-                'currentUser' => null,
-            ]
-        );
-
-        return Response::html($html, $statusCode, $headers);
-    }
-
-    /**
-     * @param array<string, mixed> $session
-     */
-    private function handleGetLogout(Request $request, array &$session): Response
-    {
-        if ($this->pdo !== null && !empty($session['admin_user_id'])) {
-            $adminUserId = (int) $session['admin_user_id'];
-            AuditLogger::log(
-                pdo: $this->pdo,
-                action: 'logout',
-                entityType: 'admin_user',
-                entityId: (string) $adminUserId,
-                before: null,
-                after: null,
-                adminUserId: $adminUserId,
-                ipAddress: $request->getClientIp(),
-                userAgent: (string) $request->getServer('HTTP_USER_AGENT', '')
-            );
-        }
-
-        SessionMiddleware::destroySession();
-        $session = [];
-
-        return Response::redirect('/login?reason=logged_out');
-    }
-
-    /**
-     * @param array<string, mixed> $session
-     */
-    private function handleGetDashboard(Request $request, array &$session): Response
-    {
-        if ($this->viewRenderer === null) {
-            throw new \LogicException('ViewRenderer is required to render dashboard view.');
-        }
-
-        $currentUser = [
-            'id' => $session['admin_user_id'] ?? null,
-            'name' => $session['admin_user_name'] ?? 'Admin',
-            'email' => $session['admin_user_email'] ?? '',
-            'role' => $session['admin_user_role'] ?? 'admin',
-        ];
-
-        $html = $this->viewRenderer->render(
-            template: 'dashboard/index.php',
-            data: [
-                'title' => 'Dashboard - Ocean View Flats Admin',
-                'currentRoute' => '/',
-                'currentUser' => $currentUser,
-                'csrfToken' => (string) ($session['csrf_token'] ?? ''),
-            ]
-        );
-
-        return Response::html($html);
-    }
 }
+

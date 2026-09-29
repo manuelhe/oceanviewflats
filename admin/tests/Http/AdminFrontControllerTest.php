@@ -6,6 +6,8 @@ namespace OceanViewFlats\Admin\Tests\Http;
 
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\InMemoryIpRateLimiter;
+use OceanViewFlats\Admin\Controller\AuthController;
+use OceanViewFlats\Admin\Controller\DashboardController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
@@ -65,18 +67,29 @@ final class AdminFrontControllerTest extends TestCase
         $viewsPath = dirname(__DIR__, 2) . '/src/Views';
         $this->viewRenderer = new ViewRenderer($viewsPath);
 
+        $authController = new AuthController(
+            pdo: $this->pdo,
+            authService: $this->authService,
+            viewRenderer: $this->viewRenderer
+        );
+        $dashboardController = new DashboardController(
+            viewRenderer: $this->viewRenderer
+        );
+
         $sessionMiddleware = new SessionMiddleware();
         $csrfMiddleware = new CsrfMiddleware();
         $authMiddleware = new AuthMiddleware();
 
         $this->router = new Router(
-            pdo: $this->pdo,
-            authService: $this->authService,
-            viewRenderer: $this->viewRenderer,
             sessionMiddleware: $sessionMiddleware,
             csrfMiddleware: $csrfMiddleware,
             authMiddleware: $authMiddleware
         );
+
+        $this->router->get('/login', [$authController, 'showLogin'])
+            ->post('/login', [$authController, 'login'])
+            ->get('/logout', [$authController, 'logout'])
+            ->get('/', [$dashboardController, 'index']);
     }
 
     private function createAdminUser(string $email, string $password, string $name = 'Super Admin'): int
@@ -291,4 +304,24 @@ final class AdminFrontControllerTest extends TestCase
         $this->assertSame(404, $response->getStatusCode());
         $this->assertStringContainsString('404 Not Found', $response->getBody());
     }
+
+    public function testMethodNotAllowedReturns405WithAllowHeader(): void
+    {
+        $session = [
+            'admin_user_id' => 1,
+            'csrf_token' => 'valid_csrf_token',
+        ];
+        $request = new Request(
+            method: 'DELETE',
+            uri: '/login',
+            post: ['csrf_token' => 'valid_csrf_token']
+        );
+
+        $response = $this->router->dispatch($request, $session);
+
+        $this->assertSame(405, $response->getStatusCode());
+        $this->assertSame('GET, POST', $response->getHeaders()['Allow']);
+        $this->assertStringContainsString('405 Method Not Allowed', $response->getBody());
+    }
 }
+
