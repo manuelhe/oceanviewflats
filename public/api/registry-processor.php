@@ -10,6 +10,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
+use OceanViewFlats\Domain\Access\DoorCodeGenerator;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 
 $config = require __DIR__ . '/config.php';
@@ -137,31 +138,7 @@ if (strlen($car_model) > 100) {
     send_json_response(false, $t['err_car_model']);
 }
 
-// 8. Store Locally (Fallback Safety)
-$temp_dir = sys_get_temp_dir();
-$backup_path = $temp_dir . '/' . LOCAL_BACKUP_FILE;
-$backup_data = [];
-if (file_exists($backup_path)) {
-    $backup_content = @file_get_contents($backup_path);
-    if ($backup_content !== false) {
-        $backup_data = json_decode($backup_content, true) ?: [];
-    }
-}
-$new_entry = [
-    'timestamp' => date('Y-m-d H:i:s'),
-    'reservation_code' => $reservation_code,
-    'property' => $property,
-    'check_in' => $check_in,
-    'check_out' => $check_out,
-    'car_plates' => $car_plates,
-    'car_model' => $car_model,
-    'guests' => $guests,
-    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
-];
-$backup_data[] = $new_entry;
-@file_put_contents($backup_path, json_encode($backup_data, JSON_PRETTY_PRINT), LOCK_EX);
-
-// 8.1 Database Persistence & ADR 0001 Registry Completion
+// 8. Database Persistence, Dynamic Door Code Calculation & ADR 0001 Registry Completion
 $pdo = null;
 if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
     try {
@@ -172,20 +149,29 @@ if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
 }
 
 $matchedUid = $reservation_code;
+$guestPhone = '';
+$primaryGuestDoc = (string) ($guests[0]['doc_num'] ?? '');
+
 if ($pdo !== null) {
     try {
         $repo = new PdoReservationRepository($pdo);
+        $existingRes = null;
         if ($reservation_code !== '') {
-            $updatedRes = $repo->markRegistryCompleted($reservation_code);
-            if ($updatedRes !== null) {
-                $matchedUid = $updatedRes->reservationUid;
-            }
+            $existingRes = $repo->findByUid($reservation_code);
         } elseif ($property !== '' && $check_in !== '' && $check_out !== '') {
-            $matched = $repo->findByPropertyAndDates($property, $check_in, $check_out);
-            if ($matched !== null) {
-                $repo->markRegistryCompleted($matched->reservationUid);
-                $matchedUid = $matched->reservationUid;
-            }
+            $existingRes = $repo->findByPropertyAndDates($property, $check_in, $check_out);
+        }
+
+        if ($existingRes !== null) {
+            $matchedUid = $existingRes->reservationUid;
+            $guestPhone = $existingRes->guestPhone;
+        }
+
+        // Calculate dynamic 7-digit door code (+ #)
+        $doorCode = DoorCodeGenerator::generate($primaryGuestDoc, $guestPhone);
+
+        if ($existingRes !== null) {
+            $repo->markRegistryCompleted($matchedUid, null, $doorCode);
         }
 
         // Record structured entry in guest_registries table
@@ -211,8 +197,37 @@ if ($pdo !== null) {
         ]);
     } catch (Throwable $e) {
         error_log('Guest registry DB logging error: ' . $e->getMessage());
+        $doorCode = DoorCodeGenerator::generate($primaryGuestDoc, $guestPhone);
+    }
+} else {
+    $doorCode = DoorCodeGenerator::generate($primaryGuestDoc, $guestPhone);
+}
+
+// 8.1 Store Locally (Fallback Safety)
+$temp_dir = sys_get_temp_dir();
+$backup_path = $temp_dir . '/' . LOCAL_BACKUP_FILE;
+$backup_data = [];
+if (file_exists($backup_path)) {
+    $backup_content = @file_get_contents($backup_path);
+    if ($backup_content !== false) {
+        $backup_data = json_decode($backup_content, true) ?: [];
     }
 }
+$new_entry = [
+    'timestamp' => date('Y-m-d H:i:s'),
+    'reservation_code' => $reservation_code,
+    'matched_uid' => $matchedUid,
+    'door_code' => $doorCode,
+    'property' => $property,
+    'check_in' => $check_in,
+    'check_out' => $check_out,
+    'car_plates' => $car_plates,
+    'car_model' => $car_model,
+    'guests' => $guests,
+    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
+];
+$backup_data[] = $new_entry;
+@file_put_contents($backup_path, json_encode($backup_data, JSON_PRETTY_PRINT), LOCK_EX);
 
 // 9. Forward to Google Spreadsheet Web App (if configured)
 $google_sheet_success = false;
@@ -267,6 +282,13 @@ foreach ($guests as $g) {
     $email_body .= "--------------------------------------------------\n";
 }
 
+$email_body .= "\nSMART LOCK ACCESS PIN (ACTION REQUIRED)\n";
+$email_body .= "--------------------------------------------------\n";
+$email_body .= "Generated Door PIN:  " . $doorCode . "\n";
+$email_body .= "Primary Guest Doc:   " . strip_newlines($primaryGuestDoc) . "\n";
+$email_body .= "Lock Instructions:   Program this 7-digit code (ending in #)\n";
+$email_body .= "                     into the apartment smart lock companion app.\n";
+
 $email_body .= "\nSYSTEM LOGS\n";
 $email_body .= "--------------------------------------------------\n";
 $email_body .= "Submission IP:  " . ($_SERVER['REMOTE_ADDR'] ?? 'Unknown') . "\n";
@@ -289,6 +311,7 @@ $guideUrl = $matchedUid ? "/guide/?code={$matchedUid}&lang={$lang}" : "/guide/?l
 $extraResponse = [
     'reservation_code' => $matchedUid,
     'guide_url' => $guideUrl,
+    'door_code' => $doorCode,
 ];
 
 if ($mail_sent) {

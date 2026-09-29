@@ -32,6 +32,7 @@ $pdo->exec("CREATE TABLE reservations (
     lang TEXT,
     registry_completed INTEGER DEFAULT 0,
     registry_completed_at TEXT,
+    door_code TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 )");
@@ -41,6 +42,8 @@ $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, 
     VALUES ('ovf_unregistered_1', '1606', 'Unregistered Guest', 'unregistered@example.com', '2026-11-24', '2026-11-28', 1800000, 'confirmed', 0, datetime('now'))");
 $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, registry_completed, registry_completed_at, created_at)
     VALUES ('ovf_completed_1', '1707', 'Completed Guest', 'completed@example.com', '2026-12-01', '2026-12-05', 2200000, 'confirmed', 1, datetime('now'), datetime('now'))");
+$pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, registry_completed, registry_completed_at, door_code, created_at)
+    VALUES ('ovf_dynamic_1', '1606', 'Dynamic Guest', 'dynamic@example.com', '2026-12-10', '2026-12-15', 2500000, 'confirmed', 1, datetime('now'), '0876543#', datetime('now'))");
 $GLOBALS['TEST_PDO'] = $pdo;
 PHP;
     }
@@ -106,12 +109,27 @@ PHP;
         $this->assertTrue($res['json']['verified']);
         $this->assertSame('verified', $res['json']['status']);
         $this->assertArrayHasKey('credentials', $res['json']);
-        $this->assertSame('1707#', $res['json']['credentials']['door_code']);
+        $this->assertSame('0170700#', $res['json']['credentials']['door_code']);
         $this->assertSame('APTO1707', $res['json']['credentials']['wifi_ssid']);
         $this->assertSame('Invitado@1707@HN', $res['json']['credentials']['wifi_password']);
         $this->assertArrayHasKey('reservation', $res['json']);
         $this->assertSame('Completed Guest', $res['json']['reservation']['guest_name']);
         $this->assertSame('1707', $res['json']['reservation']['property_id']);
+    }
+
+    public function testGuideAccessEndpointReturnsDynamicGuestSpecificDoorCode(): void
+    {
+        $res = $this->callEndpoint(['code' => 'ovf_dynamic_1', 'lang' => 'en'], $this->getSqliteSetupCode());
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertTrue($res['json']['verified']);
+        $this->assertSame('verified', $res['json']['status']);
+        $this->assertArrayHasKey('credentials', $res['json']);
+        $this->assertSame('0876543#', $res['json']['credentials']['door_code']);
+        $this->assertSame('APTO1606', $res['json']['credentials']['wifi_ssid']);
+        $this->assertSame('Invitado@1606@HN', $res['json']['credentials']['wifi_password']);
     }
 
     public function testGuideAccessEndpointHandlesCorsPreflightOptionsRequest(): void

@@ -63,6 +63,9 @@ try {
           `payment_detail` TEXT DEFAULT NULL,
           `status` ENUM('pending_payment', 'confirmed', 'cancelled') NOT NULL DEFAULT 'pending_payment',
           `lang` VARCHAR(5) NOT NULL DEFAULT 'en',
+          `registry_completed` TINYINT(1) NOT NULL DEFAULT 0,
+          `registry_completed_at` DATETIME DEFAULT NULL,
+          `door_code` VARCHAR(20) DEFAULT NULL,
           `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           INDEX `idx_property_dates` (`property_id`, `check_in`, `check_out`),
@@ -80,7 +83,8 @@ try {
         'payment_detail' => 'TEXT DEFAULT NULL',
         'lang' => "VARCHAR(5) NOT NULL DEFAULT 'en'",
         'registry_completed' => "TINYINT(1) NOT NULL DEFAULT 0",
-        'registry_completed_at' => "DATETIME DEFAULT NULL"
+        'registry_completed_at' => "DATETIME DEFAULT NULL",
+        'door_code' => "VARCHAR(20) DEFAULT NULL"
     ];
 
     foreach ($columns as $col => $type) {

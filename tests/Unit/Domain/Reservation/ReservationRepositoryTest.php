@@ -62,6 +62,7 @@ final class ReservationRepositoryTest extends TestCase
             lang TEXT,
             registry_completed INTEGER DEFAULT 0,
             registry_completed_at TEXT,
+            door_code TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )");
@@ -127,14 +128,16 @@ final class ReservationRepositoryTest extends TestCase
         $repo->save($reservation);
 
         $now = new DateTimeImmutable('2026-11-12 09:15:00');
-        $updated = $repo->markRegistryCompleted('ovf_pdo_2', $now);
+        $updated = $repo->markRegistryCompleted('ovf_pdo_2', $now, '0765432#');
 
         $this->assertNotNull($updated);
         $this->assertTrue($updated->registryCompleted);
+        $this->assertSame('0765432#', $updated->doorCode);
         $fetched = $repo->findByUid('ovf_pdo_2');
         $this->assertNotNull($fetched);
         $this->assertTrue($fetched->registryCompleted);
         $this->assertSame($now->format('Y-m-d H:i:s'), $fetched->registryCompletedAt?->format('Y-m-d H:i:s'));
+        $this->assertSame('0765432#', $fetched->doorCode);
     }
 
     public function testPdoRepositoryFindByPropertyAndDates(): void

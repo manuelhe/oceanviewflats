@@ -82,6 +82,16 @@ final class GuideAccessService implements GuideAccessServiceInterface
             return AccessVerificationResult::unauthorized('Access credentials could not be resolved for property ' . $reservation->propertyId);
         }
 
+        // If reservation has a dynamic or custom door code, use it over the property default
+        if (!empty($reservation->doorCode)) {
+            $credentials = new AccessCredentials(
+                propertyId: $credentials->propertyId,
+                doorCode: $reservation->doorCode,
+                wifiSsid: $credentials->wifiSsid,
+                wifiPassword: $credentials->wifiPassword
+            );
+        }
+
         return AccessVerificationResult::verified(
             reservation: $reservation,
             credentials: $credentials,

@@ -208,4 +208,28 @@ final class GuideAccessServiceTest extends TestCase
         $this->assertNotNull($afterRegistry->credentials);
         $this->assertSame('1606*', $afterRegistry->credentials->doorCode);
     }
+
+    public function testVerifyAccessOverridesDoorCodeWithDynamicPinWhenPresent(): void
+    {
+        $reservation = $this->createReservation(
+            uid: 'ovf_dynamic_pin_test',
+            property: '1707',
+            status: ReservationStatus::CONFIRMED,
+            registryCompleted: false
+        );
+        $this->repository->save($reservation);
+
+        // Complete with dynamic PIN
+        $this->repository->markRegistryCompleted('ovf_dynamic_pin_test', null, '0654321#');
+
+        $result = $this->service->verifyAccess('ovf_dynamic_pin_test');
+        $this->assertTrue($result->verified);
+        $this->assertSame('verified', $result->status);
+        $this->assertNotNull($result->credentials);
+        $this->assertSame('0654321#', $result->credentials->doorCode);
+        $this->assertSame('APTO1707_5G', $result->credentials->wifiSsid);
+
+        $array = $result->toArray();
+        $this->assertSame('0654321#', $array['credentials']['door_code']);
+    }
 }

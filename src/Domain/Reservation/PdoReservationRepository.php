@@ -39,7 +39,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                 `payment_detail`,
                 `lang`,
                 `registry_completed`,
-                `registry_completed_at`
+                `registry_completed_at`,
+                `door_code`
             ) VALUES (
                 :reservation_uid,
                 :property_id,
@@ -57,7 +58,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                 :payment_detail,
                 :lang,
                 :registry_completed,
-                :registry_completed_at
+                :registry_completed_at,
+                :door_code
             ) ON CONFLICT(`reservation_uid`) DO UPDATE SET
                 `guest_name` = excluded.`guest_name`,
                 `guest_email` = excluded.`guest_email`,
@@ -71,7 +73,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                 `payment_detail` = excluded.`payment_detail`,
                 `lang` = excluded.`lang`,
                 `registry_completed` = excluded.`registry_completed`,
-                `registry_completed_at` = excluded.`registry_completed_at`";
+                `registry_completed_at` = excluded.`registry_completed_at`,
+                `door_code` = excluded.`door_code`";
         } else {
             $sql = "INSERT INTO `reservations` (
                 `reservation_uid`,
@@ -90,7 +93,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                 `payment_detail`,
                 `lang`,
                 `registry_completed`,
-                `registry_completed_at`
+                `registry_completed_at`,
+                `door_code`
             ) VALUES (
                 :reservation_uid,
                 :property_id,
@@ -108,7 +112,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                 :payment_detail,
                 :lang,
                 :registry_completed,
-                :registry_completed_at
+                :registry_completed_at,
+                :door_code
             ) ON DUPLICATE KEY UPDATE
                 `guest_name` = VALUES(`guest_name`),
                 `guest_email` = VALUES(`guest_email`),
@@ -122,7 +127,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                 `payment_detail` = VALUES(`payment_detail`),
                 `lang` = VALUES(`lang`),
                 `registry_completed` = VALUES(`registry_completed`),
-                `registry_completed_at` = VALUES(`registry_completed_at`)";
+                `registry_completed_at` = VALUES(`registry_completed_at`),
+                `door_code` = VALUES(`door_code`)";
         }
 
         $stmt = $this->pdo->prepare($sql);
@@ -144,6 +150,7 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':lang' => $reservation->lang,
             ':registry_completed' => $reservation->registryCompleted ? 1 : 0,
             ':registry_completed_at' => $reservation->registryCompletedAt?->format('Y-m-d H:i:s'),
+            ':door_code' => $reservation->doorCode,
         ]);
 
         return $this->findByUid($reservation->reservationUid) ?? $reservation;
@@ -330,18 +337,36 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
 
     public function markRegistryCompleted(
         string $reservationUid,
-        ?DateTimeImmutable $completedAt = null
+        ?DateTimeImmutable $completedAt = null,
+        ?string $doorCode = null
     ): ?Reservation {
         $timestamp = $completedAt ?? new DateTimeImmutable();
-        $stmt = $this->pdo->prepare("
-            UPDATE `reservations`
-            SET `registry_completed` = 1, `registry_completed_at` = :completed_at
-            WHERE `reservation_uid` = :uid
-        ");
-        $stmt->execute([
-            ':completed_at' => $timestamp->format('Y-m-d H:i:s'),
-            ':uid' => $reservationUid
-        ]);
+
+        if ($doorCode !== null) {
+            $stmt = $this->pdo->prepare("
+                UPDATE `reservations`
+                SET `registry_completed` = 1,
+                    `registry_completed_at` = :completed_at,
+                    `door_code` = :door_code
+                WHERE `reservation_uid` = :uid
+            ");
+            $stmt->execute([
+                ':completed_at' => $timestamp->format('Y-m-d H:i:s'),
+                ':door_code' => $doorCode,
+                ':uid' => $reservationUid,
+            ]);
+        } else {
+            $stmt = $this->pdo->prepare("
+                UPDATE `reservations`
+                SET `registry_completed` = 1,
+                    `registry_completed_at` = :completed_at
+                WHERE `reservation_uid` = :uid
+            ");
+            $stmt->execute([
+                ':completed_at' => $timestamp->format('Y-m-d H:i:s'),
+                ':uid' => $reservationUid,
+            ]);
+        }
 
         return $this->findByUid($reservationUid);
     }
@@ -398,7 +423,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             createdAt: isset($row['created_at']) ? new DateTimeImmutable((string) $row['created_at']) : null,
             updatedAt: isset($row['updated_at']) ? new DateTimeImmutable((string) $row['updated_at']) : null,
             registryCompleted: !empty($row['registry_completed']),
-            registryCompletedAt: !empty($row['registry_completed_at']) ? new DateTimeImmutable((string) $row['registry_completed_at']) : null
+            registryCompletedAt: !empty($row['registry_completed_at']) ? new DateTimeImmutable((string) $row['registry_completed_at']) : null,
+            doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null
         );
     }
 }

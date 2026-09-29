@@ -24,12 +24,12 @@ return [
     ],
     'credentials' => [
         '1606' => [
-            'door_code' => $_ENV['PROPERTY_1606_DOOR_CODE'] ?? '1606#',
+            'door_code' => $_ENV['PROPERTY_1606_DOOR_CODE'] ?? '0160600#',
             'wifi_ssid' => $_ENV['PROPERTY_1606_WIFI_SSID'] ?? 'APTO1606',
             'wifi_password' => $_ENV['PROPERTY_1606_WIFI_PASSWORD'] ?? 'Invitado@1606@HN',
         ],
         '1707' => [
-            'door_code' => $_ENV['PROPERTY_1707_DOOR_CODE'] ?? '1707#',
+            'door_code' => $_ENV['PROPERTY_1707_DOOR_CODE'] ?? '0170700#',
             'wifi_ssid' => $_ENV['PROPERTY_1707_WIFI_SSID'] ?? 'APTO1707',
             'wifi_password' => $_ENV['PROPERTY_1707_WIFI_PASSWORD'] ?? 'Invitado@1707@HN',
         ],

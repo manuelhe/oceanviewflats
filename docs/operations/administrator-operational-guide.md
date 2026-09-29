@@ -21,8 +21,8 @@ Recent architectural refactorings have transitioned the OceanViewFlats platform 
 | :--- | :--- | :--- | :--- |
 | **Guest Guide URLs** | `/guide/?doorCode=1606#&wifi=...` displayed credentials directly from query string. | Query parameters `doorCode`, `door_code`, and `wifi` are **completely ignored**. The guide only accepts `?code={reservation_uid}` and queries `/api/guide-access.php`. | **CRITICAL**: Any manual message or CRM template sending `doorCode` in links will leave the guest with locked credentials (`••••••`). Templates must be updated. |
 | **Confirmation Emails** | Direct booking receipts included door PINs and Wi-Fi passwords immediately upon payment. | Confirmation emails **strictly omit** door codes, Wi-Fi passwords, and direct guide URLs. They contain an invitation button to `/registry/?code=...`. | Guests must complete the registration form before they receive access credentials. Support staff must not manually hand out PINs without registry submission. |
-| **Database Schema** | `reservations` table lacked registration status tracking. | `reservations` has `registry_completed` (TINYINT) and `registry_completed_at` (DATETIME), plus a new `guest_registries` log table. | **MANDATORY**: Administrator must run `php scripts/migrate.php` on production. Omission causes SQL fatal errors on registry and access endpoints. |
-| **Credential Storage** | Plaintext codes were embedded in client-side HTML templates or JS variables. | Credentials are exclusively stored on the server in `public/api/config.php` and loaded dynamically via environment variables (`PROPERTY_1606_DOOR_CODE`, etc.). | Door PIN changes no longer require building/deploying static assets (`npm run build`). Updating environment variables or config updates credentials live. |
+| **Database Schema** | `reservations` table lacked registration status and door code tracking. | `reservations` has `registry_completed` (TINYINT), `registry_completed_at` (DATETIME), and `door_code` (VARCHAR(20)), plus a new `guest_registries` log table. | **MANDATORY**: Administrator must run `php scripts/migrate.php` on production. Omission causes SQL fatal errors on registry and access endpoints. |
+| **Credential Storage & Dynamic PINs** | Door codes were static and identical across all guests. | Lock requires a **7-digit PIN followed by '#'** (`0XXXXXX#`), dynamically generated per guest from the primary guest's Government ID/Passport (with phone fallback) upon Guest Registry completion. The code is saved to `reservations.door_code` and emailed to `RECIPIENT_EMAIL` so staff can program the physical lock in its companion app. | Staff must program the generated 7-digit PIN into the external smart-lock platform upon receiving the guest registry report. If needed, admins can manually override `door_code` directly in MySQL. |
 | **Direct Quote Calculation** | Client JavaScript calculated subtotals from static JSON; backend verified superficial totals. | Backend `SeasonalPricer` authoritatively computes night-by-night rates, minimum stays, and fees from `public/data/prices.csv`. Client totals are ignored. | Any change in property nightly pricing or minimum-stay tiers must be made in `public/data/prices.csv`. |
 
 ---
@@ -40,6 +40,7 @@ php scripts/migrate.php
 1. **`reservations` Table**:
    - `registry_completed`: `TINYINT(1) NOT NULL DEFAULT 0`
    - `registry_completed_at`: `DATETIME DEFAULT NULL`
+   - `door_code`: `VARCHAR(20) DEFAULT NULL` (Holds the dynamic 7-digit PIN + '#')
    - Index: `idx_registry_completed`
 2. **`guest_registries` Table (New)**:
    - Stores full legal guest submissions (names, ID types, document numbers, ages, vehicle plates, vehicle model, IP address, and timestamp).
@@ -51,10 +52,11 @@ If the migration script cannot be run via CLI due to restricted hosting environm
 ```sql
 USE `oceanviewflats_db`;
 
--- 1. Add registry tracking columns to reservations table if missing
+-- 1. Add registry tracking columns and door_code to reservations table if missing
 ALTER TABLE `reservations` 
   ADD COLUMN IF NOT EXISTS `registry_completed` TINYINT(1) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS `registry_completed_at` DATETIME DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS `door_code` VARCHAR(20) DEFAULT NULL,
   ADD INDEX IF NOT EXISTS `idx_registry_completed` (`registry_completed`);
 
 -- 2. Create guest registries audit log table if missing
@@ -77,17 +79,32 @@ CREATE TABLE IF NOT EXISTS `guest_registries` (
 
 ---
 
-## 4. Environment Variables & Credential Configuration
+## 4. Smart Lock PIN Generation & Configuration
 
-Access credentials and integration secrets are managed in `public/api/config.php` and can be overridden via server environment variables (`.env`, Apache `SetEnv`, Nginx `fastcgi_param`, or systemd environment):
+### 4.1 Lock Hardware Requirements & Generation Algorithm
+OceanViewFlats physical keypad locks require a **7-digit code followed by the '#' key**. Because smart lock credentials change from guest to guest and are programmed into an external companion app (Tuya / TTLock / Yale):
+1. **Source**: The Primary Guest's Government ID / Passport number (`doc_num`) entered in the Guest Registry.
+2. **Extraction**:
+   - All non-digits are stripped (`preg_replace('/\D/', '', $docNum)`).
+   - If the ID has no digits (e.g. rare alphabetic document), digits are extracted from the primary guest's phone number.
+   - The last 6 digits are extracted and padded with leading `'0'` if fewer than 6 digits are present.
+   - The final PIN is prefixed with `'0'` and followed by `'#'` (Format: `0XXXXXX#`).
+3. **Delivery to Operations Staff**:
+   - The generated PIN is sent immediately in the registry notification email to `RECIPIENT_EMAIL` with a prominent `SMART LOCK ACCESS PIN (ACTION REQUIRED)` banner.
+   - The PIN is recorded in `reservations.door_code` and transmitted in the Google Sheets webhook payload.
+4. **Manual Admin Override**:
+   - If the lock is manually programmed with a custom PIN, the administrator can override it in the database:
+     ```sql
+     UPDATE reservations SET door_code = '0987654#' WHERE reservation_uid = 'ovf_...';
+     ```
 
-### 4.1 Property Access Credentials
+### 4.2 Property Access Credentials & Fallback Environment Variables
 | Variable | Description | Default Fallback |
 | :--- | :--- | :--- |
-| `PROPERTY_1606_DOOR_CODE` | Keypad PIN for Apartment 1606 | `1606#` |
+| `PROPERTY_1606_DOOR_CODE` | Keypad PIN fallback for Apartment 1606 (7 digits + #) | `0160600#` |
 | `PROPERTY_1606_WIFI_SSID` | Wi-Fi Network Name for 1606 | `APTO1606` |
 | `PROPERTY_1606_WIFI_PASSWORD` | Wi-Fi Password for 1606 | `Invitado@1606@HN` |
-| `PROPERTY_1707_DOOR_CODE` | Keypad PIN for Apartment 1707 | `1707#` |
+| `PROPERTY_1707_DOOR_CODE` | Keypad PIN fallback for Apartment 1707 (7 digits + #) | `0170700#` |
 | `PROPERTY_1707_WIFI_SSID` | Wi-Fi Network Name for 1707 | `APTO1707` |
 | `PROPERTY_1707_WIFI_PASSWORD` | Wi-Fi Password for 1707 | `Invitado@1707@HN` |
 

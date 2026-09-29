@@ -142,14 +142,15 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
 
     public function markRegistryCompleted(
         string $reservationUid,
-        ?DateTimeImmutable $completedAt = null
+        ?DateTimeImmutable $completedAt = null,
+        ?string $doorCode = null
     ): ?Reservation {
         $existing = $this->findByUid($reservationUid);
         if ($existing === null) {
             return null;
         }
 
-        $updated = $existing->withRegistryCompleted($completedAt);
+        $updated = $existing->withRegistryCompleted($completedAt, $doorCode);
         $this->records[$reservationUid] = $updated;
         return $updated;
     }

@@ -67,11 +67,13 @@ interface ReservationRepositoryInterface
     ): Reservation;
 
     /**
-     * Marks the guest registry as completed for the specified reservation (ADR 0001).
+     * Marks the guest registry as completed for the specified reservation (ADR 0001)
+     * and optionally assigns the generated smart lock door code.
      */
     public function markRegistryCompleted(
         string $reservationUid,
-        ?DateTimeImmutable $completedAt = null
+        ?DateTimeImmutable $completedAt = null,
+        ?string $doorCode = null
     ): ?Reservation;
 
     /**
