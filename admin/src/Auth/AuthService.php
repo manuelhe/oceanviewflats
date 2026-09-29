@@ -64,7 +64,7 @@ final class AuthService
 
         if ($user === false) {
             // Constant-time dummy verification to thwart user enumeration timing attacks
-            password_verify($password, $this->getDummyHash());
+            password_verify($password, $this->dummyHash);
             if ($ipAddress !== '' && $this->ipRateLimiter !== null) {
                 $this->ipRateLimiter->recordFailure($ipAddress);
             }
@@ -115,10 +115,6 @@ final class AuthService
             'id' => (int) $user['id'],
         ]);
 
-        if ($ipAddress !== '' && $this->ipRateLimiter !== null) {
-            $this->ipRateLimiter->reset($ipAddress);
-        }
-
         $user['failed_login_attempts'] = 0;
         $user['locked_until'] = null;
         $user['last_login_at'] = $now;
@@ -157,10 +153,5 @@ final class AuthService
             'locked' => $lockedUntil,
             'id' => $userId,
         ]);
-    }
-
-    private function getDummyHash(): string
-    {
-        return $this->dummyHash;
     }
 }

@@ -29,6 +29,7 @@ try {
     /** @var array{db: array{host?: string, dbname?: string, user?: string, pass?: string}} $config */
     $config = require dirname(__DIR__, 2) . '/public/api/config.php';
     $pdo = DatabaseFactory::createConnection($config['db']);
+    \OceanViewFlats\Admin\Audit\AuditLogger::setDefaultPdo($pdo);
 
     // 3. Assemble Dependencies & Security Middlewares
     $rateLimiter = FileIpRateLimiter::createDefault();

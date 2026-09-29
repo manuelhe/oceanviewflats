@@ -90,6 +90,48 @@ final class SessionMiddlewareTest extends TestCase
         $this->assertEmpty($session);
     }
 
+    public function testIdleTimeoutWithHtmxReturns401AndHxRedirectHeader(): void
+    {
+        $session = [
+            'admin_user_id' => 1,
+            'created_at' => 1000,
+            'last_activity' => 1000,
+        ];
+        $request = new Request(
+            method: 'GET',
+            uri: '/reservations/rows',
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+
+        $response = $this->middleware->process($request, $session, 2801);
+
+        $this->assertNotNull($response);
+        $this->assertSame(401, $response->getStatusCode());
+        $this->assertSame('/login?reason=idle_timeout', $response->getHeaders()['HX-Redirect']);
+        $this->assertEmpty($session);
+    }
+
+    public function testAbsoluteMaxLifetimeWithHtmxReturns401AndHxRedirectHeader(): void
+    {
+        $session = [
+            'admin_user_id' => 1,
+            'created_at' => 1000,
+            'last_activity' => 29000,
+        ];
+        $request = new Request(
+            method: 'GET',
+            uri: '/reservations/rows',
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+
+        $response = $this->middleware->process($request, $session, 29801);
+
+        $this->assertNotNull($response);
+        $this->assertSame(401, $response->getStatusCode());
+        $this->assertSame('/login?reason=session_expired', $response->getHeaders()['HX-Redirect']);
+        $this->assertEmpty($session);
+    }
+
     public function testGetCookieParametersResolution(): void
     {
         $params = SessionMiddleware::resolveCookieParams('admin.oceanviewflats.com', true);

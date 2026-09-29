@@ -87,7 +87,14 @@ final class Response
     {
         if (!headers_sent()) {
             http_response_code($this->statusCode);
-            foreach ($this->headers as $name => $value) {
+
+            $headers = array_merge([
+                'X-Frame-Options' => 'DENY',
+                'X-Content-Type-Options' => 'nosniff',
+                'Referrer-Policy' => 'strict-origin-when-cross-origin',
+            ], $this->headers);
+
+            foreach ($headers as $name => $value) {
                 header("{$name}: {$value}");
             }
         }

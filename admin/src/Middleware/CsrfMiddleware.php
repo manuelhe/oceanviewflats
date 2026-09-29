@@ -22,7 +22,7 @@ final class CsrfMiddleware
     {
         // 1. Ensure token exists in session
         if (empty($session['csrf_token'])) {
-            $session['csrf_token'] = bin2hex(random_bytes(32));
+            $session['csrf_token'] = self::generateToken();
         }
 
         // 2. Safe read-only HTTP methods do not require CSRF token validation
@@ -32,7 +32,7 @@ final class CsrfMiddleware
 
         // 3. Extract token from HTMX header or fallback HTML form POST field
         $clientToken = (string) ($request->getHeader('HX-CSRF-TOKEN') ?? $request->getPost('csrf_token') ?? '');
-        $sessionToken = (string) ($session['csrf_token'] ?? '');
+        $sessionToken = (string) $session['csrf_token'];
 
         // 4. Validate constant-time equality
         if ($sessionToken === '' || $clientToken === '' || !hash_equals($sessionToken, $clientToken)) {

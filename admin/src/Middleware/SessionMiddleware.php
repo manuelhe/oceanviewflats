@@ -36,14 +36,16 @@ final class SessionMiddleware
         if (isset($session['created_at']) && ($now - (int) $session['created_at'] > $this->maxLifetime)) {
             self::destroySession();
             $session = [];
-            return Response::redirect('/login?reason=session_expired');
+            $target = '/login?reason=session_expired';
+            return $request->isHtmx() ? Response::htmxUnauthorized($target) : Response::redirect($target, 302);
         }
 
         // 2. Check idle inactivity timeout
         if (isset($session['last_activity']) && ($now - (int) $session['last_activity'] > $this->idleTimeout)) {
             self::destroySession();
             $session = [];
-            return Response::redirect('/login?reason=idle_timeout');
+            $target = '/login?reason=idle_timeout';
+            return $request->isHtmx() ? Response::htmxUnauthorized($target) : Response::redirect($target, 302);
         }
 
         // 3. Initialize creation timestamp if absent

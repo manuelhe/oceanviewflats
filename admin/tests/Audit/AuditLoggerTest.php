@@ -107,13 +107,60 @@ final class AuditLoggerTest extends TestCase
 
     public function testRetrievesLogsForSpecificEntity(): void
     {
-        AuditLogger::log($this->pdo, 'create', 'reservation', 'res_A', null, ['status' => 'confirmed'], 1);
-        AuditLogger::log($this->pdo, 'modify', 'reservation', 'res_A', ['status' => 'confirmed'], ['status' => 'cancelled'], 1);
-        AuditLogger::log($this->pdo, 'create', 'reservation', 'res_B', null, ['status' => 'confirmed'], 1);
+        AuditLogger::log(pdo: $this->pdo, action: 'create', entityType: 'reservation', entityId: 'res_A', before: null, after: ['status' => 'confirmed'], adminUserId: 1);
+        AuditLogger::log(pdo: $this->pdo, action: 'modify', entityType: 'reservation', entityId: 'res_A', before: ['status' => 'confirmed'], after: ['status' => 'cancelled'], adminUserId: 1);
+        AuditLogger::log(pdo: $this->pdo, action: 'create', entityType: 'reservation', entityId: 'res_B', before: null, after: ['status' => 'confirmed'], adminUserId: 1);
 
         $logs = AuditLogger::getLogsForEntity($this->pdo, 'reservation', 'res_A');
         $this->assertCount(2, $logs);
         $this->assertSame('create', $logs[0]['action']);
         $this->assertSame('modify', $logs[1]['action']);
+    }
+
+    public function testLogsActionUsingDefaultPdoWithoutPassingPdoParameter(): void
+    {
+        AuditLogger::setDefaultPdo($this->pdo);
+
+        // Spec signature without pdo parameter
+        $logId = AuditLogger::log(
+            action: 'pin_override',
+            entityType: 'reservation',
+            entityId: 'res_default_pdo',
+            before: ['door_code' => '1234#'],
+            after: ['door_code' => '5678#'],
+            adminUserId: 1
+        );
+
+        $this->assertGreaterThan(0, $logId);
+
+        $stmt = $this->pdo->prepare('SELECT action, entity_id FROM admin_audit_logs WHERE id = :id');
+        $stmt->execute(['id' => $logId]);
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('pin_override', $row['action']);
+        $this->assertSame('res_default_pdo', $row['entity_id']);
+    }
+
+    public function testInjectableServiceInstanceRecordsAction(): void
+    {
+        $logger = new AuditLogger($this->pdo);
+
+        $logId = $logger->record(
+            action: 'refund_issued',
+            entityType: 'payment',
+            entityId: 'pay_999',
+            before: ['status' => 'captured'],
+            after: ['status' => 'refunded'],
+            adminUserId: 1
+        );
+
+        $this->assertGreaterThan(0, $logId);
+
+        $stmt = $this->pdo->prepare('SELECT action, entity_id FROM admin_audit_logs WHERE id = :id');
+        $stmt->execute(['id' => $logId]);
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('refund_issued', $row['action']);
+        $this->assertSame('pay_999', $row['entity_id']);
     }
 }

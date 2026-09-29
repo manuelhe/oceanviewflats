@@ -247,4 +247,23 @@ final class AuthServiceTest extends TestCase
         $info = password_get_info($newHash);
         $this->assertSame(PASSWORD_ARGON2ID, $info['algo']);
     }
+
+    public function testSuccessfulLoginDoesNotResetIpRateLimiter(): void
+    {
+        $this->insertUser('admin@oceanviewflats.com', 'ValidPassword123!');
+        $ip = '203.0.113.100';
+
+        // 9 failed attempts recorded
+        for ($i = 0; $i < 9; $i++) {
+            $this->rateLimiter->recordFailure($ip);
+        }
+
+        // Login succeeds with valid credentials
+        $result = $this->authService->authenticate('admin@oceanviewflats.com', 'ValidPassword123!', $ip);
+        $this->assertTrue($result->isSuccess());
+
+        // Next failure reaches 10 and blocks the IP
+        $this->rateLimiter->recordFailure($ip);
+        $this->assertFalse($this->rateLimiter->isAllowed($ip));
+    }
 }

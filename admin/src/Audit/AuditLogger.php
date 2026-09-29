@@ -11,14 +11,24 @@ use PDO;
  */
 final class AuditLogger
 {
+    private static ?PDO $defaultPdo = null;
+
+    public function __construct(private readonly PDO $pdo)
+    {
+    }
+
+    public static function setDefaultPdo(?PDO $pdo): void
+    {
+        self::$defaultPdo = $pdo;
+    }
+
     /**
-     * Records an administrative action to admin_audit_logs.
+     * Instance method for dependency-injected usage.
      *
      * @param array<string, mixed>|null $before
      * @param array<string, mixed>|null $after
      */
-    public static function log(
-        PDO $pdo,
+    public function record(
         string $action,
         string $entityType,
         string $entityId,
@@ -28,13 +38,48 @@ final class AuditLogger
         string $ipAddress = '',
         ?string $userAgent = null
     ): int {
+        return self::log(
+            action: $action,
+            entityType: $entityType,
+            entityId: $entityId,
+            before: $before,
+            after: $after,
+            adminUserId: $adminUserId,
+            ipAddress: $ipAddress,
+            userAgent: $userAgent,
+            pdo: $this->pdo
+        );
+    }
+
+    /**
+     * Records an administrative action to admin_audit_logs.
+     *
+     * @param array<string, mixed>|null $before
+     * @param array<string, mixed>|null $after
+     */
+    public static function log(
+        string $action,
+        string $entityType,
+        string $entityId,
+        ?array $before = null,
+        ?array $after = null,
+        ?int $adminUserId = null,
+        string $ipAddress = '',
+        ?string $userAgent = null,
+        ?PDO $pdo = null
+    ): int {
+        $db = $pdo ?? self::$defaultPdo;
+        if ($db === null) {
+            throw new \InvalidArgumentException('PDO instance is required to write audit logs.');
+        }
+
         $ip = $ipAddress !== '' ? $ipAddress : (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
         $ua = $userAgent ?? (isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : null);
 
         $payloadBefore = $before !== null ? json_encode($before, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $payloadAfter = $after !== null ? json_encode($after, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
 
-        $stmt = $pdo->prepare('
+        $stmt = $db->prepare('
             INSERT INTO admin_audit_logs (
                 admin_user_id, action, entity_type, entity_id, payload_before, payload_after, ip_address, user_agent
             ) VALUES (
@@ -53,7 +98,7 @@ final class AuditLogger
             'user_agent' => $ua,
         ]);
 
-        return (int) $pdo->lastInsertId();
+        return (int) $db->lastInsertId();
     }
 
     /**
