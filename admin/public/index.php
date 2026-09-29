@@ -15,6 +15,7 @@ use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
 use OceanViewFlats\Admin\Controller\AuthController;
 use OceanViewFlats\Admin\Controller\DashboardController;
+use OceanViewFlats\Admin\Controller\ReservationController;
 use OceanViewFlats\Admin\Db\DatabaseFactory;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
@@ -22,6 +23,7 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
+use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 
 try {
@@ -48,6 +50,13 @@ try {
     $dashboardController = new DashboardController(
         viewRenderer: $viewRenderer
     );
+    $reservationRepo = new AdminReservationRepository($pdo);
+    $publicSiteUrl = getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com';
+    $reservationController = new ReservationController(
+        repository: $reservationRepo,
+        viewRenderer: $viewRenderer,
+        publicSiteUrl: $publicSiteUrl
+    );
 
     // 4. Assemble Security Middlewares & Router
     $sessionMiddleware = new SessionMiddleware();
@@ -64,7 +73,10 @@ try {
     $router->get('/login', [$authController, 'showLogin'])
         ->post('/login', [$authController, 'login'])
         ->get('/logout', [$authController, 'logout'])
-        ->get('/', [$dashboardController, 'index']);
+        ->get('/', [$dashboardController, 'index'])
+        ->get('/reservations', [$reservationController, 'list'])
+        ->get('/reservations/{uid}', [$reservationController, 'show'])
+        ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry']);
 
     // 6. Capture Request & Dispatch
     $request = Request::fromGlobals();
