@@ -25,6 +25,10 @@ use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
+use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
+use OceanViewFlats\Domain\Quote\QuoteEngine;
+use OceanViewFlats\Domain\Reservation\ReservationLedger;
 
 try {
     // 1. Initialize Subdomain-Isolated Native Session
@@ -52,9 +56,19 @@ try {
     );
     $reservationRepo = new AdminReservationRepository($pdo);
     $publicSiteUrl = getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com';
+    $ledger = ReservationLedger::createDefault($pdo);
+    $quoteEngine = QuoteEngine::createDefault();
+    $emailRenderer = new ConfirmationEmailRenderer($publicSiteUrl);
+    $emailSender = new PhpMailSender();
+
     $reservationController = new ReservationController(
         repository: $reservationRepo,
         viewRenderer: $viewRenderer,
+        auditLogger: $auditLogger,
+        ledger: $ledger,
+        quoteEngine: $quoteEngine,
+        emailRenderer: $emailRenderer,
+        emailSender: $emailSender,
         publicSiteUrl: $publicSiteUrl
     );
 
@@ -75,8 +89,14 @@ try {
         ->get('/logout', [$authController, 'logout'])
         ->get('/', [$dashboardController, 'index'])
         ->get('/reservations', [$reservationController, 'list'])
+        ->get('/reservations/new', [$reservationController, 'newReservation'])
+        ->post('/reservations/quote-preview', [$reservationController, 'quotePreview'])
+        ->post('/reservations/create-manual', [$reservationController, 'createManual'])
         ->get('/reservations/{uid}', [$reservationController, 'show'])
-        ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry']);
+        ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry'])
+        ->post('/reservations/{uid}/registry/complete', [$reservationController, 'completeRegistry'])
+        ->post('/reservations/{uid}/door-code/override', [$reservationController, 'overrideDoorCode'])
+        ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode']);
 
     // 6. Capture Request & Dispatch
     $request = Request::fromGlobals();

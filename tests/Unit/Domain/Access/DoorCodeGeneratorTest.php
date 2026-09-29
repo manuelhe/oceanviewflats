@@ -91,4 +91,22 @@ final class DoorCodeGeneratorTest extends TestCase
             $this->assertMatchesRegularExpression('/^0\d{6}#$/', $code);
         }
     }
+
+    public function testGenerateRandomProducesValidCodeFormat(): void
+    {
+        $code = DoorCodeGenerator::generateRandom();
+        $this->assertSame(8, strlen($code));
+        $this->assertStringStartsWith('0', $code);
+        $this->assertStringEndsWith('#', $code);
+        $this->assertMatchesRegularExpression('/^0\d{6}#$/', $code);
+    }
+
+    public function testGenerateForPropertyProducesValidCodeFormat(): void
+    {
+        $code = DoorCodeGenerator::generateForProperty('1606');
+        $this->assertSame(8, strlen($code));
+        $this->assertStringStartsWith('0', $code);
+        $this->assertStringEndsWith('#', $code);
+        $this->assertMatchesRegularExpression('/^0\d{6}#$/', $code);
+    }
 }

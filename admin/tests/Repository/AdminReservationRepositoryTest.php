@@ -247,6 +247,104 @@ final class AdminReservationRepositoryTest extends TestCase
         $this->assertNull($missing);
     }
 
+    public function testFindReservationByUidReturnsRecordOrNull(): void
+    {
+        $this->seedSampleReservations();
+
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('res-1', $res['reservation_uid']);
+        $this->assertSame('Alice Smith', $res['guest_name']);
+
+        $missing = $this->repository->findReservationByUid('non-existent');
+        $this->assertNull($missing);
+    }
+
+    public function testUpdateRegistryCompletedUpdatesFlagsAndDoorCode(): void
+    {
+        $this->seedSampleReservations();
+
+        // Initially res-2 has registry_completed = 0 and door_code = NULL
+        $initial = $this->repository->findReservationByUid('res-2');
+        $this->assertNotNull($initial);
+        $this->assertSame(0, (int) $initial['registry_completed']);
+        $this->assertNull($initial['door_code']);
+
+        $updated = $this->repository->updateRegistryCompleted('res-2', '0999888#');
+        $this->assertTrue($updated);
+
+        $after = $this->repository->findReservationByUid('res-2');
+        $this->assertNotNull($after);
+        $this->assertSame(1, (int) $after['registry_completed']);
+        $this->assertNotNull($after['registry_completed_at']);
+        $this->assertSame('0999888#', $after['door_code']);
+
+        // Test updating without door code
+        $updatedAgain = $this->repository->updateRegistryCompleted('res-3');
+        $this->assertTrue($updatedAgain);
+        $after3 = $this->repository->findReservationByUid('res-3');
+        $this->assertNotNull($after3);
+        $this->assertSame(1, (int) $after3['registry_completed']);
+        $this->assertSame('5678#', $after3['door_code']); // preserves existing code
+    }
+
+    public function testUpdateDoorCodeModifiesCode(): void
+    {
+        $this->seedSampleReservations();
+
+        $success = $this->repository->updateDoorCode('res-1', '0777666#');
+        $this->assertTrue($success);
+
+        $record = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($record);
+        $this->assertSame('0777666#', $record['door_code']);
+
+        $fail = $this->repository->updateDoorCode('unknown-uid', '0777666#');
+        $this->assertFalse($fail);
+    }
+
+    public function testCreateManualReservationInsertsAndReturnsUid(): void
+    {
+        $uid = 'res-manual-123';
+        $createdUid = $this->repository->createManualReservation([
+            'reservation_uid' => $uid,
+            'property_id' => '1707',
+            'guest_name' => 'Diana Prince',
+            'guest_email' => 'diana@example.com',
+            'guest_phone' => '+573009998877',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-06',
+            'total_price' => 2500000.00,
+            'source' => 'bank_transfer',
+            'notes' => 'Confirmed via Bancolombia wire #98765',
+            'door_code' => '0888999#',
+            'registry_completed' => 1,
+            'registry_completed_at' => '2026-09-29 10:00:00',
+            'status' => 'confirmed',
+            'payment_status' => 'approved',
+            'lang' => 'en',
+        ]);
+
+        $this->assertSame($uid, $createdUid);
+
+        $record = $this->repository->findReservationByUid($uid);
+        $this->assertNotNull($record);
+        $this->assertSame('1707', $record['property_id']);
+        $this->assertSame('Diana Prince', $record['guest_name']);
+        $this->assertSame('bank_transfer', $record['source']);
+        $this->assertSame('0888999#', $record['door_code']);
+        $this->assertSame(1, (int) $record['registry_completed']);
+        $this->assertSame('confirmed', $record['status']);
+        $this->assertSame('approved', $record['payment_status']);
+    }
+
+    public function testTransactionsCanBeControlled(): void
+    {
+        $this->assertTrue($this->repository->beginTransaction());
+        $this->repository->updateDoorCode('res-1', '0111222#');
+        $this->assertTrue($this->repository->rollBack());
+    }
+
     private function seedSampleReservations(): void
     {
         $this->pdo->exec("
