@@ -5,15 +5,9 @@ declare(strict_types=1);
 namespace OceanViewFlats\Admin\Tests\Http;
 
 use DateTimeImmutable;
-use OceanViewFlats\Admin\Audit\AuditLogger;
-use OceanViewFlats\Admin\Controller\CalendarBlockController;
+use OceanViewFlats\Admin\AdminApp;
 use OceanViewFlats\Admin\Http\Request;
-use OceanViewFlats\Admin\Http\Router;
-use OceanViewFlats\Admin\Middleware\AuthMiddleware;
-use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
-use OceanViewFlats\Admin\Middleware\SessionMiddleware;
 use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
-use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Reservation\InMemoryChannelBlockSource;
 use OceanViewFlats\Domain\Reservation\InMemoryReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
@@ -25,7 +19,7 @@ use PHPUnit\Framework\TestCase;
 final class AdminCalendarBlockRoutesTest extends TestCase
 {
     private PDO $pdo;
-    private Router $router;
+    private AdminApp $app;
     private AdminCalendarBlockRepository $blockRepo;
     private InMemoryReservationRepository $reservationRepo;
     private ReservationLedger $ledger;
@@ -79,39 +73,16 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             channelBlockSource: $channelBlockSource
         );
 
-        $viewRenderer = new ViewRenderer(dirname(__DIR__, 2) . '/src/Views');
-        $auditLogger = new AuditLogger($this->pdo);
-
-        $calendarBlockController = new CalendarBlockController(
-            blockRepository: $this->blockRepo,
-            ledger: $this->ledger,
-            viewRenderer: $viewRenderer,
-            auditLogger: $auditLogger
-        );
-
-        $sessionMiddleware = new SessionMiddleware();
-        $csrfMiddleware = new CsrfMiddleware();
-        $authMiddleware = new AuthMiddleware();
-
-        $this->router = new Router(
-            sessionMiddleware: $sessionMiddleware,
-            csrfMiddleware: $csrfMiddleware,
-            authMiddleware: $authMiddleware
-        );
-
-        $this->router
-            ->get('/calendar-blocks', [$calendarBlockController, 'index'])
-            ->get('/calendar-blocks/new', [$calendarBlockController, 'newHold'])
-            ->post('/calendar-blocks', [$calendarBlockController, 'create'])
-            ->delete('/calendar-blocks/{id}', [$calendarBlockController, 'delete'])
-            ->post('/calendar-blocks/{id}/delete', [$calendarBlockController, 'delete']);
+        $this->app = AdminApp::createDefault($this->pdo, [
+            'ledger' => $this->ledger,
+        ]);
     }
 
     public function testUnauthenticatedAccessRedirectsToLogin(): void
     {
         $session = [];
         $request = new Request(method: 'GET', uri: '/calendar-blocks');
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('/login', $response->getHeader('Location'));
@@ -125,7 +96,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             'csrf_token' => 'route_test_csrf',
         ];
         $request = new Request(method: 'GET', uri: '/calendar-blocks');
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('Maintenance & Calendar Holds', $response->getBody());
@@ -138,7 +109,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             'csrf_token' => 'route_test_csrf',
         ];
         $request = new Request(method: 'GET', uri: '/calendar-blocks/new');
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('Add Maintenance Hold', $response->getBody());
@@ -161,7 +132,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             ]
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         // CsrfMiddleware or Controller CSRF rejects
         $this->assertSame(403, $response->getStatusCode());
     }
@@ -188,7 +159,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             ]
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('blockSaved', $response->getHeader('HX-Trigger'));
 
@@ -229,7 +200,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             ]
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString('Collides with active direct reservation ovf_route_collision', $response->getBody());
     }
@@ -251,7 +222,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             server: ['HTTP_HX_REQUEST' => 'true']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertNull($this->blockRepo->findById($id));
     }
@@ -273,7 +244,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             server: ['HTTP_HX_REQUEST' => 'true']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertNull($this->blockRepo->findById($id));
     }
@@ -294,7 +265,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
             post: ['csrf_token' => 'route_test_csrf']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString('Concluded historical maintenance blocks cannot be deleted', $response->getBody());
         $this->assertNotNull($this->blockRepo->findById($id));
