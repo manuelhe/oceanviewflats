@@ -1,0 +1,95 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": true,
+		"includes": [
+			"**",
+			"!node_modules",
+			"!dist",
+			"!vendor",
+			"!public/data",
+			"!public/cache",
+			"!public/api",
+			"!public/api/openapi.json",
+			"!public/js",
+			"!public/site.webmanifest",
+			"!composer.json",
+			"!composer.lock"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"a11y": {
+				"noSvgWithoutTitle": "off",
+				"noLabelWithoutControl": "off",
+				"useButtonType": "off",
+				"noRedundantRoles": "off",
+				"useValidAnchor": "off"
+			},
+			"correctness": {
+				"noUnusedImports": "off"
+			},
+			"security": {
+				"noDangerouslySetInnerHtml": "off"
+			},
+			"suspicious": {
+				"noArrayIndexKey": "off",
+				"noAssignInExpressions": "off"
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "double"
+		},
+		"globals": [
+			"window",
+			"document",
+			"location",
+			"localStorage",
+			"sessionStorage",
+			"navigator",
+			"fetch",
+			"alert",
+			"confirm",
+			"prompt",
+			"setTimeout",
+			"clearTimeout",
+			"setInterval",
+			"clearInterval",
+			"console",
+			"history",
+			"HTMLElement",
+			"CustomEvent",
+			"Event",
+			"FormData",
+			"URLSearchParams",
+			"URL",
+			"Intl"
+		]
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	}
+}
