@@ -70,7 +70,7 @@ To refund the entire remaining refundable balance of a payment, the request body
 ```bash
 curl -X POST \
   "https://api.mercadopago.com/v1/payments/9876543210/refunds" \
-  -H "Authorization: Bearer TEST-78901234..." \
+  -H "Authorization: Bearer <MERCADOPAGO_ACCESS_TOKEN>" \
   -H "X-Idempotency-Key: ref_ovf_a1b2c3d4_full_1727589600" \
   -H "Content-Type: application/json" \
   -d '{}'
@@ -82,7 +82,7 @@ To refund an explicit sub-amount (e.g. refunding a cleaning fee, single-night ad
 ```bash
 curl -X POST \
   "https://api.mercadopago.com/v1/payments/9876543210/refunds" \
-  -H "Authorization: Bearer TEST-78901234..." \
+  -H "Authorization: Bearer <MERCADOPAGO_ACCESS_TOKEN>" \
   -H "X-Idempotency-Key: ref_ovf_a1b2c3d4_part_150000_1727589600" \
   -H "Content-Type: application/json" \
   -d '{
