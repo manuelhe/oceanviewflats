@@ -26,14 +26,8 @@ try {
     $config = require dirname(__DIR__, 2) . '/public/api/config.php';
     $pdo = DatabaseFactory::createConnection($config['db']);
 
-    // 3. Resolve Environment Configuration & Initialize Kernel
-    $publicSiteUrl = getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com';
-    $mpAccessToken = $_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: '';
-
-    $app = AdminApp::createDefault($pdo, [
-        'public_site_url' => $publicSiteUrl,
-        'mp_access_token' => $mpAccessToken,
-    ]);
+    // 3. Initialize Authoritative Application Kernel
+    $app = AdminApp::createDefault($pdo);
 
     // 4. Capture Request & Dispatch via Application Kernel
     $request = Request::fromGlobals();

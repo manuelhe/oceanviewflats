@@ -51,8 +51,7 @@ final class AdminApp
 {
     public const VERSION = '1.0.0';
 
-    public function __construct(
-        private readonly PDO $pdo,
+    private function __construct(
         private readonly Router $router
     ) {
     }
@@ -60,16 +59,6 @@ final class AdminApp
     public static function getVersion(): string
     {
         return self::VERSION;
-    }
-
-    public function getRouter(): Router
-    {
-        return $this->router;
-    }
-
-    public function getPdo(): PDO
-    {
-        return $this->pdo;
     }
 
     /**
@@ -120,8 +109,12 @@ final class AdminApp
         $publicSiteUrl = (string) ($options['public_site_url'] ?? (getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com'));
         /** @var PropertyRatesConfig $ratesConfig */
         $ratesConfig = $options['rates_config'] ?? PropertyRatesConfig::createDefault();
+        $csvPath = (string) ($options['csv_path'] ?? 'public/data/prices.csv');
+        $csvRateSource = isset($options['csv_path'])
+            ? new CsvRateSource((string) $options['csv_path'])
+            : new CsvRateSource();
         /** @var RateSourceInterface $rateSource */
-        $rateSource = $options['rate_source'] ?? new PdoRateSource($pdo, new CsvRateSource());
+        $rateSource = $options['rate_source'] ?? new PdoRateSource($pdo, $csvRateSource);
         /** @var QuoteEngineInterface $quoteEngine */
         $quoteEngine = $options['quote_engine'] ?? new QuoteEngine(rateSource: $rateSource, config: $ratesConfig);
         /** @var ConfirmationEmailRendererInterface $emailRenderer */
@@ -152,7 +145,6 @@ final class AdminApp
 
         // 6. Rates Repository & Controller
         $rateRepo = new AdminRateRepository($pdo, $ratesConfig);
-        $csvPath = (string) ($options['csv_path'] ?? 'public/data/prices.csv');
         $pdoRateSource = $rateSource instanceof PdoRateSource ? $rateSource : new PdoRateSource($pdo, $rateSource);
 
         $rateController = new RateController(
@@ -173,16 +165,12 @@ final class AdminApp
             auditLogger: $auditLogger
         );
 
-        // 8. Security Middlewares & Router
-        /** @var SessionMiddleware $sessionMiddleware */
-        $sessionMiddleware = $options['session_middleware'] ?? new SessionMiddleware();
-        /** @var CsrfMiddleware $csrfMiddleware */
-        $csrfMiddleware = $options['csrf_middleware'] ?? new CsrfMiddleware();
-        /** @var AuthMiddleware $authMiddleware */
-        $authMiddleware = $options['auth_middleware'] ?? new AuthMiddleware();
+        // 8. Security Middlewares & Router (immutable internal security pipeline)
+        $sessionMiddleware = new SessionMiddleware();
+        $csrfMiddleware = new CsrfMiddleware();
+        $authMiddleware = new AuthMiddleware();
 
-        /** @var Router $router */
-        $router = $options['router'] ?? new Router(
+        $router = new Router(
             sessionMiddleware: $sessionMiddleware,
             csrfMiddleware: $csrfMiddleware,
             authMiddleware: $authMiddleware
@@ -217,6 +205,6 @@ final class AdminApp
             ->delete('/calendar-blocks/{id}', [$calendarBlockController, 'delete'])
             ->post('/calendar-blocks/{id}/delete', [$calendarBlockController, 'delete']);
 
-        return new self($pdo, $router);
+        return new self($router);
     }
 }
