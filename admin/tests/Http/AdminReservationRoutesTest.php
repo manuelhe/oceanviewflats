@@ -4,21 +4,11 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Tests\Http;
 
-use OceanViewFlats\Admin\Audit\AuditLogger;
-use OceanViewFlats\Admin\Controller\ReservationController;
+use OceanViewFlats\Admin\AdminApp;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
-use OceanViewFlats\Admin\Http\Router;
-use OceanViewFlats\Admin\Middleware\AuthMiddleware;
-use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
-use OceanViewFlats\Admin\Middleware\SessionMiddleware;
-use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
-use OceanViewFlats\Admin\Views\ViewRenderer;
-use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
-use OceanViewFlats\Domain\Quote\QuoteEngine;
-use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use PDO;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
@@ -26,8 +16,9 @@ use PHPUnit\Framework\TestCase;
 final class AdminReservationRoutesTest extends TestCase
 {
     private PDO $pdo;
-    private Router $router;
+    private AdminApp $app;
     private InMemoryMercadoPagoRefundClient $refundClient;
+    private InMemoryEmailSender $emailSender;
 
     protected function setUp(): void
     {
@@ -123,51 +114,44 @@ final class AdminReservationRoutesTest extends TestCase
                 admin_user_id INTEGER DEFAULT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE property_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                property_id TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                season_name TEXT NOT NULL,
+                price_per_night REAL NOT NULL,
+                min_stay INTEGER NOT NULL DEFAULT 2,
+                cleaning_fee REAL NOT NULL DEFAULT 0.0,
+                resort_fee REAL NOT NULL DEFAULT 0.0,
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE calendar_blocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                property_id TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         ');
     }
 
     private function configureRouter(): void
     {
-        $viewsPath = dirname(__DIR__, 2) . '/src/Views';
-        $viewRenderer = new ViewRenderer($viewsPath);
-        $reservationRepo = new AdminReservationRepository($this->pdo);
-        $auditLogger = new AuditLogger($this->pdo);
-        $ledger = ReservationLedger::createDefault($this->pdo);
-        $quoteEngine = QuoteEngine::createDefault();
-        $emailRenderer = new ConfirmationEmailRenderer('https://oceanviewflats.com');
-        $emailSender = new InMemoryEmailSender();
-
         $this->refundClient = new InMemoryMercadoPagoRefundClient();
-
-        $reservationController = new ReservationController(
-            repository: $reservationRepo,
-            viewRenderer: $viewRenderer,
-            auditLogger: $auditLogger,
-            ledger: $ledger,
-            quoteEngine: $quoteEngine,
-            emailRenderer: $emailRenderer,
-            emailSender: $emailSender,
-            publicSiteUrl: 'https://oceanviewflats.com',
-            refundClient: $this->refundClient
-        );
-
-        $this->router = new Router(
-            sessionMiddleware: new SessionMiddleware(),
-            csrfMiddleware: new CsrfMiddleware(),
-            authMiddleware: new AuthMiddleware()
-        );
-
-        $this->router->get('/reservations', [$reservationController, 'list'])
-            ->get('/reservations/new', [$reservationController, 'newReservation'])
-            ->post('/reservations/quote-preview', [$reservationController, 'quotePreview'])
-            ->post('/reservations/create-manual', [$reservationController, 'createManual'])
-            ->get('/reservations/{uid}', [$reservationController, 'show'])
-            ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry'])
-            ->post('/reservations/{uid}/registry/complete', [$reservationController, 'completeRegistry'])
-            ->post('/reservations/{uid}/door-code/override', [$reservationController, 'overrideDoorCode'])
-            ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode'])
-            ->get('/reservations/{uid}/cancel-modal', [$reservationController, 'cancelModal'])
-            ->post('/reservations/{uid}/cancel', [$reservationController, 'cancel']);
+        $this->emailSender = new InMemoryEmailSender();
+        $this->app = AdminApp::createDefault($this->pdo, [
+            'refund_client' => $this->refundClient,
+            'email_sender' => $this->emailSender,
+            'public_site_url' => 'https://oceanviewflats.com',
+        ]);
     }
 
     private function dispatchAdmin(Request $request): Response
@@ -179,7 +163,7 @@ final class AdminReservationRoutesTest extends TestCase
             'admin_user_role' => 'admin',
             'csrf_token' => 'test-csrf-token',
         ];
-        return $this->router->dispatch($request, $session);
+        return $this->app->handle($request, $session);
     }
 
 
