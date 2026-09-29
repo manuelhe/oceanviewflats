@@ -36,6 +36,9 @@
 				"noRedundantRoles": "off",
 				"useValidAnchor": "off"
 			},
+			"correctness": {
+				"noUnusedImports": "off"
+			},
 			"security": {
 				"noDangerouslySetInnerHtml": "off"
 			},

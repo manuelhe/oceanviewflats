@@ -47,26 +47,26 @@ final class FileCacheChannelBlockSource implements ChannelBlockSourceInterface
                 $prevDate = $night;
             } else {
                 $rangeEnd = (new DateTimeImmutable($prevDate))->modify('+1 day')->format('Y-m-d');
-                $blocks[] = new ChannelBlock(
-                    propertyId: $propertyId,
-                    startDate: $rangeStart,
-                    endDate: $rangeEnd,
-                    source: 'airbnb'
-                );
+                $blocks[] = $this->createChannelBlock($propertyId, $rangeStart, $rangeEnd);
                 $rangeStart = $night;
                 $prevDate = $night;
             }
         }
 
         $rangeEnd = (new DateTimeImmutable($prevDate))->modify('+1 day')->format('Y-m-d');
-        $blocks[] = new ChannelBlock(
-            propertyId: $propertyId,
-            startDate: $rangeStart,
-            endDate: $rangeEnd,
-            source: 'airbnb'
-        );
+        $blocks[] = $this->createChannelBlock($propertyId, $rangeStart, $rangeEnd);
 
         return $blocks;
+    }
+
+    private function createChannelBlock(string $propertyId, string $startDate, string $endDate): ChannelBlock
+    {
+        return new ChannelBlock(
+            propertyId: $propertyId,
+            startDate: $startDate,
+            endDate: $endDate,
+            source: 'airbnb'
+        );
     }
 
     public function getBlockedNights(string $propertyId): array

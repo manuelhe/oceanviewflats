@@ -53,6 +53,9 @@ jobs:
       - name: Validate OpenAPI spec generation
         run: php scripts/generate-docs.php
 
+      - name: Verify OpenAPI specs are in sync
+        run: git diff --exit-code public/api/openapi.json public/api/openapi.yaml
+
   frontend:
     name: Frontend (TypeScript, Biome & Build)
     runs-on: ubuntu-latest
@@ -105,6 +108,18 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
       - name: Install Composer dependencies
         run: composer install --prefer-dist --no-progress
 
@@ -123,16 +138,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy filesystem vulnerability scan
+        id: trivy
         uses: aquasecurity/trivy-action@0.29.0
         with:
           scan-type: 'fs'
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
+          exit-code: '1'
           ignore-unfixed: true
 
       - name: Upload SARIF report to GitHub Code Scanning
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && steps.trivy.conclusion != 'skipped'
         with:
           sarif_file: 'trivy-results.sarif'
