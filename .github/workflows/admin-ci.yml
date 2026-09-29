@@ -1,0 +1,73 @@
+name: Admin CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin/**'
+      - 'src/Domain/**'
+      - '.github/workflows/admin-ci.yml'
+      - 'scripts/schema.sql'
+      - 'scripts/migrate.php'
+      - 'composer.json'
+      - 'composer.lock'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'admin/**'
+      - 'src/Domain/**'
+      - '.github/workflows/admin-ci.yml'
+      - 'scripts/schema.sql'
+      - 'scripts/migrate.php'
+      - 'composer.json'
+      - 'composer.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin-quality-and-tests:
+    name: Admin Quality & Verification Seam
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo, pdo_mysql, sqlite3, json, argon2
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Get Composer Cache Directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHP syntax lint on admin codebase
+        run: find admin -name "*.php" -exec php -l {} +
+
+      - name: Run PHPStan static analysis at Level 8 (Strict Typing)
+        run: composer admin:phpstan
+
+      - name: Run Admin PHPUnit test suite
+        run: composer admin:test
+
+      - name: Run Shared Domain regression test suite
+        run: ./vendor/bin/phpunit --filter Domain

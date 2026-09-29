@@ -14,17 +14,21 @@
   "autoload": {
     "psr-4": {
       "OceanViewFlats\\Api\\": "public/api/",
-      "OceanViewFlats\\Domain\\": "src/Domain/"
+      "OceanViewFlats\\Domain\\": "src/Domain/",
+      "OceanViewFlats\\Admin\\": "admin/src/"
     }
   },
   "autoload-dev": {
     "psr-4": {
-      "OceanViewFlats\\Tests\\": "tests/"
+      "OceanViewFlats\\Tests\\": "tests/",
+      "OceanViewFlats\\Admin\\Tests\\": "admin/tests/"
     }
   },
   "scripts": {
     "test": "phpunit",
     "phpstan": "phpstan analyse -c phpstan.neon",
+    "admin:test": "phpunit -c admin/phpunit.xml",
+    "admin:phpstan": "phpstan analyse -c admin/phpstan.neon",
     "generate-docs": "php scripts/generate-docs.php"
   },
   "config": {
