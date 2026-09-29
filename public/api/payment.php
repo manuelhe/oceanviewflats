@@ -247,25 +247,25 @@ $paymentMethodId = $mpResponse['payment_method_id'] ?? '';
 $reservationStatus = $paymentStatus === 'approved' ? 'confirmed' : 'pending_payment';
 
 // Persist reservation via authoritative Reservation Ledger repository
+$reservation = new Reservation(
+    reservationUid: $uid,
+    propertyId: $propertyId,
+    guestName: $guestName,
+    guestEmail: $guestEmail,
+    guestPhone: $guestPhone,
+    checkIn: $checkInStr,
+    checkOut: $checkOutStr,
+    totalPrice: (float)$serverTotalCop,
+    status: ReservationStatus::from($reservationStatus),
+    paymentMethodId: $paymentMethodId !== '' ? $paymentMethodId : null,
+    mercadopagoPaymentId: $paymentId !== '' ? $paymentId : null,
+    paymentStatus: $paymentStatus,
+    lang: $lang,
+    createdAt: new DateTimeImmutable()
+);
+
 if ($pdo !== null) {
     try {
-        $reservation = new Reservation(
-            reservationUid: $uid,
-            propertyId: $propertyId,
-            guestName: $guestName,
-            guestEmail: $guestEmail,
-            guestPhone: $guestPhone,
-            checkIn: $checkInStr,
-            checkOut: $checkOutStr,
-            totalPrice: (float)$serverTotalCop,
-            status: ReservationStatus::from($reservationStatus),
-            paymentMethodId: $paymentMethodId !== '' ? $paymentMethodId : null,
-            mercadopagoPaymentId: $paymentId !== '' ? $paymentId : null,
-            paymentStatus: $paymentStatus,
-            lang: $lang,
-            createdAt: new DateTimeImmutable()
-        );
-
         $repository = new PdoReservationRepository($pdo);
         $repository->save($reservation);
 
@@ -294,7 +294,7 @@ if ($reservationStatus === 'confirmed') {
 
     // Dispatch pending inquiry / voucher hold email (no access credentials per ADR 0001)
     $mailSender = new PhpMailSender();
-    $copFormatter = '$' . number_get_formatted_amount($serverTotalCop) . ' COP';
+    $copFormatter = '$ ' . number_format($serverTotalCop, 0, ',', '.') . ' COP';
     $safeGuestName = htmlspecialchars($guestName, ENT_QUOTES, 'UTF-8');
     $safePropertyId = htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8');
     $safeUid = htmlspecialchars($uid, ENT_QUOTES, 'UTF-8');

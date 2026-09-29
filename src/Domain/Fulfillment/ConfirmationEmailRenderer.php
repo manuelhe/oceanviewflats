@@ -201,11 +201,7 @@ HTML;
 
     private function resolveLanguage(Reservation $reservation): string
     {
-        $lang = $reservation->lang ?? '';
-        if (is_array($lang)) {
-            $lang = '';
-        }
-        $lang = trim((string)$lang);
+        $lang = trim($reservation->lang);
 
         if (in_array($lang, ['en', 'es', 'fr', 'it', 'de', 'ja'], true)) {
             return $lang;

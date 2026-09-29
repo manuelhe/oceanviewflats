@@ -154,7 +154,7 @@ final class ReservationLedger implements ReservationLedgerInterface
         $allBlocked = array_unique(array_merge($channelNights, $reservationNights));
         sort($allBlocked);
 
-        return array_values($allBlocked);
+        return $allBlocked;
     }
 
     public function hold(

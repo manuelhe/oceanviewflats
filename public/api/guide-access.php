@@ -99,21 +99,17 @@ switch ($result->status) {
     case 'not_found':
         http_response_code(404);
         send_json_response(false, $result->message, $result->toArray());
-        break;
 
     case 'unauthorized':
         http_response_code(403);
         send_json_response(false, $result->message, $result->toArray());
-        break;
 
     case 'registry_required':
         http_response_code(200);
         send_json_response(true, $result->message, $result->toArray());
-        break;
 
     case 'verified':
     default:
         http_response_code(200);
         send_json_response(true, $result->message, $result->toArray());
-        break;
 }

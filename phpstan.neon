@@ -1,0 +1,9 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - public/api
+        - scripts
+        - tests
+    bootstrapFiles:
+        - vendor/autoload.php

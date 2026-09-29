@@ -13,7 +13,7 @@ use InvalidArgumentException;
 final class PropertyRatesConfig
 {
     /**
-     * @param array<string, array{default_rate: float, cleaning_fee: float, resort_fee: float, default_min_stay: int}> $properties
+     * @param array<array-key, array{default_rate: float, cleaning_fee: float, resort_fee: float, default_min_stay: int}> $properties
      */
     public function __construct(
         private readonly array $properties

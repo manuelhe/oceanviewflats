@@ -11,7 +11,7 @@ namespace OceanViewFlats\Domain\Access;
 final class ConfigPropertyCredentialsProvider implements PropertyCredentialsProviderInterface
 {
     /**
-     * @param array<string, array{door_code?: string, wifi_ssid?: string, wifi_password?: string}> $config
+     * @param array<array-key, array{door_code?: string, wifi_ssid?: string, wifi_password?: string}> $config
      */
     public function __construct(
         private readonly array $config = []
