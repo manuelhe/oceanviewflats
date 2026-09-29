@@ -4,17 +4,10 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Tests\Http;
 
-use OceanViewFlats\Admin\Audit\AuditLogger;
+use OceanViewFlats\Admin\AdminApp;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\InMemoryIpRateLimiter;
-use OceanViewFlats\Admin\Controller\AuthController;
-use OceanViewFlats\Admin\Controller\DashboardController;
 use OceanViewFlats\Admin\Http\Request;
-use OceanViewFlats\Admin\Http\Router;
-use OceanViewFlats\Admin\Middleware\AuthMiddleware;
-use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
-use OceanViewFlats\Admin\Middleware\SessionMiddleware;
-use OceanViewFlats\Admin\Views\ViewRenderer;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -23,8 +16,7 @@ final class AdminFrontControllerTest extends TestCase
     private PDO $pdo;
     private InMemoryIpRateLimiter $rateLimiter;
     private AuthService $authService;
-    private ViewRenderer $viewRenderer;
-    private Router $router;
+    private AdminApp $app;
 
     protected function setUp(): void
     {
@@ -65,33 +57,7 @@ final class AdminFrontControllerTest extends TestCase
         $this->rateLimiter = new InMemoryIpRateLimiter(maxAttempts: 10, windowSeconds: 900);
         $this->authService = new AuthService($this->pdo, $this->rateLimiter);
 
-        $viewsPath = dirname(__DIR__, 2) . '/src/Views';
-        $this->viewRenderer = new ViewRenderer($viewsPath);
-
-        $auditLogger = new AuditLogger($this->pdo);
-        $authController = new AuthController(
-            auditLogger: $auditLogger,
-            authService: $this->authService,
-            viewRenderer: $this->viewRenderer
-        );
-        $dashboardController = new DashboardController(
-            viewRenderer: $this->viewRenderer
-        );
-
-        $sessionMiddleware = new SessionMiddleware();
-        $csrfMiddleware = new CsrfMiddleware();
-        $authMiddleware = new AuthMiddleware();
-
-        $this->router = new Router(
-            sessionMiddleware: $sessionMiddleware,
-            csrfMiddleware: $csrfMiddleware,
-            authMiddleware: $authMiddleware
-        );
-
-        $this->router->get('/login', [$authController, 'showLogin'])
-            ->post('/login', [$authController, 'login'])
-            ->get('/logout', [$authController, 'logout'])
-            ->get('/', [$dashboardController, 'index']);
+        $this->app = AdminApp::createDefault($this->pdo, ['rate_limiter' => $this->rateLimiter]);
     }
 
     private function createAdminUser(string $email, string $password, string $name = 'Super Admin'): int
@@ -115,7 +81,7 @@ final class AdminFrontControllerTest extends TestCase
         $session = [];
         $request = new Request('GET', '/login');
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertNotEmpty($session['csrf_token']);
@@ -128,7 +94,7 @@ final class AdminFrontControllerTest extends TestCase
         $session = ['admin_user_id' => 1];
         $request = new Request('GET', '/login');
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('/', $response->getHeaders()['Location']);
@@ -143,7 +109,7 @@ final class AdminFrontControllerTest extends TestCase
             post: ['email' => 'admin@test.com', 'password' => 'secret']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(403, $response->getStatusCode());
         $this->assertStringContainsString('403 Forbidden', $response->getBody());
@@ -165,7 +131,7 @@ final class AdminFrontControllerTest extends TestCase
             server: ['REMOTE_ADDR' => '192.168.1.5']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(401, $response->getStatusCode());
         $this->assertStringContainsString('The email address or password entered is incorrect.', $response->getBody());
@@ -197,7 +163,7 @@ final class AdminFrontControllerTest extends TestCase
             server: ['REMOTE_ADDR' => '10.0.0.99', 'HTTP_USER_AGENT' => 'TestBrowser/1.0']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('/', $response->getHeaders()['Location']);
@@ -239,7 +205,7 @@ final class AdminFrontControllerTest extends TestCase
             server: ['REMOTE_ADDR' => '198.51.100.5']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(429, $response->getStatusCode());
         $this->assertSame('900', $response->getHeaders()['Retry-After'] ?? null);
@@ -251,7 +217,7 @@ final class AdminFrontControllerTest extends TestCase
         $session = []; // Unauthenticated
         $request = new Request('GET', '/');
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('/login', $response->getHeaders()['Location']);
@@ -267,7 +233,7 @@ final class AdminFrontControllerTest extends TestCase
         ];
         $request = new Request('GET', '/');
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('Welcome back, Operator Bob', $response->getBody());
@@ -282,7 +248,7 @@ final class AdminFrontControllerTest extends TestCase
         ];
         $request = new Request('GET', '/logout');
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('/login?reason=logged_out', $response->getHeaders()['Location']);
@@ -301,7 +267,7 @@ final class AdminFrontControllerTest extends TestCase
         $session = ['admin_user_id' => 1];
         $request = new Request('GET', '/non-existent-page');
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(404, $response->getStatusCode());
         $this->assertStringContainsString('404 Not Found', $response->getBody());
@@ -319,7 +285,7 @@ final class AdminFrontControllerTest extends TestCase
             post: ['csrf_token' => 'valid_csrf_token']
         );
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
 
         $this->assertSame(405, $response->getStatusCode());
         $this->assertSame('GET, POST', $response->getHeaders()['Allow']);
