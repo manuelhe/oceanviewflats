@@ -159,17 +159,54 @@ $createdAt = (string) ($reservation['created_at'] ?? '');
                     <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Access & Fulfillment</h3>
                     <div class="grid grid-cols-2 gap-4">
                         <!-- Door Code Card -->
-                        <div class="p-4 rounded-xl border border-gray-200 bg-white shadow-2xs">
-                            <span class="block text-xs text-gray-500 font-medium mb-1">Access Credential (PIN)</span>
-                            <?php if ($doorCode !== ''): ?>
-                                <span class="font-mono text-xl font-bold tracking-wider text-indigo-700">
-                                    <?= htmlspecialchars($doorCode, ENT_QUOTES, 'UTF-8') ?>
-                                </span>
-                            <?php else: ?>
-                                <span class="text-xs text-amber-600 font-medium flex items-center">
-                                    <svg class="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
-                                    Not Assigned
-                                </span>
+                        <div class="p-4 rounded-xl border border-gray-200 bg-white shadow-2xs flex flex-col justify-between">
+                            <div>
+                                <span class="block text-xs text-gray-500 font-medium mb-1">Access Credential (PIN)</span>
+                                <?php if ($doorCode !== ''): ?>
+                                    <span class="font-mono text-xl font-bold tracking-wider text-indigo-700">
+                                        <?= htmlspecialchars($doorCode, ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="text-xs text-amber-600 font-medium flex items-center">
+                                        <svg class="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                                        Not Assigned
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+
+                            <?php if ($status === 'confirmed'): ?>
+                                <div class="mt-3 pt-2.5 border-t border-gray-100 flex flex-col space-y-1.5">
+                                    <button type="button"
+                                            hx-post="/reservations/<?= urlencode($uid) ?>/door-code/regenerate"
+                                            hx-target="#drawer-container"
+                                            hx-confirm="Regenerate this door code? A fresh random PIN will be generated immediately."
+                                            class="inline-flex items-center text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition cursor-pointer">
+                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        Regenerate PIN
+                                    </button>
+
+                                    <details class="text-[11px] group">
+                                        <summary class="text-gray-500 hover:text-indigo-600 cursor-pointer font-medium select-none">
+                                            Override PIN...
+                                        </summary>
+                                        <form hx-post="/reservations/<?= urlencode($uid) ?>/door-code/override"
+                                              hx-target="#drawer-container"
+                                              class="mt-1.5 flex items-center space-x-1.5">
+                                            <input type="text"
+                                                   name="door_code"
+                                                   placeholder="0123456#"
+                                                   pattern="^[0-9]{4,10}#?$"
+                                                   required
+                                                   class="w-24 px-2 py-0.5 text-xs border border-gray-300 rounded font-mono focus:ring-1 focus:ring-indigo-500">
+                                            <button type="submit"
+                                                    class="px-2 py-0.5 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded transition cursor-pointer">
+                                                Save
+                                            </button>
+                                        </form>
+                                    </details>
+                                </div>
                             <?php endif; ?>
                         </div>
 
@@ -189,13 +226,25 @@ $createdAt = (string) ($reservation['created_at'] ?? '');
                                     </span>
                                 <?php endif; ?>
                             </div>
-                            <div class="mt-2">
+                            <div class="mt-3 pt-2.5 border-t border-gray-100 flex flex-col space-y-1.5">
                                 <button type="button"
                                         hx-get="/reservations/<?= urlencode($uid) ?>/registry"
                                         hx-target="#modal-container"
-                                        class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
+                                        class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left">
                                     <?= $registryCompleted ? 'Inspect Registry &rarr;' : 'View Pending Details &rarr;' ?>
                                 </button>
+                                <?php if (!$registryCompleted): ?>
+                                    <button type="button"
+                                            hx-post="/reservations/<?= urlencode($uid) ?>/registry/complete"
+                                            hx-target="#drawer-container"
+                                            hx-confirm="Mark guest registry as manually verified? This generates an access credential if not already set."
+                                            class="inline-flex items-center text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 transition cursor-pointer">
+                                        <svg class="w-3 h-3 mr-1 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Complete Manually
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

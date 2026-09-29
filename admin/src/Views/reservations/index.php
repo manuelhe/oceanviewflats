@@ -27,6 +27,15 @@ $checkInTo = (string) ($filters['check_in_to'] ?? '');
             </p>
         </div>
         <div class="flex items-center space-x-3">
+            <button type="button"
+                    hx-get="/reservations/new"
+                    hx-target="#modal-container"
+                    class="inline-flex items-center px-3.5 py-2 border border-transparent text-xs font-semibold rounded-lg shadow-2xs text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                + New Reservation
+            </button>
             <span class="inline-flex items-center text-xs text-gray-500 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-2xs">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span> Real-time Sync Active
             </span>
@@ -151,7 +160,10 @@ $checkInTo = (string) ($filters['check_in_to'] ?? '');
     </div>
 
     <!-- Reservations Table Container -->
-    <div id="reservations-table-container">
+    <div id="reservations-table-container"
+         hx-get="/reservations"
+         hx-trigger="reservationUpdated from:body"
+         hx-include="#filter-form">
         <?= $tableHtml ?>
     </div>
 
@@ -160,7 +172,7 @@ $checkInTo = (string) ($filters['check_in_to'] ?? '');
         <?= $drawerHtml ?? '' ?>
     </div>
 
-    <!-- Guest Registry Modal Container (z-50) -->
-    <div id="modal-container"></div>
+    <!-- Modal Container (z-50) -->
+    <div id="modal-container"><?= $modalHtml ?? '' ?></div>
 
 </div>

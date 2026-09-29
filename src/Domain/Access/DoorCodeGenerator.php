@@ -33,4 +33,22 @@ final class DoorCodeGenerator
 
         return self::CODE_PREFIX . $paddedCore . self::SUFFIX;
     }
+
+    /**
+     * Generates a fresh, non-deterministic 7-digit keypad code followed by '#'
+     * for smart lock PIN regeneration or administrative overrides.
+     */
+    public static function generateRandom(): string
+    {
+        $randomCore = (string) random_int(100000, 999999);
+        return self::CODE_PREFIX . $randomCore . self::SUFFIX;
+    }
+
+    /**
+     * Alias for generateRandom() satisfying property-specific regeneration interface requirements.
+     */
+    public static function generateForProperty(string $propertyId = ''): string
+    {
+        return self::generateRandom();
+    }
 }
