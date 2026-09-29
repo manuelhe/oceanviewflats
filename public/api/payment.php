@@ -20,10 +20,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     send_json_response(false, 'Method Not Allowed');
 }
 
+// Enforce valid referer origin (prevents direct address bar typing)
+enforce_referer_check();
+
 $config = require __DIR__ . '/config.php';
 
 // Read JSON input from request body
 $rawInput = file_get_contents('php://input');
+if (($rawInput === false || $rawInput === '') && PHP_SAPI === 'cli' && defined('STDIN')) {
+    $rawInput = @stream_get_contents(STDIN);
+}
 $data = !empty($rawInput) ? json_decode((string) $rawInput, true) : [];
 if (!is_array($data)) {
     $data = [];

@@ -222,8 +222,7 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
             ],
         ];
 
-        $extraPhp = '$GLOBALS["TEST_EMAIL_SENDER"] = new \\OceanViewFlats\\Domain\\Fulfillment\\InMemoryEmailSender();';
-        $res = $this->callWebhook('99881122', $paymentPayload, $extraPhp);
+        $res = $this->callWebhook('99881122', $paymentPayload);
 
         $this->assertSame(0, $res['exitCode'], $res['stderr']);
         $this->assertIsArray($res['json']);
@@ -418,10 +417,9 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
      *
      * @param string $paymentId
      * @param array<string, mixed> $paymentData
-     * @param string|null $extraPhp Legacy argument kept for interface compatibility
      * @return array{exitCode: int, stdout: string, stderr: string, json: ?array<string, mixed>}
      */
-    private function callWebhook(string $paymentId, array $paymentData, ?string $extraPhp = null): array
+    private function callWebhook(string $paymentId, array $paymentData): array
     {
         $gateway = new InMemoryPaymentGateway();
         $gateway->stagePaymentArray($paymentData);

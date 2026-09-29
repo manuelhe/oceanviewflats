@@ -76,14 +76,9 @@ final class MercadoPagoPaymentGateway implements PaymentGatewayInterface
             return PaymentGatewayResult::fromArray($decoded, $intent);
         }
 
-        $errorMessage = 'Gateway returned HTTP ' . $httpCode;
+        $defaultMessage = 'Gateway returned HTTP ' . $httpCode;
+        $errorMessage = $this->extractErrorMessage($decoded, $httpCode, $defaultMessage);
         $errorType = 'gateway_error';
-
-        if (isset($decoded['message']) && is_string($decoded['message'])) {
-            $errorMessage = $decoded['message'];
-        } elseif (isset($decoded['cause'][0]['description']) && is_string($decoded['cause'][0]['description'])) {
-            $errorMessage = $decoded['cause'][0]['description'];
-        }
 
         if (isset($decoded['error']) && is_string($decoded['error'])) {
             $errorType = $decoded['error'];
@@ -138,14 +133,9 @@ final class MercadoPagoPaymentGateway implements PaymentGatewayInterface
             return PaymentDetails::fromArray($decoded);
         }
 
-        $errorMessage = 'Gateway returned HTTP ' . $httpCode;
+        $defaultMessage = 'Gateway returned HTTP ' . $httpCode;
+        $errorMessage = $this->extractErrorMessage($decoded, $httpCode, $defaultMessage);
         $errorType = 'gateway_error';
-
-        if (isset($decoded['message']) && is_string($decoded['message'])) {
-            $errorMessage = $decoded['message'];
-        } elseif (isset($decoded['cause'][0]['description']) && is_string($decoded['cause'][0]['description'])) {
-            $errorMessage = $decoded['cause'][0]['description'];
-        }
 
         if (isset($decoded['error']) && is_string($decoded['error'])) {
             $errorType = $decoded['error'];
@@ -157,6 +147,27 @@ final class MercadoPagoPaymentGateway implements PaymentGatewayInterface
             $errorType,
             $decoded
         );
+    }
+
+    /**
+     * Extracts a descriptive error message from a decoded gateway response.
+     *
+     * @param array<string, mixed> $decoded
+     * @param int $httpCode
+     * @param string $defaultMessage
+     * @return string
+     */
+    private function extractErrorMessage(array $decoded, int $httpCode, string $defaultMessage): string
+    {
+        if (isset($decoded['message']) && is_string($decoded['message']) && trim($decoded['message']) !== '') {
+            return trim($decoded['message']);
+        }
+
+        if (isset($decoded['cause'][0]['description']) && is_string($decoded['cause'][0]['description']) && trim($decoded['cause'][0]['description']) !== '') {
+            return trim($decoded['cause'][0]['description']);
+        }
+
+        return $defaultMessage !== '' ? $defaultMessage : 'Gateway returned HTTP ' . $httpCode;
     }
 
     /**

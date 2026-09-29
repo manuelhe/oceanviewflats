@@ -376,8 +376,195 @@ final class BookingPaymentEndpointTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertSame(200, $result->httpStatusCode);
-        $this->assertSame('Payment already processed successfully', $result->message);
+        $this->assertSame('Payment already processed.', $result->message);
         $this->assertSame('pay_already_processed_999', $result->extra['payment_id'] ?? null);
         $this->assertEmpty($this->gateway->getRecordedIntents());
+    }
+
+    public function testIdempotencyShieldRespectsConfirmedReservationStatus(): void
+    {
+        $idempotencyKey = 'idem_replay_conf_777';
+        $paymentId = 'pay_conf_888';
+        $this->pdo->exec("INSERT INTO payment_idempotency (idempotency_key, payment_id) VALUES ('{$idempotencyKey}', '{$paymentId}')");
+        $this->pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, mercadopago_payment_id)
+            VALUES ('ovf_int_conf_1', '1606', 'Maria Gomez', 'maria@example.com', '+573009998888', '2026-11-10', '2026-11-14', 1610000, 'confirmed', '{$paymentId}')");
+
+        $request = $this->createValidRequest([
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        $result = $this->processor->processBookingPayment($request);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('confirmed', $result->status);
+        $this->assertSame('Payment already processed.', $result->message);
+        $this->assertSame('ovf_int_conf_1', $result->extra['reservation_code'] ?? null);
+        $this->assertSame('confirmed', $result->extra['status'] ?? null);
+        $this->assertEmpty($this->gateway->getRecordedIntents());
+    }
+
+    public function testIdempotencyShieldRespectsPendingPaymentReservationStatus(): void
+    {
+        $idempotencyKey = 'idem_replay_pend_777';
+        $paymentId = 'pay_pend_888';
+        $this->pdo->exec("INSERT INTO payment_idempotency (idempotency_key, payment_id) VALUES ('{$idempotencyKey}', '{$paymentId}')");
+        $this->pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, mercadopago_payment_id)
+            VALUES ('ovf_int_pend_1', '1606', 'Maria Gomez', 'maria@example.com', '+573009998888', '2026-11-10', '2026-11-14', 1610000, 'pending_payment', '{$paymentId}')");
+
+        $request = $this->createValidRequest([
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        $result = $this->processor->processBookingPayment($request);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('pending_payment', $result->status);
+        $this->assertSame('Payment already processed.', $result->message);
+        $this->assertSame('ovf_int_pend_1', $result->extra['reservation_code'] ?? null);
+        $this->assertSame('pending_payment', $result->extra['status'] ?? null);
+        $this->assertEmpty($this->gateway->getRecordedIntents());
+    }
+
+    public function testPaymentEndpointRejectsNonPostMethodWith405(): void
+    {
+        $res = $this->callPaymentEndpoint([], 'GET');
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Method Not Allowed', $res['json']['error']);
+    }
+
+    public function testPaymentEndpointCatchesHoneypotSubmission(): void
+    {
+        $res = $this->callPaymentEndpoint(['website_url' => 'http://spam-bot.xyz']);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertSame('Booking request received.', $res['json']['message']);
+    }
+
+    public function testPaymentEndpointEnforcesRefererCheckForDirectBrowserAccess(): void
+    {
+        $res = $this->callPaymentEndpoint(
+            ['property_id' => '1606'],
+            'POST',
+            [
+                'HTTP_REFERER' => '',
+                'HTTP_USER_AGENT' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+            ]
+        );
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Direct access to this processing script is not permitted.', $res['json']['error']);
+    }
+
+    public function testPaymentEndpointRejectsUnauthorizedRefererHost(): void
+    {
+        $res = $this->callPaymentEndpoint(
+            ['property_id' => '1606'],
+            'POST',
+            [
+                'HTTP_REFERER' => 'https://malicious-phishing.com/attack',
+            ]
+        );
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Unauthorized access origin.', $res['json']['error']);
+    }
+
+    public function testPaymentEndpointRejectsInvalidCaptchaChallenge(): void
+    {
+        $res = $this->callPaymentEndpoint([
+            'property_id' => '1606',
+            'captcha_challenge' => '3 + 4',
+            'captcha_signature' => 'invalid_signature_hash',
+            'captcha_response' => '7',
+        ]);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertNotEmpty($res['json']['error']);
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        $rateLimitFile = sys_get_temp_dir() . '/ovf_payments_rate_limits.json';
+        if (file_exists($rateLimitFile)) {
+            @unlink($rateLimitFile);
+        }
+    }
+
+    /**
+     * Executes public/api/payment.php via a sub-process to test HTTP guards in complete isolation.
+     *
+     * @param array<string, mixed> $bodyData
+     * @param string $method
+     * @param array<string, string> $serverVars
+     * @param string $prependCode
+     * @return array{exitCode: int, stdout: string, stderr: string, json: ?array<string, mixed>}
+     */
+    private function callPaymentEndpoint(
+        array $bodyData = [],
+        string $method = 'POST',
+        array $serverVars = [],
+        string $prependCode = ''
+    ): array {
+        $rateLimitFile = sys_get_temp_dir() . '/ovf_payments_rate_limits.json';
+        if (file_exists($rateLimitFile)) {
+            @unlink($rateLimitFile);
+        }
+
+        $defaultServer = [
+            'REQUEST_METHOD' => $method,
+            'HTTP_HOST' => 'oceanviewflats.com',
+            'HTTP_REFERER' => 'https://oceanviewflats.com/booking',
+            'REMOTE_ADDR' => '127.0.0.1',
+        ];
+        $mergedServer = array_merge($defaultServer, $serverVars);
+
+        $jsonInput = json_encode($bodyData);
+
+        $phpCode = sprintf(
+            '%s; foreach (%s as $k => $v) { $_SERVER[$k] = $v; }; require %s;',
+            $prependCode,
+            var_export($mergedServer, true),
+            var_export(dirname(__DIR__, 3) . '/public/api/payment.php', true)
+        );
+
+        $process = proc_open(
+            ['php', '-r', $phpCode],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes
+        );
+
+        if ($jsonInput !== false) {
+            fwrite($pipes[0], $jsonInput);
+        }
+        fclose($pipes[0]);
+
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        return [
+            'exitCode' => $exitCode,
+            'stdout' => (string) $stdout,
+            'stderr' => (string) $stderr,
+            'json' => json_decode((string) $stdout, true),
+        ];
     }
 }

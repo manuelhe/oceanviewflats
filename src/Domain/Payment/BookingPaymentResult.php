@@ -45,17 +45,22 @@ final class BookingPaymentResult implements JsonSerializable
      * Factory for successfully confirmed bookings (e.g. instant credit card approval).
      *
      * @param string $reservationUid
-     * @param string $message
+     * @param string|array<string, mixed> $message
      * @param array<string, mixed> $extra
      * @param int $httpStatusCode
      * @return self
      */
     public static function confirmed(
         string $reservationUid,
-        string $message = 'Payment request processed successfully',
+        string|array $message = 'Payment request processed successfully',
         array $extra = [],
         int $httpStatusCode = 200
     ): self {
+        if (is_array($message)) {
+            $extra = $message;
+            $message = 'Payment already processed.';
+        }
+
         return new self(
             success: true,
             message: $message,
@@ -70,17 +75,22 @@ final class BookingPaymentResult implements JsonSerializable
      * Factory for pending payment bookings (e.g. cash vouchers, PSE asynchronous clearing).
      *
      * @param string $reservationUid
-     * @param string $message
+     * @param string|array<string, mixed> $message
      * @param array<string, mixed> $extra
      * @param int $httpStatusCode
      * @return self
      */
     public static function pendingPayment(
         string $reservationUid,
-        string $message = 'Payment request processed successfully',
+        string|array $message = 'Payment request processed successfully',
         array $extra = [],
         int $httpStatusCode = 200
     ): self {
+        if (is_array($message)) {
+            $extra = $message;
+            $message = 'Payment already processed.';
+        }
+
         return new self(
             success: true,
             message: $message,

@@ -347,9 +347,118 @@ final class BookingPaymentProcessorTest extends TestCase
 
         $this->assertTrue($result->success);
         $this->assertSame(200, $result->httpStatusCode);
-        $this->assertSame('Payment already processed successfully', $result->message);
+        $this->assertSame('Payment already processed.', $result->message);
         $this->assertSame('pay_already_charged_789', $result->extra['payment_id'] ?? null);
         $this->assertEmpty($this->gateway->getRecordedIntents());
+    }
+
+    public function testIdempotencyReplayRespectsConfirmedReservationStatus(): void
+    {
+        $idempotencyKey = 'idem_confirmed_test';
+        $paymentId = 'pay_confirmed_123';
+        $this->pdo->exec("INSERT INTO payment_idempotency (idempotency_key, payment_id) VALUES ('{$idempotencyKey}', '{$paymentId}')");
+        $this->pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, mercadopago_payment_id)
+            VALUES ('ovf_conf_1', '1606', 'John Doe', 'john@example.com', '+573001234567', '2026-11-10', '2026-11-14', 1610000, 'confirmed', '{$paymentId}')");
+
+        $request = $this->createValidRequest([
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        $result = $this->processor->processBookingPayment($request);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('confirmed', $result->status);
+        $this->assertSame('Payment already processed.', $result->message);
+        $this->assertSame($paymentId, $result->extra['payment_id'] ?? null);
+        $this->assertSame('ovf_conf_1', $result->extra['reservation_code'] ?? null);
+        $this->assertSame('confirmed', $result->extra['status'] ?? null);
+        $this->assertEmpty($this->gateway->getRecordedIntents());
+    }
+
+    public function testIdempotencyReplayRespectsPendingPaymentReservationStatus(): void
+    {
+        $idempotencyKey = 'idem_pending_test';
+        $paymentId = 'pay_pending_456';
+        $this->pdo->exec("INSERT INTO payment_idempotency (idempotency_key, payment_id) VALUES ('{$idempotencyKey}', '{$paymentId}')");
+        $this->pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, mercadopago_payment_id)
+            VALUES ('ovf_pend_1', '1606', 'John Doe', 'john@example.com', '+573001234567', '2026-11-10', '2026-11-14', 1610000, 'pending_payment', '{$paymentId}')");
+
+        $request = $this->createValidRequest([
+            'idempotency_key' => $idempotencyKey,
+        ]);
+
+        $result = $this->processor->processBookingPayment($request);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('pending_payment', $result->status);
+        $this->assertSame('Payment already processed.', $result->message);
+        $this->assertSame($paymentId, $result->extra['payment_id'] ?? null);
+        $this->assertSame('ovf_pend_1', $result->extra['reservation_code'] ?? null);
+        $this->assertSame('pending_payment', $result->extra['status'] ?? null);
+        $this->assertEmpty($this->gateway->getRecordedIntents());
+    }
+
+    public function testBookingPaymentRequestSanitizesXssInputs(): void
+    {
+        $request = BookingPaymentRequest::fromArray([
+            'property_id' => '  1606  ',
+            'check_in' => '2026-11-10',
+            'check_out' => '2026-11-14',
+            'guest_name' => '<script>alert("xss")</script>Carlos',
+            'guest_email' => 'carlos@example.com',
+            'guest_phone' => '+57 300 987 6543',
+            'payment_method_id' => 'visa',
+            'idempotency_key' => '  <tag>key</tag>  ',
+        ]);
+
+        $this->assertSame('1606', $request->propertyId);
+        $this->assertStringNotContainsString('<script>', $request->guestName);
+        $this->assertStringContainsString('&lt;script&gt;', $request->guestName);
+        $this->assertSame('&lt;tag&gt;key&lt;/tag&gt;', $request->idempotencyKey);
+    }
+
+    public function testCustomPendingPaymentEmailRendererCanBeInjected(): void
+    {
+        $customRenderer = new class implements \OceanViewFlats\Domain\Payment\PendingPaymentEmailRendererInterface {
+            public int $called = 0;
+            public function renderPendingEmailHtml(\OceanViewFlats\Domain\Reservation\Reservation $reservation, \OceanViewFlats\Domain\Quote\Quote $quote, PaymentGatewayResult $gatewayResult): string {
+                $this->called++;
+                return '<html>custom</html>';
+            }
+        };
+
+        $processor = new BookingPaymentProcessor(
+            gateway: $this->gateway,
+            pdo: $this->pdo,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            repository: $this->repository,
+            fulfillment: $this->fulfillment,
+            emailSender: $this->emailSender,
+            translations: [],
+            pendingEmailRenderer: $customRenderer
+        );
+
+        $this->gateway->stageCreateResult(new PaymentGatewayResult(
+            success: true,
+            paymentId: 'pay_efecty_test',
+            status: 'pending',
+            statusDetail: 'pending_waiting_payment',
+            paymentMethodId: 'efecty',
+            transactionAmount: 1610000.0,
+            externalResourceUrl: 'https://mercadopago.com/voucher/123',
+            barcode: '123456789',
+            verificationCode: '987654',
+            rawResponse: ['id' => 'pay_efecty_test', 'status' => 'pending']
+        ));
+
+        $result = $processor->processBookingPayment($this->createValidRequest([
+            'payment_method_id' => 'efecty',
+        ]));
+
+        $this->assertTrue($result->success);
+        $this->assertSame('pending_payment', $result->status);
+        $this->assertSame(1, $customRenderer->called);
     }
 
     public function testApprovedCreditCardPaymentSucceedsEndToEnd(): void

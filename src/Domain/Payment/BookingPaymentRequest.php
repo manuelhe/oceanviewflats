@@ -6,6 +6,10 @@ namespace OceanViewFlats\Domain\Payment;
 
 use JsonSerializable;
 
+if (!function_exists('clean_input')) {
+    require_once dirname(__DIR__, 3) . '/public/api/utils.php';
+}
+
 /**
  * Immutable typed Data Transfer Object representing a booking payment checkout request.
  */
@@ -41,17 +45,20 @@ final class BookingPaymentRequest implements JsonSerializable
      */
     public static function fromArray(array $data, string $lang = 'en', ?string $clientIp = null): self
     {
-        $propertyId = (string) ($data['property_id'] ?? '');
-        $checkIn = (string) ($data['check_in'] ?? '');
-        $checkOut = (string) ($data['check_out'] ?? '');
-        $guestName = (string) ($data['guest_name'] ?? '');
-        $guestEmail = (string) ($data['guest_email'] ?? ($data['payer']['email'] ?? ''));
-        $guestPhone = (string) ($data['guest_phone'] ?? '');
-        $paymentMethodId = (string) ($data['payment_method_id'] ?? '');
+        $propertyId = clean_input((string) ($data['property_id'] ?? ''));
+        $checkIn = clean_input((string) ($data['check_in'] ?? ''));
+        $checkOut = clean_input((string) ($data['check_out'] ?? ''));
+        $guestName = clean_input((string) ($data['guest_name'] ?? ''));
+        $guestEmail = clean_input((string) ($data['guest_email'] ?? ($data['payer']['email'] ?? '')));
+        $guestPhone = clean_input((string) ($data['guest_phone'] ?? ''));
+        $paymentMethodId = clean_input((string) ($data['payment_method_id'] ?? ''));
 
         $token = isset($data['token']) && is_string($data['token']) && trim($data['token']) !== ''
-            ? trim($data['token'])
+            ? clean_input($data['token'])
             : null;
+        if ($token === '') {
+            $token = null;
+        }
 
         $installments = isset($data['installments']) ? (int) $data['installments'] : 1;
         if ($installments < 1) {
@@ -59,41 +66,59 @@ final class BookingPaymentRequest implements JsonSerializable
         }
 
         $issuerId = isset($data['issuer_id']) && (is_string($data['issuer_id']) || is_numeric($data['issuer_id']))
-            ? (string) $data['issuer_id']
+            ? clean_input((string) $data['issuer_id'])
             : null;
+        if ($issuerId === '') {
+            $issuerId = null;
+        }
 
         $idType = null;
         if (isset($data['payer']['identification']['type']) && is_string($data['payer']['identification']['type'])) {
-            $idType = trim($data['payer']['identification']['type']);
+            $idType = clean_input($data['payer']['identification']['type']);
         } elseif (isset($data['identification_type']) && is_string($data['identification_type'])) {
-            $idType = trim($data['identification_type']);
+            $idType = clean_input($data['identification_type']);
+        }
+        if ($idType === '') {
+            $idType = null;
         }
 
         $idNumber = null;
         if (isset($data['payer']['identification']['number']) && (is_string($data['payer']['identification']['number']) || is_numeric($data['payer']['identification']['number']))) {
-            $idNumber = trim((string) $data['payer']['identification']['number']);
+            $idNumber = clean_input((string) $data['payer']['identification']['number']);
         } elseif (isset($data['identification_number']) && (is_string($data['identification_number']) || is_numeric($data['identification_number']))) {
-            $idNumber = trim((string) $data['identification_number']);
+            $idNumber = clean_input((string) $data['identification_number']);
+        }
+        if ($idNumber === '') {
+            $idNumber = null;
         }
 
         $financialInstitution = null;
         if (isset($data['transaction_details']['financial_institution']) && is_string($data['transaction_details']['financial_institution'])) {
-            $financialInstitution = trim($data['transaction_details']['financial_institution']);
+            $financialInstitution = clean_input($data['transaction_details']['financial_institution']);
         } elseif (isset($data['financial_institution']) && is_string($data['financial_institution'])) {
-            $financialInstitution = trim($data['financial_institution']);
+            $financialInstitution = clean_input($data['financial_institution']);
+        }
+        if ($financialInstitution === '') {
+            $financialInstitution = null;
         }
 
         $effectiveLang = isset($data['lang']) && is_string($data['lang']) && trim($data['lang']) !== ''
-            ? strtolower(trim($data['lang']))
-            : strtolower($lang);
+            ? strtolower(clean_input($data['lang']))
+            : strtolower(clean_input($lang));
 
         $effectiveClientIp = isset($data['client_ip']) && is_string($data['client_ip']) && trim($data['client_ip']) !== ''
-            ? trim($data['client_ip'])
-            : $clientIp;
+            ? clean_input($data['client_ip'])
+            : ($clientIp !== null ? clean_input($clientIp) : null);
+        if ($effectiveClientIp === '') {
+            $effectiveClientIp = null;
+        }
 
         $idempotencyKey = null;
         if (isset($data['idempotency_key']) && is_string($data['idempotency_key']) && trim($data['idempotency_key']) !== '') {
-            $idempotencyKey = trim($data['idempotency_key']);
+            $idempotencyKey = clean_input($data['idempotency_key']);
+            if ($idempotencyKey === '') {
+                $idempotencyKey = null;
+            }
         }
 
         return new self(
