@@ -15,12 +15,17 @@ use PDO;
  */
 final class ReservationLedger implements ReservationLedgerInterface
 {
+    private readonly MaintenanceBlockSourceInterface $maintenanceBlockSource;
+
     public function __construct(
         private readonly ReservationRepositoryInterface $repository,
         private readonly ChannelBlockSourceInterface $channelBlockSource,
+        ?MaintenanceBlockSourceInterface $maintenanceBlockSource = null,
         private readonly int $standardHoldMinutes = Reservation::DEFAULT_STANDARD_HOLD_MINUTES,
         private readonly int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
-    ) {}
+    ) {
+        $this->maintenanceBlockSource = $maintenanceBlockSource ?? new InMemoryMaintenanceBlockSource();
+    }
 
     public static function createDefault(?PDO $pdo = null, ?string $cacheDir = null): self
     {
@@ -32,9 +37,14 @@ final class ReservationLedger implements ReservationLedgerInterface
             ? new FileCacheChannelBlockSource($cacheDir)
             : FileCacheChannelBlockSource::createDefault();
 
+        $maintenanceBlockSource = $pdo !== null
+            ? new PdoMaintenanceBlockSource($pdo)
+            : new InMemoryMaintenanceBlockSource();
+
         return new self(
             repository: $repository,
-            channelBlockSource: $channelBlockSource
+            channelBlockSource: $channelBlockSource,
+            maintenanceBlockSource: $maintenanceBlockSource
         );
     }
 
@@ -72,7 +82,20 @@ final class ReservationLedger implements ReservationLedgerInterface
             }
         }
 
-        // 2. Evaluate active direct reservations with dynamic hold windows (ADR 0003)
+        // 2. Evaluate authoritative administrative Maintenance Blocks (ADR 0006)
+        $maintenanceBlocks = $this->maintenanceBlockSource->getBlocks($propertyId);
+        foreach ($maintenanceBlocks as $mBlock) {
+            if ($mBlock->overlaps($checkIn, $checkOut)) {
+                $reasons[] = sprintf(
+                    'Dates overlap maintenance hold (%s: %s to %s)',
+                    $mBlock->reason,
+                    $mBlock->startDate,
+                    $mBlock->endDate
+                );
+            }
+        }
+
+        // 3. Evaluate active direct reservations with dynamic hold windows (ADR 0003)
         $conflictingReservations = $this->repository->findOverlappingActive(
             propertyId: $propertyId,
             checkIn: $checkIn,
@@ -112,6 +135,19 @@ final class ReservationLedger implements ReservationLedgerInterface
         return null;
     }
 
+    public function findMaintenanceConflict(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?MaintenanceBlock {
+        foreach ($this->maintenanceBlockSource->getBlocks($propertyId) as $block) {
+            if ($block->overlaps($checkIn, $checkOut)) {
+                return $block;
+            }
+        }
+        return null;
+    }
+
     public function findReservationConflict(
         string $propertyId,
         string $checkIn,
@@ -136,6 +172,9 @@ final class ReservationLedger implements ReservationLedgerInterface
         // Ephemeral channel nights
         $channelNights = $this->channelBlockSource->getBlockedNights($propertyId);
 
+        // Maintenance hold nights (ADR 0006)
+        $maintenanceNights = $this->maintenanceBlockSource->getBlockedNights($propertyId);
+
         // Active direct reservation nights
         $activeReservations = $this->repository->findActiveByProperty(
             propertyId: $propertyId,
@@ -151,7 +190,7 @@ final class ReservationLedger implements ReservationLedgerInterface
             }
         }
 
-        $allBlocked = array_unique(array_merge($channelNights, $reservationNights));
+        $allBlocked = array_unique(array_merge($channelNights, $maintenanceNights, $reservationNights));
         sort($allBlocked);
 
         return $allBlocked;
@@ -193,7 +232,27 @@ final class ReservationLedger implements ReservationLedgerInterface
             );
         }
 
-        // 3. Atomically check overlapping reservations and hold in repository
+        // 3. Maintenance blocks checked in domain (ADR 0006)
+        $maintenanceConflict = $this->findMaintenanceConflict(
+            $reservation->propertyId,
+            $reservation->checkIn,
+            $reservation->checkOut
+        );
+        if ($maintenanceConflict !== null) {
+            throw ReservationConflictException::forDates(
+                propertyId: $reservation->propertyId,
+                checkIn: $reservation->checkIn,
+                checkOut: $reservation->checkOut,
+                conflictReason: sprintf(
+                    'Dates overlap maintenance hold (%s: %s to %s)',
+                    $maintenanceConflict->reason,
+                    $maintenanceConflict->startDate,
+                    $maintenanceConflict->endDate
+                )
+            );
+        }
+
+        // 4. Atomically check overlapping reservations and hold in repository
         // Never writes channel blocks to the database (ADR 0002), prevents race conditions
         return $this->repository->holdAtomic(
             reservation: $reservation,

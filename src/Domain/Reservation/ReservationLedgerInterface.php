@@ -45,6 +45,15 @@ interface ReservationLedgerInterface
     ): ?ChannelBlock;
 
     /**
+     * Finds the first overlapping maintenance block, or null if none.
+     */
+    public function findMaintenanceConflict(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?MaintenanceBlock;
+
+    /**
      * Finds the first overlapping active direct reservation, or null if none.
      */
     public function findReservationConflict(

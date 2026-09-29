@@ -17,6 +17,7 @@ if (count(get_included_files()) === 1 && !defined('ALLOW_ICAL_RUN')) {
 require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
+use OceanViewFlats\Domain\Reservation\PdoMaintenanceBlockSource;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 
 // Enforce security headers & CORS policy dynamically
@@ -47,10 +48,12 @@ try {
     exit("Internal Server Error: Database offline.");
 }
 
-// 5. Fetch Active Direct Bookings via Authoritative Reservation Repository (ADR 0003 Dynamic Hold Windows)
+// 5. Fetch Active Direct Bookings & Maintenance Holds (ADR 0003 & ADR 0006)
 try {
     $repository = new PdoReservationRepository($pdo);
     $activeReservations = $repository->findActiveByProperty($propertyId);
+    $maintenanceBlockSource = new PdoMaintenanceBlockSource($pdo);
+    $maintenanceBlocks = $maintenanceBlockSource->getBlocks($propertyId);
 } catch (Exception $e) {
     http_response_code(500);
     exit("Internal Server Error: Failed to fetch calendar records.");
@@ -89,7 +92,26 @@ foreach ($activeReservations as $res) {
     echo "DTSTAMP:" . $dtstamp . "\r\n";
     echo "DTSTART;VALUE=DATE:" . $dtstart . "\r\n";
     echo "DTEND;VALUE=DATE:" . $dtend . "\r\n";
+    echo "STATUS:CONFIRMED\r\n";
     echo "SUMMARY:Blocked - OceanViewFlats Direct Booking\r\n";
+    echo "END:VEVENT\r\n";
+}
+
+foreach ($maintenanceBlocks as $block) {
+    $uid = ($block->id !== null ? 'block-' . $block->id : 'block-' . md5($block->startDate . $block->endDate)) . '@oceanviewflats.com';
+    $dtstamp = $block->createdAt !== null
+        ? formatICalDateTime($block->createdAt->format('Y-m-d H:i:s'))
+        : formatICalDateTime('now');
+    $dtstart = formatICalDate($block->startDate);
+    $dtend = formatICalDate($block->endDate);
+
+    echo "BEGIN:VEVENT\r\n";
+    echo "UID:" . $uid . "\r\n";
+    echo "DTSTAMP:" . $dtstamp . "\r\n";
+    echo "DTSTART;VALUE=DATE:" . $dtstart . "\r\n";
+    echo "DTEND;VALUE=DATE:" . $dtend . "\r\n";
+    echo "STATUS:CONFIRMED\r\n";
+    echo "SUMMARY:Maintenance Hold\r\n";
     echo "END:VEVENT\r\n";
 }
 

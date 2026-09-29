@@ -8,7 +8,9 @@ use DateTimeImmutable;
 use InvalidArgumentException;
 use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\InMemoryChannelBlockSource;
+use OceanViewFlats\Domain\Reservation\InMemoryMaintenanceBlockSource;
 use OceanViewFlats\Domain\Reservation\InMemoryReservationRepository;
+use OceanViewFlats\Domain\Reservation\MaintenanceBlock;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationConflictException;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
@@ -19,6 +21,7 @@ final class ReservationLedgerTest extends TestCase
 {
     private InMemoryReservationRepository $repository;
     private InMemoryChannelBlockSource $channelBlockSource;
+    private InMemoryMaintenanceBlockSource $maintenanceBlockSource;
     private ReservationLedger $ledger;
 
     protected function setUp(): void
@@ -26,9 +29,11 @@ final class ReservationLedgerTest extends TestCase
         parent::setUp();
         $this->repository = new InMemoryReservationRepository();
         $this->channelBlockSource = new InMemoryChannelBlockSource();
+        $this->maintenanceBlockSource = new InMemoryMaintenanceBlockSource();
         $this->ledger = new ReservationLedger(
             repository: $this->repository,
-            channelBlockSource: $this->channelBlockSource
+            channelBlockSource: $this->channelBlockSource,
+            maintenanceBlockSource: $this->maintenanceBlockSource
         );
     }
 
@@ -301,5 +306,61 @@ final class ReservationLedgerTest extends TestCase
             '2026-07-08',
             '2026-07-09',
         ], $blockedNights);
+    }
+
+    public function testMaintenanceBlocksBlockAvailabilityAndPreventHolds(): void
+    {
+        $now = new DateTimeImmutable('2026-08-01 10:00:00');
+
+        $this->maintenanceBlockSource->addBlock(new MaintenanceBlock(
+            propertyId: '1606',
+            startDate: '2026-08-10',
+            endDate: '2026-08-14',
+            reason: 'Painting and AC repair',
+            id: 10
+        ));
+
+        // Overlapping range is blocked
+        $this->assertFalse($this->ledger->isAvailable('1606', '2026-08-11', '2026-08-13'));
+        $reasons = $this->ledger->getConflictReasons('1606', '2026-08-11', '2026-08-13');
+        $this->assertCount(1, $reasons);
+        $this->assertStringContainsString('Dates overlap maintenance hold (Painting and AC repair: 2026-08-10 to 2026-08-14)', $reasons[0]);
+
+        // findMaintenanceConflict identifies the block
+        $conflict = $this->ledger->findMaintenanceConflict('1606', '2026-08-12', '2026-08-15');
+        $this->assertNotNull($conflict);
+        $this->assertSame('Painting and AC repair', $conflict->reason);
+
+        // Attempting to hold overlapping dates throws ReservationConflictException
+        $this->expectException(ReservationConflictException::class);
+        $this->expectExceptionMessage('Dates overlap maintenance hold (Painting and AC repair: 2026-08-10 to 2026-08-14)');
+
+        $this->ledger->hold(new Reservation(
+            reservationUid: 'ovf_blocked_by_maintenance',
+            propertyId: '1606',
+            guestName: 'Blocked Guest',
+            guestEmail: 'guest@example.com',
+            guestPhone: '+573100000000',
+            checkIn: '2026-08-12',
+            checkOut: '2026-08-16',
+            totalPrice: 500000.0,
+            status: ReservationStatus::PENDING_PAYMENT,
+            createdAt: $now
+        ), $now);
+    }
+
+    public function testGetBlockedNightsIncludesMaintenanceNights(): void
+    {
+        $now = new DateTimeImmutable('2026-08-01 10:00:00');
+
+        $this->maintenanceBlockSource->addBlock(new MaintenanceBlock(
+            propertyId: '1707',
+            startDate: '2026-08-05',
+            endDate: '2026-08-08',
+            reason: 'Flooring'
+        ));
+
+        $nights = $this->ledger->getBlockedNights('1707', $now);
+        $this->assertSame(['2026-08-05', '2026-08-06', '2026-08-07'], $nights);
     }
 }

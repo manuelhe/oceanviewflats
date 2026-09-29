@@ -1,0 +1,5 @@
+# Authoritative Maintenance Blocks and Distinct Ledger Port
+
+Administrative maintenance holds (`calendar_blocks` table) are modeled as authoritative, first-class domain entities (`MaintenanceBlock`) and managed through a dedicated domain port (`MaintenanceBlockSourceInterface`) injected into `ReservationLedger`. 
+
+Unlike external Online Travel Agency (OTA) bookings which are ingested strictly as ephemeral, in-memory `ChannelBlock` objects cached on disk (ADR 0002), maintenance blocks are authoritatively persisted in the relational database with explicit administrative ownership (`created_by`), operational justification (`reason`), and immutable audit logs (`admin_audit_logs`). By maintaining a distinct domain port rather than overloading `ChannelBlockSourceInterface`, `ReservationLedger` produces clear, unambiguous availability diagnostic reasons (differentiating internal maintenance holds from external Airbnb blocks), prevents synthetic channel translation, and enables outbound iCalendar feeds (`/api/ical.php`) to project maintenance holds as confirmed events (`STATUS:CONFIRMED`, `SUMMARY:Maintenance Hold`) without leaking sensitive operational notes.

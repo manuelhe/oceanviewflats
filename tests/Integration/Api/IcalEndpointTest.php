@@ -103,6 +103,60 @@ PHP;
         $this->assertStringContainsString('END:VCALENDAR', $res['stdout']);
     }
 
+    public function testIcalEndpointProjectsMaintenanceBlocksWithoutLeakingReasons(): void
+    {
+        $setupPdoCode = <<<'PHP'
+$pdo = new PDO("sqlite::memory:");
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+$pdo->exec("CREATE TABLE reservations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reservation_uid TEXT UNIQUE,
+    property_id TEXT,
+    guest_name TEXT,
+    guest_email TEXT,
+    guest_phone TEXT,
+    check_in TEXT,
+    check_out TEXT,
+    total_price REAL,
+    status TEXT,
+    payment_method_id TEXT,
+    mercadopago_payment_id TEXT,
+    payment_status TEXT,
+    payment_detail TEXT,
+    lang TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)");
+$pdo->exec("CREATE TABLE calendar_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    reason TEXT,
+    created_by INTEGER DEFAULT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)");
+$pdo->exec("INSERT INTO calendar_blocks (id, property_id, start_date, end_date, reason, created_at)
+    VALUES (99, '1606', '2026-09-10', '2026-09-15', 'Private Host Wedding and Plumbing', '2026-09-01 10:00:00')");
+$GLOBALS['TEST_PDO'] = $pdo;
+PHP;
+
+        $res = $this->callEndpoint(['property' => '1606'], $setupPdoCode);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertStringContainsString('BEGIN:VCALENDAR', $res['stdout']);
+        $this->assertStringContainsString('UID:block-99@oceanviewflats.com', $res['stdout']);
+        $this->assertStringContainsString('DTSTART;VALUE=DATE:20260910', $res['stdout']);
+        $this->assertStringContainsString('DTEND;VALUE=DATE:20260915', $res['stdout']);
+        $this->assertStringContainsString('STATUS:CONFIRMED', $res['stdout']);
+        $this->assertStringContainsString('SUMMARY:Maintenance Hold', $res['stdout']);
+        // Crucial security invariant: private host operational reasons must NOT be exposed in public feeds
+        $this->assertStringNotContainsString('Private Host Wedding and Plumbing', $res['stdout']);
+        $this->assertStringContainsString('END:VCALENDAR', $res['stdout']);
+    }
+
     /**
      * @param array<string, string> $params
      * @return array{exitCode: int, stdout: string, stderr: string}
