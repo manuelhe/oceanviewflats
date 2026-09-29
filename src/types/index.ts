@@ -1,14 +1,14 @@
-export type Lang = 'en' | 'es' | 'fr' | 'it' | 'de' | 'ja';
+export type Lang = "en" | "es" | "fr" | "it" | "de" | "ja";
 
 export interface AppProps {
-  lang: Lang;
-  assetPrefix?: string;
+	lang: Lang;
+	assetPrefix?: string;
 }
 
 export interface CalendarWidgetProps {
-  lang: Lang;
-  checkIn: Date | null;
-  checkOut: Date | null;
-  onSelectDate: (date: Date) => void;
-  propertyId?: '1707' | '1606';
+	lang: Lang;
+	checkIn: Date | null;
+	checkOut: Date | null;
+	onSelectDate: (date: Date) => void;
+	propertyId?: "1707" | "1606";
 }
