@@ -1,0 +1,273 @@
+<?php
+/**
+ * @var array<string, mixed> $reservation
+ * @var list<array<string, mixed>> $auditLogs
+ * @var string $csrfToken
+ * @var string $publicSiteUrl
+ */
+
+$uid = (string) ($reservation['reservation_uid'] ?? '');
+$propertyId = (string) ($reservation['property_id'] ?? '');
+$guestName = (string) ($reservation['guest_name'] ?? '');
+$guestEmail = (string) ($reservation['guest_email'] ?? '');
+$guestPhone = (string) ($reservation['guest_phone'] ?? '');
+$checkIn = (string) ($reservation['check_in'] ?? '');
+$checkOut = (string) ($reservation['check_out'] ?? '');
+$nights = (int) max(1, (strtotime($checkOut) - strtotime($checkIn)) / 86400);
+$totalPrice = (float) ($reservation['total_price'] ?? 0.0);
+$refundedAmount = (float) ($reservation['refunded_amount'] ?? 0.0);
+$status = (string) ($reservation['status'] ?? 'pending_payment');
+$source = (string) ($reservation['source'] ?? 'web');
+$registryCompleted = (int) ($reservation['registry_completed'] ?? 0) === 1;
+$registryCompletedAt = (string) ($reservation['registry_completed_at'] ?? '');
+$doorCode = (string) ($reservation['door_code'] ?? '');
+$mpPaymentId = (string) ($reservation['mercadopago_payment_id'] ?? '');
+$mpPrefId = (string) ($reservation['mercadopago_preference_id'] ?? '');
+$paymentStatus = (string) ($reservation['payment_status'] ?? '');
+$createdAt = (string) ($reservation['created_at'] ?? '');
+?>
+
+<div class="fixed inset-0 z-40 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
+    <!-- Backdrop -->
+    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity duration-300"
+         onclick="document.getElementById('drawer-container').innerHTML = '';"
+         aria-hidden="true"></div>
+
+    <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
+        <div class="w-screen max-w-xl bg-white shadow-2xl flex flex-col transform transition ease-in-out duration-300">
+            
+            <!-- Drawer Header -->
+            <div class="px-6 py-5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold <?= $propertyId === '1606' ? 'bg-sky-100 text-sky-800' : 'bg-purple-100 text-purple-800' ?>">
+                            Apto <?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>
+                        </span>
+                        <?php if ($status === 'confirmed'): ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                Confirmed
+                            </span>
+                        <?php elseif ($status === 'pending_payment'): ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                Pending Payment
+                            </span>
+                        <?php else: ?>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
+                                Cancelled
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <h2 class="text-lg font-bold text-gray-900 mt-1" id="slide-over-title">
+                        <?= htmlspecialchars($guestName, ENT_QUOTES, 'UTF-8') ?>
+                    </h2>
+                    <p class="text-xs font-mono text-gray-500 select-all">
+                        UID: <?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>
+                    </p>
+                </div>
+                <button type="button"
+                        onclick="document.getElementById('drawer-container').innerHTML = '';"
+                        class="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer">
+                    <span class="sr-only">Close panel</span>
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Drawer Scrollable Body -->
+            <div class="flex-1 overflow-y-auto px-6 py-6 space-y-6 divide-y divide-gray-100">
+                
+                <!-- 1. Guest & Contact -->
+                <div class="space-y-3 pt-1">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Primary Guest</h3>
+                    <div class="grid grid-cols-2 gap-4 text-sm bg-gray-50/80 p-4 rounded-xl border border-gray-100">
+                        <div>
+                            <span class="block text-xs text-gray-500">Full Name</span>
+                            <span class="font-medium text-gray-900"><?= htmlspecialchars($guestName, ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-gray-500">Email</span>
+                            <a href="mailto:<?= htmlspecialchars($guestEmail, ENT_QUOTES, 'UTF-8') ?>" class="text-indigo-600 hover:underline font-mono text-xs">
+                                <?= htmlspecialchars($guestEmail, ENT_QUOTES, 'UTF-8') ?>
+                            </a>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-gray-500">Phone</span>
+                            <a href="tel:<?= htmlspecialchars($guestPhone, ENT_QUOTES, 'UTF-8') ?>" class="text-indigo-600 hover:underline text-xs">
+                                <?= htmlspecialchars($guestPhone, ENT_QUOTES, 'UTF-8') ?>
+                            </a>
+                        </div>
+                        <div>
+                            <span class="block text-xs text-gray-500">Language</span>
+                            <span class="text-xs font-medium uppercase text-gray-700"><?= htmlspecialchars((string) ($reservation['lang'] ?? 'en'), ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Stay Details -->
+                <div class="space-y-3 pt-6">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Stay & Accommodation</h3>
+                    <div class="grid grid-cols-3 gap-3 text-sm">
+                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <span class="block text-xs text-gray-500">Check-in</span>
+                            <span class="font-semibold text-gray-900 text-xs sm:text-sm"><?= htmlspecialchars($checkIn, ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <span class="block text-xs text-gray-500">Check-out</span>
+                            <span class="font-semibold text-gray-900 text-xs sm:text-sm"><?= htmlspecialchars($checkOut, ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <span class="block text-xs text-gray-500">Duration</span>
+                            <span class="font-semibold text-gray-900 text-xs sm:text-sm"><?= $nights ?> Nights</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-gray-500 px-1">
+                        <span>Source: <strong class="text-gray-700 uppercase"><?= htmlspecialchars($source, ENT_QUOTES, 'UTF-8') ?></strong></span>
+                        <span>Booked: <?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
+                </div>
+
+                <!-- 3. Financial & Payment Summary -->
+                <div class="space-y-3 pt-6">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Financial Summary</h3>
+                    <div class="bg-indigo-50/40 p-4 rounded-xl border border-indigo-100 space-y-2">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-gray-600">Total Price</span>
+                            <span class="font-bold text-gray-900 text-base">$<?= number_format($totalPrice, 0, '.', ',') ?> COP</span>
+                        </div>
+                        <?php if ($refundedAmount > 0): ?>
+                            <div class="flex justify-between items-center text-xs text-rose-600 font-medium">
+                                <span>Refunded Amount</span>
+                                <span>-$<?= number_format($refundedAmount, 0, '.', ',') ?> COP</span>
+                            </div>
+                        <?php endif; ?>
+                        <div class="pt-2 border-t border-indigo-100/60 flex justify-between text-xs text-gray-500">
+                            <span>Payment Status</span>
+                            <span class="font-medium text-gray-800"><?= htmlspecialchars($paymentStatus !== '' ? $paymentStatus : 'None', ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <?php if ($mpPaymentId !== ''): ?>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>Mercado Pago ID</span>
+                                <span class="font-mono text-gray-700"><?= htmlspecialchars($mpPaymentId, ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- 4. Access Credentials & Guest Registry -->
+                <div class="space-y-3 pt-6">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Access & Fulfillment</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Door Code Card -->
+                        <div class="p-4 rounded-xl border border-gray-200 bg-white shadow-2xs">
+                            <span class="block text-xs text-gray-500 font-medium mb-1">Access Credential (PIN)</span>
+                            <?php if ($doorCode !== ''): ?>
+                                <span class="font-mono text-xl font-bold tracking-wider text-indigo-700">
+                                    <?= htmlspecialchars($doorCode, ENT_QUOTES, 'UTF-8') ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-xs text-amber-600 font-medium flex items-center">
+                                    <svg class="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>
+                                    Not Assigned
+                                </span>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Registry Card -->
+                        <div class="p-4 rounded-xl border border-gray-200 bg-white shadow-2xs flex flex-col justify-between">
+                            <div>
+                                <span class="block text-xs text-gray-500 font-medium mb-1">Guest Registry</span>
+                                <?php if ($registryCompleted): ?>
+                                    <span class="inline-flex items-center text-xs font-semibold text-emerald-700">
+                                        <svg class="w-3.5 h-3.5 mr-1 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                                        Completed
+                                    </span>
+                                <?php else: ?>
+                                    <span class="inline-flex items-center text-xs font-semibold text-amber-700">
+                                        <svg class="w-3.5 h-3.5 mr-1 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path></svg>
+                                        Pending Submission
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button"
+                                        hx-get="/reservations/<?= urlencode($uid) ?>/registry"
+                                        hx-target="#modal-container"
+                                        class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer">
+                                    <?= $registryCompleted ? 'Inspect Registry &rarr;' : 'View Pending Details &rarr;' ?>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Audit Trail Timeline -->
+                <div class="space-y-4 pt-6">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-gray-400">Operational Audit Trail</h3>
+                    <?php if (empty($auditLogs)): ?>
+                        <p class="text-xs text-gray-400 italic">No operational changes recorded for this reservation yet.</p>
+                    <?php else: ?>
+                        <div class="flow-root">
+                            <ul role="list" class="-mb-8">
+                                <?php foreach ($auditLogs as $idx => $log): ?>
+                                    <?php
+                                    $action = (string) ($log['action'] ?? 'update');
+                                    $adminName = (string) ($log['admin_user_name'] ?? 'System / Automated');
+                                    $timestamp = (string) ($log['created_at'] ?? '');
+                                    $isLast = $idx === count($auditLogs) - 1;
+                                    ?>
+                                    <li>
+                                        <div class="relative pb-8">
+                                            <?php if (!$isLast): ?>
+                                                <span class="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true"></span>
+                                            <?php endif; ?>
+                                            <div class="relative flex space-x-3">
+                                                <div>
+                                                    <span class="h-8 w-8 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center ring-8 ring-white">
+                                                        <svg class="h-4 w-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </span>
+                                                </div>
+                                                <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
+                                                    <div>
+                                                        <p class="text-xs text-gray-900 font-medium">
+                                                            <span class="inline-block px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-gray-800 rounded mr-1 uppercase">
+                                                                <?= htmlspecialchars($action, ENT_QUOTES, 'UTF-8') ?>
+                                                            </span>
+                                                            by <span class="font-semibold text-gray-800"><?= htmlspecialchars($adminName, ENT_QUOTES, 'UTF-8') ?></span>
+                                                        </p>
+                                                        <?php if (!empty($log['payload_after'])): ?>
+                                                            <details class="mt-1 text-[11px] text-gray-500">
+                                                                <summary class="cursor-pointer hover:text-indigo-600">View Payload Details</summary>
+                                                                <pre class="mt-1 p-2 bg-gray-50 rounded text-[10px] font-mono text-gray-700 overflow-x-auto border border-gray-100"><?= htmlspecialchars((string) $log['payload_after'], ENT_QUOTES, 'UTF-8') ?></pre>
+                                                            </details>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div class="text-right text-[11px] whitespace-nowrap text-gray-400">
+                                                        <?= htmlspecialchars($timestamp, ENT_QUOTES, 'UTF-8') ?>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+            </div>
+
+            <!-- Drawer Footer -->
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+                <button type="button"
+                        onclick="document.getElementById('drawer-container').innerHTML = '';"
+                        class="px-4 py-2 border border-gray-300 rounded-lg shadow-2xs text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition cursor-pointer">
+                    Close
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>

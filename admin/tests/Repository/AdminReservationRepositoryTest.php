@@ -1,0 +1,263 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OceanViewFlats\Admin\Tests\Repository;
+
+use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use PDO;
+use PHPUnit\Framework\TestCase;
+
+final class AdminReservationRepositoryTest extends TestCase
+{
+    private PDO $pdo;
+    private AdminReservationRepository $repository;
+
+    protected function setUp(): void
+    {
+        $this->pdo = new PDO('sqlite::memory:', null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+
+        $this->pdo->exec('
+            CREATE TABLE reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL UNIQUE,
+                property_id TEXT NOT NULL,
+                guest_name TEXT NOT NULL,
+                guest_email TEXT NOT NULL,
+                guest_phone TEXT NOT NULL,
+                check_in TEXT NOT NULL,
+                check_out TEXT NOT NULL,
+                total_price NUMERIC NOT NULL,
+                refunded_amount NUMERIC NOT NULL DEFAULT 0.00,
+                source TEXT NOT NULL DEFAULT "web",
+                mercadopago_preference_id TEXT DEFAULT NULL,
+                mercadopago_payment_id TEXT DEFAULT NULL,
+                payment_status TEXT DEFAULT NULL,
+                payment_method_id TEXT DEFAULT NULL,
+                payment_detail TEXT DEFAULT NULL,
+                status TEXT NOT NULL DEFAULT "pending_payment",
+                lang TEXT NOT NULL DEFAULT "en",
+                registry_completed INTEGER NOT NULL DEFAULT 0,
+                registry_completed_at TEXT DEFAULT NULL,
+                door_code TEXT DEFAULT NULL,
+                notes TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE guest_registries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                property_id TEXT NOT NULL,
+                check_in TEXT NOT NULL,
+                check_out TEXT NOT NULL,
+                guest_count INTEGER NOT NULL DEFAULT 1,
+                guests_payload TEXT NOT NULL,
+                car_plates TEXT DEFAULT NULL,
+                car_model TEXT DEFAULT NULL,
+                ip_address TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT "admin",
+                is_active INTEGER NOT NULL DEFAULT 1,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until TEXT DEFAULT NULL,
+                last_login_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE admin_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER DEFAULT NULL,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                payload_before TEXT DEFAULT NULL,
+                payload_after TEXT DEFAULT NULL,
+                ip_address TEXT NOT NULL,
+                user_agent TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+
+        $this->repository = new AdminReservationRepository($this->pdo);
+    }
+
+    public function testSearchReservationsReturnsEmptyPaginationWhenNoData(): void
+    {
+        $emptyPaginatedResult = $this->repository->searchReservations();
+
+        $this->assertCount(0, $emptyPaginatedResult['items']);
+        $this->assertSame(0, $emptyPaginatedResult['total']);
+        $this->assertSame(1, $emptyPaginatedResult['page']);
+        $this->assertSame(25, $emptyPaginatedResult['per_page']);
+        $this->assertSame(1, $emptyPaginatedResult['total_pages']);
+    }
+
+    public function testSearchReservationsAppliesFiltersCorrectly(): void
+    {
+        $this->seedSampleReservations();
+
+        // 1. Filter by property_id
+        $resultProp = $this->repository->searchReservations(['property_id' => '1606']);
+        $this->assertSame(2, $resultProp['total']);
+        foreach ($resultProp['items'] as $item) {
+            $this->assertSame('1606', $item['property_id']);
+        }
+
+        // 2. Filter by status
+        $resultStatus = $this->repository->searchReservations(['status' => 'confirmed']);
+        $this->assertSame(2, $resultStatus['total']);
+        foreach ($resultStatus['items'] as $item) {
+            $this->assertSame('confirmed', $item['status']);
+        }
+
+        // 3. Filter by registry_status
+        $resultRegComp = $this->repository->searchReservations(['registry_status' => 'completed']);
+        $this->assertSame(1, $resultRegComp['total']);
+        $this->assertSame(1, (int) $resultRegComp['items'][0]['registry_completed']);
+
+        $resultRegPending = $this->repository->searchReservations(['registry_status' => 'pending']);
+        $this->assertSame(2, $resultRegPending['total']);
+
+        // 4. Filter by source
+        $resultSource = $this->repository->searchReservations(['source' => 'cash']);
+        $this->assertSame(1, $resultSource['total']);
+        $this->assertSame('cash', $resultSource['items'][0]['source']);
+
+        // 5. Search on guest name, email, phone, or UID
+        $resultSearchName = $this->repository->searchReservations(['search' => 'Alice']);
+        $this->assertSame(1, $resultSearchName['total']);
+        $this->assertSame('Alice Smith', $resultSearchName['items'][0]['guest_name']);
+
+        $resultSearchUid = $this->repository->searchReservations(['search' => 'res-3']);
+        $this->assertSame(1, $resultSearchUid['total']);
+        $this->assertSame('res-3', $resultSearchUid['items'][0]['reservation_uid']);
+
+        // 6. Date range filtering (check_in_from and check_in_to)
+        $resultDate = $this->repository->searchReservations([
+            'check_in_from' => '2026-10-10',
+            'check_in_to' => '2026-10-15',
+        ]);
+        $this->assertSame(1, $resultDate['total']);
+        $this->assertSame('res-2', $resultDate['items'][0]['reservation_uid']);
+    }
+
+    public function testSearchReservationsPaginationAndSorting(): void
+    {
+        $this->seedSampleReservations();
+
+        // 3 reservations seeded; test limit=1, page=2
+        $resultPage2 = $this->repository->searchReservations([
+            'limit' => 1,
+            'page' => 2,
+            'sort_by' => 'created_at',
+            'sort_dir' => 'asc',
+        ]);
+
+        $this->assertSame(3, $resultPage2['total']);
+        $this->assertSame(2, $resultPage2['page']);
+        $this->assertSame(1, $resultPage2['per_page']);
+        $this->assertSame(3, $resultPage2['total_pages']);
+        $this->assertCount(1, $resultPage2['items']);
+        $this->assertSame('res-2', $resultPage2['items'][0]['reservation_uid']);
+
+        // Sort by check_in DESC
+        $resultSortCheckIn = $this->repository->searchReservations([
+            'sort_by' => 'check_in',
+            'sort_dir' => 'desc',
+        ]);
+        $this->assertSame('res-3', $resultSortCheckIn['items'][0]['reservation_uid']);
+    }
+
+    public function testFindReservationWithAuditTrailReturnsNullWhenNotFound(): void
+    {
+        $res = $this->repository->findReservationWithAuditTrail('non-existent-uid');
+        $this->assertNull($res);
+    }
+
+    public function testFindReservationWithAuditTrailReturnsDetailsAndLogs(): void
+    {
+        $this->seedSampleReservations();
+
+        // Insert admin user
+        $this->pdo->exec("
+            INSERT INTO admin_users (id, email, password_hash, name, role)
+            VALUES (1, 'admin@oceanviewflats.com', 'dummy_hash', 'Operator Manuel', 'admin');
+        ");
+
+        // Insert audit log
+        $this->pdo->exec("
+            INSERT INTO admin_audit_logs (admin_user_id, action, entity_type, entity_id, payload_before, payload_after, ip_address, created_at)
+            VALUES (1, 'pin_override', 'reservation', 'res-1', '{\"door_code\": \"1111#\"}', '{\"door_code\": \"2222#\"}', '127.0.0.1', '2026-09-29 10:00:00');
+        ");
+
+        $res = $this->repository->findReservationWithAuditTrail('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('res-1', $res['reservation']['reservation_uid']);
+        $this->assertSame('Alice Smith', $res['reservation']['guest_name']);
+        $this->assertCount(1, $res['audit_logs']);
+        $this->assertSame('pin_override', $res['audit_logs'][0]['action']);
+        $this->assertSame('Operator Manuel', $res['audit_logs'][0]['admin_user_name']);
+    }
+
+    public function testFindGuestRegistryByReservationUidReturnsDecodedPayload(): void
+    {
+        $this->seedSampleReservations();
+
+        $payload = json_encode([
+            [
+                'full_name' => 'Bob Smith',
+                'doc_type' => 'CC',
+                'doc_number' => '12345678',
+                'is_primary' => true,
+            ],
+            [
+                'full_name' => 'Charlie Smith',
+                'doc_type' => 'TI',
+                'doc_number' => '87654321',
+                'is_primary' => false,
+            ],
+        ]);
+
+        $this->pdo->exec("
+            INSERT INTO guest_registries (reservation_uid, property_id, check_in, check_out, guest_count, guests_payload, car_plates, car_model, ip_address)
+            VALUES ('res-1', '1606', '2026-10-01', '2026-10-05', 2, '{$payload}', 'ABC-123', 'Toyota Corolla', '192.168.1.1');
+        ");
+
+        $registry = $this->repository->findGuestRegistryByReservationUid('res-1');
+        $this->assertNotNull($registry);
+        $this->assertSame('res-1', $registry['reservation_uid']);
+        $this->assertSame('ABC-123', $registry['car_plates']);
+        $this->assertIsArray($registry['guests_payload']);
+        $this->assertCount(2, $registry['guests_payload']);
+        $this->assertSame('Bob Smith', $registry['guests_payload'][0]['full_name']);
+
+        $missing = $this->repository->findGuestRegistryByReservationUid('res-2');
+        $this->assertNull($missing);
+    }
+
+    private function seedSampleReservations(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, registry_completed,
+                door_code, created_at
+            ) VALUES 
+            ('res-1', '1606', 'Alice Smith', 'alice@example.com', '+573001112233', '2026-10-01', '2026-10-05', 1200000.00, 'confirmed', 'web', 1, '1234#', '2026-09-01 12:00:00'),
+            ('res-2', '1606', 'Bob Jones', 'bob@example.com', '+573004445566', '2026-10-10', '2026-10-15', 1500000.00, 'pending_payment', 'cash', 0, NULL, '2026-09-02 12:00:00'),
+            ('res-3', '1707', 'Carlos Gomez', 'carlos@example.com', '+573007778899', '2026-10-20', '2026-10-25', 1800000.00, 'confirmed', 'manual_override', 0, '5678#', '2026-09-03 12:00:00');
+        ");
+    }
+}
