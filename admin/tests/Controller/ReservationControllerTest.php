@@ -9,6 +9,8 @@ use OceanViewFlats\Admin\Controller\ReservationController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
+use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
@@ -32,6 +34,7 @@ final class ReservationControllerTest extends TestCase
     /** @var MockObject&ConfirmationEmailRendererInterface */
     private MockObject $emailRenderer;
     private InMemoryEmailSender $emailSender;
+    private InMemoryMercadoPagoRefundClient $refundClient;
     private ReservationController $controller;
 
     /**
@@ -114,6 +117,19 @@ final class ReservationControllerTest extends TestCase
                 user_agent TEXT DEFAULT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE reservation_refunds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                mercadopago_refund_id TEXT DEFAULT NULL UNIQUE,
+                mercadopago_payment_id TEXT NOT NULL,
+                amount NUMERIC NOT NULL,
+                status TEXT NOT NULL DEFAULT "approved",
+                reason TEXT DEFAULT NULL,
+                source TEXT NOT NULL DEFAULT "admin",
+                admin_user_id INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         ');
 
         $this->seedDatabase();
@@ -125,6 +141,7 @@ final class ReservationControllerTest extends TestCase
         $this->quoteEngine = $this->createMock(QuoteEngineInterface::class);
         $this->emailRenderer = $this->createMock(ConfirmationEmailRendererInterface::class);
         $this->emailSender = new InMemoryEmailSender();
+        $this->refundClient = new InMemoryMercadoPagoRefundClient();
 
         $this->controller = new ReservationController(
             $this->repository,
@@ -134,7 +151,8 @@ final class ReservationControllerTest extends TestCase
             $this->quoteEngine,
             $this->emailRenderer,
             $this->emailSender,
-            'https://oceanviewflats.com'
+            'https://oceanviewflats.com',
+            $this->refundClient
         );
 
         $this->session = [
@@ -602,6 +620,256 @@ final class ReservationControllerTest extends TestCase
         $this->assertNotFalse($log);
     }
 
+    public function testCancelModalRendersSuccessfullyForConfirmedReservation(): void
+    {
+        $server = ['HTTP_HX_REQUEST' => 'true'];
+        $request = (new Request('GET', '/reservations/res-1/cancel-modal', server: $server))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancelModal($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('Cancel Reservation', $body);
+        $this->assertStringContainsString('res-1', $body);
+        $this->assertStringContainsString('1,200,000', $body);
+        $this->assertStringContainsString('Full Refund', $body);
+        $this->assertStringContainsString('Partial Refund', $body);
+        $this->assertStringContainsString('No Refund (Policy Retention)', $body);
+    }
+
+    public function testCancelModalReturns404ForNonExistentReservation(): void
+    {
+        $request = (new Request('GET', '/reservations/unknown/cancel-modal'))
+            ->withAttribute('uid', 'unknown');
+
+        $response = $this->controller->cancelModal($request, $this->session);
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertStringContainsString('Reservation not found', $response->getBody());
+    }
+
+    public function testCancelModalReturns422ForAlreadyCancelledReservation(): void
+    {
+        $this->pdo->exec("UPDATE reservations SET status = 'cancelled' WHERE reservation_uid = 'res-1'");
+
+        $request = (new Request('GET', '/reservations/res-1/cancel-modal'))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancelModal($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('already cancelled', $response->getBody());
+    }
+
+    public function testCancelRejectsInvalidCsrfToken(): void
+    {
+        $post = [
+            'csrf_token' => 'invalid-token',
+            'reason' => 'Guest cancelled',
+            'refund_type' => 'full',
+        ];
+        $request = (new Request('POST', '/reservations/res-1/cancel', post: $post))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancel($request, $this->session);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertStringContainsString('Invalid or expired CSRF token', $response->getBody());
+    }
+
+    public function testCancelRequiresReason(): void
+    {
+        $post = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => '',
+            'refund_type' => 'full',
+        ];
+        $request = (new Request('POST', '/reservations/res-1/cancel', post: $post, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancel($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Cancellation reason is required', $response->getBody());
+    }
+
+    public function testCancelValidatesPartialAmount(): void
+    {
+        $postZero = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => 'Guest requested',
+            'refund_type' => 'partial',
+            'refund_amount' => '0',
+        ];
+        $requestZero = (new Request('POST', '/reservations/res-1/cancel', post: $postZero, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-1');
+
+        $responseZero = $this->controller->cancel($requestZero, $this->session);
+        $this->assertSame(422, $responseZero->getStatusCode());
+        $this->assertStringContainsString('Partial refund amount must be greater than 0', $responseZero->getBody());
+
+        $postExceeding = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => 'Guest requested',
+            'refund_type' => 'partial',
+            'refund_amount' => '2000000',
+        ];
+        $requestExceeding = (new Request('POST', '/reservations/res-1/cancel', post: $postExceeding, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-1');
+
+        $responseExceeding = $this->controller->cancel($requestExceeding, $this->session);
+        $this->assertSame(422, $responseExceeding->getStatusCode());
+        $this->assertStringContainsString('cannot exceed the refundable balance', $responseExceeding->getBody());
+    }
+
+    public function testCancelExecutesFullRefundViaMercadoPagoClient(): void
+    {
+        $this->refundClient->setCustomResponse([
+            'id' => 'ref-mp-999',
+            'payment_id' => 'pay-mp-123456',
+            'amount' => 1200000.0,
+            'status' => 'approved',
+        ]);
+
+        $post = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => 'Guest emergency cancellation',
+            'refund_type' => 'full',
+        ];
+        $request = (new Request('POST', '/reservations/res-1/cancel', post: $post, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancel($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('reservationUpdated', $response->getHeaders()['HX-Trigger'] ?? null);
+        $this->assertStringContainsString('modal-container', $response->getBody());
+        $this->assertStringContainsString('drawer-container', $response->getBody());
+
+        // Assert gateway dispatch
+        $dispatches = $this->refundClient->getDispatchedRefunds();
+        $this->assertCount(1, $dispatches);
+        $this->assertSame('pay-mp-123456', $dispatches[0]['payment_id']);
+        $this->assertSame(1200000.0, $dispatches[0]['amount']);
+
+        // Assert database updates
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('cancelled', $res['status']);
+        $this->assertSame('refunded', $res['payment_status']);
+        $this->assertEquals(1200000.0, (float) $res['refunded_amount']);
+
+        // Assert refund recorded in reservation_refunds
+        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $this->assertCount(1, $refunds);
+        $this->assertSame('ref-mp-999', $refunds[0]['mercadopago_refund_id']);
+        $this->assertSame('admin_pms', $refunds[0]['source']);
+        $this->assertEquals(1200000.0, (float) $refunds[0]['amount']);
+
+        // Assert audit logs
+        $stmt = $this->pdo->prepare('SELECT action FROM admin_audit_logs WHERE entity_id = :uid ORDER BY id ASC');
+        $stmt->execute(['uid' => 'res-1']);
+        $actions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $this->assertContains('reservation_cancelled', $actions);
+        $this->assertContains('refund_issued', $actions);
+    }
+
+    public function testCancelHandlesGatewayFailureGracefullyWithRollback(): void
+    {
+        $this->refundClient->setShouldFail(
+            shouldFail: true,
+            statusCode: 428,
+            message: 'Insufficient balance in account',
+            errorCode: 'insufficient_money_for_refund'
+        );
+
+        $post = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => 'Guest requested cancel',
+            'refund_type' => 'full',
+        ];
+        $request = (new Request('POST', '/reservations/res-1/cancel', post: $post, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancel($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Insufficient merchant balance', $response->getBody());
+
+        // Verify reservation remained confirmed and no refund records were committed
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('confirmed', $res['status']);
+        $this->assertEquals(0.0, (float) $res['refunded_amount']);
+
+        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $this->assertCount(0, $refunds);
+    }
+
+    public function testCancelOfflineReservationDoesNotDispatchToGateway(): void
+    {
+        $post = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => 'Manual reservation cancelled and refunded in cash',
+            'refund_type' => 'partial',
+            'refund_amount' => '400000',
+        ];
+        $request = (new Request('POST', '/reservations/res-3/cancel', post: $post, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-3');
+
+        $response = $this->controller->cancel($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+
+        // Zero gateway dispatches
+        $this->assertCount(0, $this->refundClient->getDispatchedRefunds());
+
+        // Database updated
+        $res = $this->repository->findReservationByUid('res-3');
+        $this->assertNotNull($res);
+        $this->assertSame('cancelled', $res['status']);
+        $this->assertEquals(400000.0, (float) $res['refunded_amount']);
+
+        $refunds = $this->repository->findRefundsByReservationUid('res-3');
+        $this->assertCount(1, $refunds);
+        $this->assertSame('admin_manual', $refunds[0]['source']);
+        $this->assertNull($refunds[0]['mercadopago_refund_id']);
+        $this->assertEquals(400000.0, (float) $refunds[0]['amount']);
+    }
+
+    public function testCancelWithPolicyRetentionZeroRefund(): void
+    {
+        $post = [
+            'csrf_token' => 'test-csrf-token-xyz',
+            'reason' => 'No-show strict policy retention',
+            'refund_type' => 'none',
+        ];
+        $request = (new Request('POST', '/reservations/res-1/cancel', post: $post, server: ['HTTP_HX_REQUEST' => 'true']))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->cancel($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(0, $this->refundClient->getDispatchedRefunds());
+
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('cancelled', $res['status']);
+        $this->assertEquals(0.0, (float) $res['refunded_amount']);
+
+        // No refund record
+        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $this->assertCount(0, $refunds);
+
+        // Audit log has cancellation, but no refund_issued
+        $stmt = $this->pdo->prepare('SELECT action FROM admin_audit_logs WHERE entity_id = :uid');
+        $stmt->execute(['uid' => 'res-1']);
+        $actions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $this->assertContains('reservation_cancelled', $actions);
+        $this->assertNotContains('refund_issued', $actions);
+    }
+
     private function seedDatabase(): void
     {
         $this->pdo->exec("
@@ -611,11 +879,11 @@ final class ReservationControllerTest extends TestCase
             INSERT INTO reservations (
                 reservation_uid, property_id, guest_name, guest_email, guest_phone,
                 check_in, check_out, total_price, status, source, registry_completed,
-                door_code, created_at
+                door_code, mercadopago_payment_id, payment_status, created_at
             ) VALUES 
-            ('res-1', '1606', 'Alice Smith', 'alice@example.com', '+573001112233', '2026-10-01', '2026-10-05', 1200000.00, 'confirmed', 'web', 1, '1234#', '2026-09-01 12:00:00'),
-            ('res-2', '1606', 'Bob Jones', 'bob@example.com', '+573004445566', '2026-10-10', '2026-10-15', 1500000.00, 'pending_payment', 'cash', 0, NULL, '2026-09-02 12:00:00'),
-            ('res-3', '1707', 'Carlos Gomez', 'carlos@example.com', '+573007778899', '2026-10-20', '2026-10-25', 1800000.00, 'confirmed', 'manual_override', 0, '5678#', '2026-09-03 12:00:00');
+            ('res-1', '1606', 'Alice Smith', 'alice@example.com', '+573001112233', '2026-10-01', '2026-10-05', 1200000.00, 'confirmed', 'web', 1, '1234#', 'pay-mp-123456', 'approved', '2026-09-01 12:00:00'),
+            ('res-2', '1606', 'Bob Jones', 'bob@example.com', '+573004445566', '2026-10-10', '2026-10-15', 1500000.00, 'pending_payment', 'cash', 0, NULL, NULL, 'pending', '2026-09-02 12:00:00'),
+            ('res-3', '1707', 'Carlos Gomez', 'carlos@example.com', '+573007778899', '2026-10-20', '2026-10-25', 1800000.00, 'confirmed', 'manual_override', 0, '5678#', NULL, 'offline', '2026-09-03 12:00:00');
 
             INSERT INTO admin_audit_logs (admin_user_id, action, entity_type, entity_id, payload_before, payload_after, ip_address, created_at)
             VALUES (1, 'pin_override', 'reservation', 'res-1', '{\"door_code\": \"1111#\"}', '{\"door_code\": \"1234#\"}', '127.0.0.1', '2026-09-29 10:00:00');

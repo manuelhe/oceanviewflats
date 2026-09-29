@@ -13,6 +13,7 @@ use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
@@ -26,6 +27,7 @@ final class AdminReservationRoutesTest extends TestCase
 {
     private PDO $pdo;
     private Router $router;
+    private InMemoryMercadoPagoRefundClient $refundClient;
 
     protected function setUp(): void
     {
@@ -108,6 +110,19 @@ final class AdminReservationRoutesTest extends TestCase
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE reservation_refunds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                mercadopago_refund_id TEXT DEFAULT NULL UNIQUE,
+                mercadopago_payment_id TEXT NOT NULL,
+                amount NUMERIC NOT NULL,
+                status TEXT NOT NULL DEFAULT "approved",
+                reason TEXT DEFAULT NULL,
+                source TEXT NOT NULL DEFAULT "admin",
+                admin_user_id INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         ');
     }
 
@@ -122,6 +137,8 @@ final class AdminReservationRoutesTest extends TestCase
         $emailRenderer = new ConfirmationEmailRenderer('https://oceanviewflats.com');
         $emailSender = new InMemoryEmailSender();
 
+        $this->refundClient = new InMemoryMercadoPagoRefundClient();
+
         $reservationController = new ReservationController(
             repository: $reservationRepo,
             viewRenderer: $viewRenderer,
@@ -130,7 +147,8 @@ final class AdminReservationRoutesTest extends TestCase
             quoteEngine: $quoteEngine,
             emailRenderer: $emailRenderer,
             emailSender: $emailSender,
-            publicSiteUrl: 'https://oceanviewflats.com'
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient
         );
 
         $this->router = new Router(
@@ -147,7 +165,9 @@ final class AdminReservationRoutesTest extends TestCase
             ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry'])
             ->post('/reservations/{uid}/registry/complete', [$reservationController, 'completeRegistry'])
             ->post('/reservations/{uid}/door-code/override', [$reservationController, 'overrideDoorCode'])
-            ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode']);
+            ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode'])
+            ->get('/reservations/{uid}/cancel-modal', [$reservationController, 'cancelModal'])
+            ->post('/reservations/{uid}/cancel', [$reservationController, 'cancel']);
     }
 
     private function dispatchAdmin(Request $request): Response
@@ -357,5 +377,60 @@ final class AdminReservationRoutesTest extends TestCase
         $this->assertIsArray($row);
         $this->assertSame(1, (int) $row['registry_completed']);
         $this->assertMatchesRegularExpression('/^0[0-9]{6}#$/', (string) $row['door_code']);
+    }
+
+    public function testCancelModalRouteReturnsModalContent(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status)
+            VALUES ('res-int-cancel-modal', '1606', 'Modal Tester', 'modal@test.com', '+573001112233', '2026-12-15', '2026-12-20', 800000.00, 'confirmed');
+        ");
+
+        $response = $this->dispatchAdmin(new Request(
+            'GET',
+            '/reservations/res-int-cancel-modal/cancel-modal',
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+            ]
+        ));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('Cancel Reservation', $response->getBody());
+        $this->assertStringContainsString('res-int-cancel-modal', $response->getBody());
+        $this->assertStringContainsString('800,000', $response->getBody());
+    }
+
+    public function testCancelRouteExecutesCancellationAndSwapsContainers(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, source)
+            VALUES ('res-int-cancel-exec', '1707', 'Exec Tester', 'exec@test.com', '+573001112233', '2026-12-22', '2026-12-27', 950000.00, 'confirmed', 'phone');
+        ");
+
+        $response = $this->dispatchAdmin(new Request(
+            'POST',
+            '/reservations/res-int-cancel-exec/cancel',
+            post: [
+                'csrf_token' => 'test-csrf-token',
+                'reason' => 'Guest family emergency',
+                'refund_type' => 'none',
+            ],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_CSRF_TOKEN' => 'test-csrf-token',
+            ]
+        ));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('reservationUpdated', $response->getHeaders()['HX-Trigger'] ?? null);
+        $this->assertStringContainsString('modal-container', $response->getBody());
+        $this->assertStringContainsString('drawer-container', $response->getBody());
+
+        $stmt = $this->pdo->query("SELECT status, notes FROM reservations WHERE reservation_uid = 'res-int-cancel-exec'");
+        $this->assertInstanceOf(PDOStatement::class, $stmt);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertIsArray($row);
+        $this->assertSame('cancelled', $row['status']);
+        $this->assertStringContainsString('Guest family emergency', (string) $row['notes']);
     }
 }

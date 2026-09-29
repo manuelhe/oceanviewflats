@@ -145,11 +145,12 @@ final class AdminReservationRepository
     }
 
     /**
-     * Retrieves a reservation by UID along with its associated audit trail.
+     * Retrieves a reservation by UID along with its associated audit trail and refunds.
      *
      * @return array{
      *     reservation: array<string, mixed>,
-     *     audit_logs: list<array<string, mixed>>
+     *     audit_logs: list<array<string, mixed>>,
+     *     refunds: list<array<string, mixed>>
      * }|null
      */
     public function findReservationWithAuditTrail(string $uid): ?array
@@ -174,10 +175,54 @@ final class AdminReservationRepository
         /** @var list<array<string, mixed>> $auditLogs */
         $auditLogs = $logStmt->fetchAll(PDO::FETCH_ASSOC);
 
+        $refunds = $this->findRefundsByReservationUid($uid);
+
         return [
             'reservation' => $reservation,
             'audit_logs' => $auditLogs,
+            'refunds' => $refunds,
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function findRefundsByReservationUid(string $uid): array
+    {
+        try {
+            $stmt = $this->pdo->prepare('
+                SELECT r.*, u.name AS admin_user_name, u.email AS admin_user_email
+                FROM reservation_refunds r
+                LEFT JOIN admin_users u ON r.admin_user_id = u.id
+                WHERE r.reservation_uid = :uid
+                ORDER BY r.created_at DESC, r.id DESC
+            ');
+            $stmt->execute(['uid' => $uid]);
+            /** @var list<array<string, mixed>> $refunds */
+            $refunds = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            return $refunds;
+        } catch (\PDOException) {
+            return [];
+        }
+    }
+
+    /**
+     * Retrieves reservation record for update with row locking where supported.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findReservationForUpdate(string $uid): ?array
+    {
+        $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $lockClause = ($driver === 'mysql') ? ' FOR UPDATE' : '';
+
+        $stmt = $this->pdo->prepare("SELECT * FROM reservations WHERE reservation_uid = :uid{$lockClause} LIMIT 1");
+        $stmt->execute(['uid' => $uid]);
+        /** @var array<string, mixed>|false $row */
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $row !== false ? $row : null;
     }
 
     /**
@@ -342,6 +387,103 @@ final class AdminReservationRepository
         ]);
 
         return $data['reservation_uid'];
+    }
+
+    /**
+     * Updates reservation status to 'cancelled', records refund in reservation_refunds if amount > 0,
+     * and updates refunded_amount and payment_status atomically.
+     */
+    public function cancelReservationWithRefund(
+        string $uid,
+        string $reason,
+        string $refundType,
+        float $refundAmount,
+        ?string $mpRefundId,
+        ?string $mpPaymentId,
+        ?int $adminUserId,
+        string $source = 'admin_pms'
+    ): bool {
+        $reservation = $this->findReservationForUpdate($uid);
+        if ($reservation === null) {
+            return false;
+        }
+
+        $totalPrice = (float) ($reservation['total_price'] ?? 0.0);
+        $currentRefunded = (float) ($reservation['refunded_amount'] ?? 0.0);
+        $refundAmount = max(0.0, round($refundAmount, 2));
+        $newRefundedAmount = round($currentRefunded + $refundAmount, 2);
+
+        $newPaymentStatus = (string) ($reservation['payment_status'] ?? 'pending_payment');
+        if ($newRefundedAmount >= $totalPrice && $totalPrice > 0) {
+            $newPaymentStatus = 'refunded';
+        } elseif ($newRefundedAmount > 0) {
+            $newPaymentStatus = 'partially_refunded';
+        }
+
+        // 1. Insert refund record if amount > 0
+        if ($refundAmount > 0) {
+            $refundStmt = $this->pdo->prepare('
+                INSERT INTO reservation_refunds (
+                    reservation_uid,
+                    mercadopago_refund_id,
+                    mercadopago_payment_id,
+                    amount,
+                    status,
+                    reason,
+                    source,
+                    admin_user_id,
+                    created_at
+                ) VALUES (
+                    :reservation_uid,
+                    :mercadopago_refund_id,
+                    :mercadopago_payment_id,
+                    :amount,
+                    :status,
+                    :reason,
+                    :source,
+                    :admin_user_id,
+                    CURRENT_TIMESTAMP
+                )
+            ');
+            $refundStmt->execute([
+                'reservation_uid' => $uid,
+                'mercadopago_refund_id' => $mpRefundId,
+                'mercadopago_payment_id' => $mpPaymentId !== null && $mpPaymentId !== '' ? $mpPaymentId : 'offline',
+                'amount' => $refundAmount,
+                'status' => 'approved',
+                'reason' => $reason,
+                'source' => $source,
+                'admin_user_id' => $adminUserId,
+            ]);
+        }
+
+        // 2. Append cancel note to existing notes
+        $cancelNote = '[Cancelled ' . date('Y-m-d H:i') . '] ' . $reason;
+        if ($refundAmount > 0) {
+            $cancelNote .= ' (Refund: COP ' . number_format($refundAmount, 2) . ', type: ' . $refundType . ')';
+        } else {
+            $cancelNote .= ' (Policy retention: No refund)';
+        }
+        $existingNotes = isset($reservation['notes']) && is_string($reservation['notes']) ? trim($reservation['notes']) : '';
+        $updatedNotes = $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote;
+
+        // 3. Update reservation
+        $updateStmt = $this->pdo->prepare('
+            UPDATE reservations
+            SET status = "cancelled",
+                refunded_amount = :refunded_amount,
+                payment_status = :payment_status,
+                notes = :notes,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE reservation_uid = :uid
+        ');
+
+        return $updateStmt->execute([
+            'refunded_amount' => $newRefundedAmount,
+            'payment_status' => $newPaymentStatus,
+            'notes' => $updatedNotes,
+            'uid' => $uid,
+        ]) && $updateStmt->rowCount() > 0;
     }
 
     public function getPdo(): PDO

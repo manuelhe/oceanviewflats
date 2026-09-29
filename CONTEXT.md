@@ -110,6 +110,18 @@ _Avoid_: Ticket, Slip, Cash Receipt
 A unique client-generated token ensuring a payment transaction is processed exactly once, protecting against double-charges during network retries or duplicate submissions.
 _Avoid_: Nonce, Transaction Token, Request Hash
 
+**Gateway Refund**:
+An automated monetary reversal executed against the payment gateway (Mercado Pago) returning funds to the Primary Guest's original payment rail.
+_Avoid_: Charge reversal, payback, return
+
+**Refundable Balance**:
+The remaining net monetary balance of a Reservation eligible for refund, defined strictly as Total Price minus cumulative Refunded Amount.
+_Avoid_: Available balance, remaining charge, credit
+
+**Policy Retention**:
+The portion of the Quote withheld upon cancellation according to cancellation policy terms rather than refunded.
+_Avoid_: Cancellation penalty, forfeit, withheld fee
+
 ### Channel Synchronization
 
 **Channel Sync**:

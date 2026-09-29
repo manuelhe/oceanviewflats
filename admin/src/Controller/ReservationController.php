@@ -9,6 +9,8 @@ use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
+use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
@@ -21,7 +23,7 @@ use Throwable;
 /**
  * Controller handling reservation management, real-time debounced filtering,
  * slide-over detail inspector drawer, manual booking creation, PIN overrides,
- * and guest registry administration.
+ * cancellation with automated refunds, and guest registry administration.
  */
 final class ReservationController
 {
@@ -33,7 +35,8 @@ final class ReservationController
         private readonly QuoteEngineInterface $quoteEngine,
         private readonly ConfirmationEmailRendererInterface $emailRenderer,
         private readonly EmailSenderInterface $emailSender,
-        private readonly string $publicSiteUrl = 'https://oceanviewflats.com'
+        private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
+        private readonly ?MercadoPagoRefundClientInterface $refundClient = null
     ) {
     }
 
@@ -92,6 +95,7 @@ final class ReservationController
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
             'reservation' => $data['reservation'],
             'auditLogs' => $data['audit_logs'],
+            'refunds' => $data['refunds'],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
@@ -544,6 +548,293 @@ final class ReservationController
                 'filters' => $filters,
             ]
         );
+    }
+
+    /**
+     * Renders the cancellation confirmation and refund modal.
+     *
+     * @param array<string, mixed> $session
+     */
+    public function cancelModal(Request $request, array &$session): Response
+    {
+        $uid = (string) ($request->getAttribute('uid') ?? '');
+        $reservation = $this->repository->findReservationByUid($uid);
+
+        if ($reservation === null) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
+        }
+
+        if ((string) ($reservation['status'] ?? '') === 'cancelled') {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
+        }
+
+        $totalPrice = (float) ($reservation['total_price'] ?? 0.0);
+        $refundedAmount = (float) ($reservation['refunded_amount'] ?? 0.0);
+        $refundableBalance = max(0.0, round($totalPrice - $refundedAmount, 2));
+        $isOnlinePayment = !empty($reservation['mercadopago_payment_id']);
+
+        $modalHtml = $this->viewRenderer->renderPartial('reservations/_cancel_modal.php', [
+            'reservation' => $reservation,
+            'refundableBalance' => $refundableBalance,
+            'isOnlinePayment' => $isOnlinePayment,
+            'errorMessage' => null,
+            'oldInput' => [],
+            'csrfToken' => (string) ($session['csrf_token'] ?? ''),
+        ]);
+
+        return Response::html($modalHtml);
+    }
+
+    /**
+     * Executes atomic cancellation and Mercado Pago refund dispatch.
+     *
+     * @param array<string, mixed> $session
+     */
+    public function cancel(Request $request, array &$session): Response
+    {
+        $uid = (string) ($request->getAttribute('uid') ?? '');
+
+        // 1. Verify CSRF Token
+        $csrfToken = (string) $request->getPost('csrf_token', '');
+        if (!hash_equals((string) ($session['csrf_token'] ?? ''), $csrfToken)) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Invalid or expired CSRF token. Please refresh.</div>', 403);
+        }
+
+        // 2. Begin database transaction
+        $this->repository->beginTransaction();
+
+        try {
+            // 3. Acquire row-level lock
+            $reservation = $this->repository->findReservationForUpdate($uid);
+            if ($reservation === null) {
+                $this->repository->rollBack();
+                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
+            }
+
+            if ((string) ($reservation['status'] ?? '') === 'cancelled') {
+                $this->repository->rollBack();
+                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
+            }
+
+            $totalPrice = (float) ($reservation['total_price'] ?? 0.0);
+            $currentRefunded = (float) ($reservation['refunded_amount'] ?? 0.0);
+            $refundableBalance = max(0.0, round($totalPrice - $currentRefunded, 2));
+            $isOnlinePayment = !empty($reservation['mercadopago_payment_id']);
+
+            $reason = trim((string) $request->getPost('reason', ''));
+            $refundType = trim((string) $request->getPost('refund_type', 'none'));
+            $refundAmountInput = (float) $request->getPost('refund_amount', 0.0);
+
+            // 4. Validate Reason
+            if ($reason === '') {
+                $this->repository->rollBack();
+                return $this->renderCancelError(
+                    reservation: $reservation,
+                    refundableBalance: $refundableBalance,
+                    isOnlinePayment: $isOnlinePayment,
+                    errorMessage: 'Cancellation reason is required.',
+                    oldInput: [
+                        'reason' => $reason,
+                        'refund_type' => $refundType,
+                        'refund_amount' => $refundAmountInput,
+                    ],
+                    csrfToken: (string) ($session['csrf_token'] ?? '')
+                );
+            }
+
+            // 5. Determine and validate Refund Amount
+            if ($refundType === 'full') {
+                $refundAmount = $refundableBalance;
+            } elseif ($refundType === 'partial') {
+                if ($refundAmountInput <= 0 || $refundAmountInput > $refundableBalance) {
+                    $this->repository->rollBack();
+                    return $this->renderCancelError(
+                        reservation: $reservation,
+                        refundableBalance: $refundableBalance,
+                        isOnlinePayment: $isOnlinePayment,
+                        errorMessage: 'Partial refund amount must be greater than 0 and cannot exceed the refundable balance ($' . number_format($refundableBalance, 0, '.', ',') . ' COP).',
+                        oldInput: [
+                            'reason' => $reason,
+                            'refund_type' => $refundType,
+                            'refund_amount' => $refundAmountInput,
+                        ],
+                        csrfToken: (string) ($session['csrf_token'] ?? '')
+                    );
+                }
+                $refundAmount = round($refundAmountInput, 2);
+            } else {
+                $refundType = 'none';
+                $refundAmount = 0.0;
+            }
+
+            // 6. External Gateway Refund Dispatch (if online payment & refund requested)
+            $mpPaymentId = $isOnlinePayment ? (string) $reservation['mercadopago_payment_id'] : null;
+            $mpRefundId = null;
+            $source = $isOnlinePayment ? 'admin_pms' : 'admin_manual';
+
+            if ($isOnlinePayment && $refundAmount > 0) {
+                if ($this->refundClient === null) {
+                    $this->repository->rollBack();
+                    return $this->renderCancelError(
+                        reservation: $reservation,
+                        refundableBalance: $refundableBalance,
+                        isOnlinePayment: $isOnlinePayment,
+                        errorMessage: 'Refund client service is unavailable. Please contact technical support.',
+                        oldInput: [
+                            'reason' => $reason,
+                            'refund_type' => $refundType,
+                            'refund_amount' => $refundAmountInput,
+                        ],
+                        csrfToken: (string) ($session['csrf_token'] ?? '')
+                    );
+                }
+
+                $idempotencyKey = 'ref_' . $uid . '_' . (int) $refundAmount . '_' . time();
+
+                try {
+                    $refundResult = $this->refundClient->refundPayment((string) $mpPaymentId, $refundAmount, $idempotencyKey);
+                    $mpRefundId = (string) $refundResult['id'];
+                } catch (MercadoPagoRefundException $e) {
+                    $this->repository->rollBack();
+                    return $this->renderCancelError(
+                        reservation: $reservation,
+                        refundableBalance: $refundableBalance,
+                        isOnlinePayment: $isOnlinePayment,
+                        errorMessage: $e->getUserFriendlyMessage(),
+                        oldInput: [
+                            'reason' => $reason,
+                            'refund_type' => $refundType,
+                            'refund_amount' => $refundAmountInput,
+                        ],
+                        csrfToken: (string) ($session['csrf_token'] ?? '')
+                    );
+                } catch (Throwable $e) {
+                    $this->repository->rollBack();
+                    return $this->renderCancelError(
+                        reservation: $reservation,
+                        refundableBalance: $refundableBalance,
+                        isOnlinePayment: $isOnlinePayment,
+                        errorMessage: 'Gateway connection failed: ' . $e->getMessage(),
+                        oldInput: [
+                            'reason' => $reason,
+                            'refund_type' => $refundType,
+                            'refund_amount' => $refundAmountInput,
+                        ],
+                        csrfToken: (string) ($session['csrf_token'] ?? '')
+                    );
+                }
+            }
+
+            // 7. Mutate database records atomically
+            $currentUser = $this->buildCurrentUser($session);
+            $adminUserId = $currentUser['id'];
+
+            $this->repository->cancelReservationWithRefund(
+                uid: $uid,
+                reason: $reason,
+                refundType: $refundType,
+                refundAmount: $refundAmount,
+                mpRefundId: $mpRefundId,
+                mpPaymentId: $mpPaymentId,
+                adminUserId: $adminUserId,
+                source: $source
+            );
+
+            // 8. Record audit logs
+            $this->auditLogger->record(
+                action: 'reservation_cancelled',
+                entityType: 'reservation',
+                entityId: $uid,
+                before: [
+                    'status' => $reservation['status'],
+                    'payment_status' => $reservation['payment_status'] ?? null,
+                ],
+                after: [
+                    'status' => 'cancelled',
+                    'reason' => $reason,
+                    'refund_type' => $refundType,
+                    'refund_amount' => $refundAmount,
+                ],
+                adminUserId: $adminUserId,
+                ipAddress: $request->getClientIp(),
+                userAgent: (string) $request->getHeader('User-Agent', '')
+            );
+
+            if ($refundAmount > 0) {
+                $this->auditLogger->record(
+                    action: 'refund_issued',
+                    entityType: 'reservation',
+                    entityId: $uid,
+                    before: ['refunded_amount' => $currentRefunded],
+                    after: [
+                        'refunded_amount' => round($currentRefunded + $refundAmount, 2),
+                        'refund_amount' => $refundAmount,
+                        'mercadopago_refund_id' => $mpRefundId,
+                        'refund_type' => $refundType,
+                        'source' => $source,
+                    ],
+                    adminUserId: $adminUserId,
+                    ipAddress: $request->getClientIp(),
+                    userAgent: (string) $request->getHeader('User-Agent', '')
+                );
+            }
+
+            // 9. Commit transaction
+            $this->repository->commit();
+        } catch (Throwable $e) {
+            $this->repository->rollBack();
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Cancellation failed unexpectedly: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 500);
+        }
+
+        // 10. Render response
+        $updatedData = $this->repository->findReservationWithAuditTrail($uid);
+        $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
+            'reservation' => $updatedData !== null ? $updatedData['reservation'] : $reservation,
+            'auditLogs' => $updatedData !== null ? $updatedData['audit_logs'] : [],
+            'refunds' => $updatedData !== null ? $updatedData['refunds'] : [],
+            'csrfToken' => (string) ($session['csrf_token'] ?? ''),
+            'publicSiteUrl' => $this->publicSiteUrl,
+        ]);
+
+        if ($request->isHtmx()) {
+            $responseBody = '<script>document.getElementById("modal-container").innerHTML = "";</script>';
+            $responseBody .= '<div id="drawer-container" hx-swap-oob="innerHTML">' . $drawerHtml . '</div>';
+
+            return new Response(
+                statusCode: 200,
+                headers: [
+                    'Content-Type' => 'text/html; charset=UTF-8',
+                    'HX-Trigger' => 'reservationUpdated',
+                ],
+                body: $responseBody
+            );
+        }
+
+        return Response::redirect('/reservations/' . urlencode($uid));
+    }
+
+    /**
+     * @param array<string, mixed> $reservation
+     * @param array<string, mixed> $oldInput
+     */
+    private function renderCancelError(
+        array $reservation,
+        float $refundableBalance,
+        bool $isOnlinePayment,
+        string $errorMessage,
+        array $oldInput,
+        string $csrfToken
+    ): Response {
+        $modalHtml = $this->viewRenderer->renderPartial('reservations/_cancel_modal.php', [
+            'reservation' => $reservation,
+            'refundableBalance' => $refundableBalance,
+            'isOnlinePayment' => $isOnlinePayment,
+            'errorMessage' => $errorMessage,
+            'oldInput' => $oldInput,
+            'csrfToken' => $csrfToken,
+        ]);
+
+        return Response::html($modalHtml, 422);
     }
 
     private function renderCreateError(Request $request, string $errorMessage): Response

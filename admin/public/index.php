@@ -24,6 +24,7 @@ use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
@@ -60,6 +61,8 @@ try {
     $quoteEngine = QuoteEngine::createDefault();
     $emailRenderer = new ConfirmationEmailRenderer($publicSiteUrl);
     $emailSender = new PhpMailSender();
+    $mpAccessToken = $_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: '';
+    $refundClient = new MercadoPagoRefundClient($mpAccessToken);
 
     $reservationController = new ReservationController(
         repository: $reservationRepo,
@@ -69,6 +72,7 @@ try {
         quoteEngine: $quoteEngine,
         emailRenderer: $emailRenderer,
         emailSender: $emailSender,
+        refundClient: $refundClient,
         publicSiteUrl: $publicSiteUrl
     );
 
@@ -96,7 +100,9 @@ try {
         ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry'])
         ->post('/reservations/{uid}/registry/complete', [$reservationController, 'completeRegistry'])
         ->post('/reservations/{uid}/door-code/override', [$reservationController, 'overrideDoorCode'])
-        ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode']);
+        ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode'])
+        ->get('/reservations/{uid}/cancel-modal', [$reservationController, 'cancelModal'])
+        ->post('/reservations/{uid}/cancel', [$reservationController, 'cancel']);
 
     // 6. Capture Request & Dispatch
     $request = Request::fromGlobals();
