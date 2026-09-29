@@ -52,12 +52,12 @@ If the migration script cannot be run via CLI due to restricted hosting environm
 ```sql
 USE `oceanviewflats_db`;
 
--- 1. Add registry tracking columns and door_code to reservations table if missing
+-- 1. Add registry tracking columns and door_code to reservations table
 ALTER TABLE `reservations` 
-  ADD COLUMN IF NOT EXISTS `registry_completed` TINYINT(1) NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS `registry_completed_at` DATETIME DEFAULT NULL,
-  ADD COLUMN IF NOT EXISTS `door_code` VARCHAR(20) DEFAULT NULL,
-  ADD INDEX IF NOT EXISTS `idx_registry_completed` (`registry_completed`);
+  ADD COLUMN `registry_completed` TINYINT(1) NOT NULL DEFAULT 0,
+  ADD COLUMN `registry_completed_at` DATETIME DEFAULT NULL,
+  ADD COLUMN `door_code` VARCHAR(20) DEFAULT NULL,
+  ADD INDEX `idx_registry_completed` (`registry_completed`);
 
 -- 2. Create guest registries audit log table if missing
 CREATE TABLE IF NOT EXISTS `guest_registries` (
