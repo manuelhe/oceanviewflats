@@ -14,6 +14,7 @@ final class Request
      * @param array<string, mixed> $post
      * @param array<string, mixed> $server
      * @param array<string, mixed> $cookies
+     * @param array<string, mixed> $attributes
      */
     public function __construct(
         private readonly string $method,
@@ -21,7 +22,8 @@ final class Request
         private readonly array $query = [],
         private readonly array $post = [],
         private readonly array $server = [],
-        private readonly array $cookies = []
+        private readonly array $cookies = [],
+        private readonly array $attributes = []
     ) {
     }
 
@@ -37,7 +39,8 @@ final class Request
             query: $_GET,
             post: $_POST,
             server: $_SERVER,
-            cookies: $_COOKIE
+            cookies: $_COOKIE,
+            attributes: []
         );
     }
 
@@ -106,5 +109,52 @@ final class Request
     public function isMutating(): bool
     {
         return in_array($this->method, ['POST', 'PUT', 'DELETE', 'PATCH'], true);
+    }
+
+    public function getAttribute(string $key, mixed $default = null): mixed
+    {
+        return array_key_exists($key, $this->attributes) ? $this->attributes[$key] : $default;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getAttributes(): array
+    {
+        return $this->attributes;
+    }
+
+    public function withAttribute(string $key, mixed $value): self
+    {
+        $newAttributes = $this->attributes;
+        $newAttributes[$key] = $value;
+
+        return new self(
+            method: $this->method,
+            uri: $this->uri,
+            query: $this->query,
+            post: $this->post,
+            server: $this->server,
+            cookies: $this->cookies,
+            attributes: $newAttributes
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    public function withAttributes(array $attributes): self
+    {
+        $newAttributes = array_merge($this->attributes, $attributes);
+
+        return new self(
+            method: $this->method,
+            uri: $this->uri,
+            query: $this->query,
+            post: $this->post,
+            server: $this->server,
+            cookies: $this->cookies,
+            attributes: $newAttributes
+        );
     }
 }
