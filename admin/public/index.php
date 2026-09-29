@@ -14,6 +14,7 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
 use OceanViewFlats\Admin\Controller\AuthController;
+use OceanViewFlats\Admin\Controller\CalendarBlockController;
 use OceanViewFlats\Admin\Controller\DashboardController;
 use OceanViewFlats\Admin\Controller\RateController;
 use OceanViewFlats\Admin\Controller\ReservationController;
@@ -24,6 +25,7 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
+use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
 use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
@@ -79,6 +81,8 @@ try {
     $mpAccessToken = $_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: '';
     $refundClient = new MercadoPagoRefundClient($mpAccessToken);
 
+    $ledger = ReservationLedger::createDefault($pdo);
+
     $reservationController = new ReservationController(
         repository: $reservationRepo,
         viewRenderer: $viewRenderer,
@@ -89,6 +93,14 @@ try {
         emailSender: $emailSender,
         refundClient: $refundClient,
         publicSiteUrl: $publicSiteUrl
+    );
+
+    $calendarBlockRepo = new AdminCalendarBlockRepository($pdo);
+    $calendarBlockController = new CalendarBlockController(
+        blockRepository: $calendarBlockRepo,
+        ledger: $ledger,
+        viewRenderer: $viewRenderer,
+        auditLogger: $auditLogger
     );
 
     // 4. Assemble Security Middlewares & Router
@@ -124,7 +136,12 @@ try {
         ->get('/rates/{id}/edit', [$rateController, 'edit'])
         ->post('/rates/{id}', [$rateController, 'update'])
         ->delete('/rates/{id}', [$rateController, 'delete'])
-        ->post('/rates/seed-from-csv', [$rateController, 'seedFromCsv']);
+        ->post('/rates/seed-from-csv', [$rateController, 'seedFromCsv'])
+        ->get('/calendar-blocks', [$calendarBlockController, 'index'])
+        ->get('/calendar-blocks/new', [$calendarBlockController, 'newHold'])
+        ->post('/calendar-blocks', [$calendarBlockController, 'create'])
+        ->delete('/calendar-blocks/{id}', [$calendarBlockController, 'delete'])
+        ->post('/calendar-blocks/{id}/delete', [$calendarBlockController, 'delete']);
 
     // 6. Capture Request & Dispatch
     $request = Request::fromGlobals();
