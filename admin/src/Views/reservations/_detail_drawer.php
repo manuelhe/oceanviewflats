@@ -2,10 +2,12 @@
 /**
  * @var array<string, mixed> $reservation
  * @var list<array<string, mixed>> $auditLogs
+ * @var list<array<string, mixed>> $refunds
  * @var string $csrfToken
  * @var string $publicSiteUrl
  */
 
+$refunds = isset($refunds) && is_array($refunds) ? $refunds : [];
 $uid = (string) ($reservation['reservation_uid'] ?? '');
 $propertyId = (string) ($reservation['property_id'] ?? '');
 $guestName = (string) ($reservation['guest_name'] ?? '');
@@ -149,6 +151,28 @@ $createdAt = (string) ($reservation['created_at'] ?? '');
                             <div class="flex justify-between text-xs text-gray-500">
                                 <span>Mercado Pago ID</span>
                                 <span class="font-mono text-gray-700"><?= htmlspecialchars($mpPaymentId, ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($refunds)): ?>
+                            <div class="pt-2 border-t border-indigo-100/60 space-y-1.5">
+                                <span class="block text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Refund History</span>
+                                <?php foreach ($refunds as $ref): ?>
+                                    <div class="p-2 bg-white rounded-lg border border-indigo-100/60 text-[11px] space-y-0.5">
+                                        <div class="flex justify-between font-semibold text-rose-700">
+                                            <span>-$<?= number_format((float) ($ref['amount'] ?? 0), 0, '.', ',') ?> COP</span>
+                                            <span class="text-gray-400 font-normal"><?= htmlspecialchars((string) ($ref['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                        <div class="text-gray-600 flex justify-between">
+                                            <span><?= htmlspecialchars((string) ($ref['reason'] ?? 'Refund'), ENT_QUOTES, 'UTF-8') ?></span>
+                                            <span class="text-gray-400 text-[10px] font-mono uppercase"><?= htmlspecialchars((string) ($ref['source'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                        <?php if (!empty($ref['mercadopago_refund_id'])): ?>
+                                            <div class="text-[10px] font-mono text-gray-400">
+                                                Refund ID: <?= htmlspecialchars((string) $ref['mercadopago_refund_id'], ENT_QUOTES, 'UTF-8') ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -309,7 +333,24 @@ $createdAt = (string) ($reservation['created_at'] ?? '');
             </div>
 
             <!-- Drawer Footer -->
-            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end">
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+                <div>
+                    <?php if ($status !== 'cancelled'): ?>
+                        <button type="button"
+                                hx-get="/reservations/<?= urlencode($uid) ?>/cancel-modal"
+                                hx-target="#modal-container"
+                                class="px-3.5 py-2 border border-rose-200 rounded-lg shadow-2xs text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 transition cursor-pointer flex items-center">
+                            <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                            Cancel Reservation...
+                        </button>
+                    <?php else: ?>
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800">
+                            Reservation Cancelled
+                        </span>
+                    <?php endif; ?>
+                </div>
                 <button type="button"
                         onclick="document.getElementById('drawer-container').innerHTML = '';"
                         class="px-4 py-2 border border-gray-300 rounded-lg shadow-2xs text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition cursor-pointer">

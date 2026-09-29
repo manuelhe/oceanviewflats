@@ -88,6 +88,19 @@ final class AdminReservationRepositoryTest extends TestCase
                 user_agent TEXT DEFAULT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE reservation_refunds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                mercadopago_refund_id TEXT DEFAULT NULL UNIQUE,
+                mercadopago_payment_id TEXT NOT NULL,
+                amount NUMERIC NOT NULL,
+                status TEXT NOT NULL DEFAULT "approved",
+                reason TEXT DEFAULT NULL,
+                source TEXT NOT NULL DEFAULT "admin",
+                admin_user_id INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         ');
 
         $this->repository = new AdminReservationRepository($this->pdo);
@@ -343,6 +356,107 @@ final class AdminReservationRepositoryTest extends TestCase
         $this->assertTrue($this->repository->beginTransaction());
         $this->repository->updateDoorCode('res-1', '0111222#');
         $this->assertTrue($this->repository->rollBack());
+    }
+
+    public function testCancelReservationWithFullRefund(): void
+    {
+        $this->seedSampleReservations();
+
+        $success = $this->repository->cancelReservationWithRefund(
+            uid: 'res-1',
+            reason: 'Guest requested emergency cancellation',
+            refundType: 'full',
+            refundAmount: 1200000.00,
+            mpRefundId: 'mp-ref-888',
+            mpPaymentId: 'mp-pay-111',
+            adminUserId: 1
+        );
+
+        $this->assertTrue($success);
+
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('cancelled', $res['status']);
+        $this->assertSame('refunded', $res['payment_status']);
+        $this->assertEquals(1200000.00, (float) $res['refunded_amount']);
+        $this->assertStringContainsString('Guest requested emergency cancellation', (string) $res['notes']);
+        $this->assertStringContainsString('Refund: COP 1,200,000.00, type: full', (string) $res['notes']);
+
+        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $this->assertCount(1, $refunds);
+        $this->assertSame('mp-ref-888', $refunds[0]['mercadopago_refund_id']);
+        $this->assertSame('mp-pay-111', $refunds[0]['mercadopago_payment_id']);
+        $this->assertEquals(1200000.00, (float) $refunds[0]['amount']);
+        $this->assertSame('admin_pms', $refunds[0]['source']);
+
+        $detail = $this->repository->findReservationWithAuditTrail('res-1');
+        $this->assertNotNull($detail);
+        $this->assertCount(1, $detail['refunds']);
+    }
+
+    public function testCancelReservationWithPartialRefund(): void
+    {
+        $this->seedSampleReservations();
+
+        $success = $this->repository->cancelReservationWithRefund(
+            uid: 'res-1',
+            reason: 'Late cancellation 50% policy retention',
+            refundType: 'partial',
+            refundAmount: 600000.00,
+            mpRefundId: 'mp-ref-partial-1',
+            mpPaymentId: 'mp-pay-111',
+            adminUserId: null
+        );
+
+        $this->assertTrue($success);
+
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('cancelled', $res['status']);
+        $this->assertSame('partially_refunded', $res['payment_status']);
+        $this->assertEquals(600000.00, (float) $res['refunded_amount']);
+        $this->assertStringContainsString('Refund: COP 600,000.00, type: partial', (string) $res['notes']);
+    }
+
+    public function testCancelReservationWithNoRefund(): void
+    {
+        $this->seedSampleReservations();
+
+        $success = $this->repository->cancelReservationWithRefund(
+            uid: 'res-1',
+            reason: 'No-show under non-refundable terms',
+            refundType: 'none',
+            refundAmount: 0.00,
+            mpRefundId: null,
+            mpPaymentId: null,
+            adminUserId: null
+        );
+
+        $this->assertTrue($success);
+
+        $res = $this->repository->findReservationByUid('res-1');
+        $this->assertNotNull($res);
+        $this->assertSame('cancelled', $res['status']);
+        $this->assertEquals(0.00, (float) $res['refunded_amount']);
+        $this->assertStringContainsString('Policy retention: No refund', (string) $res['notes']);
+
+        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $this->assertCount(0, $refunds);
+    }
+
+    public function testCancelReservationNonExistentReturnsFalse(): void
+    {
+        $result = $this->repository->cancelReservationWithRefund(
+            uid: 'unknown-uid',
+            reason: 'Unknown',
+            refundType: 'none',
+            refundAmount: 0.0,
+            mpRefundId: null,
+            mpPaymentId: null,
+            adminUserId: null
+        );
+
+        $this->assertFalse($result);
     }
 
     private function seedSampleReservations(): void

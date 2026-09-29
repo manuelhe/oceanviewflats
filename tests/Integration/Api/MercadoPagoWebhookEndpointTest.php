@@ -1,0 +1,406 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OceanViewFlats\Tests\Integration\Api;
+
+use PDO;
+use PHPUnit\Framework\TestCase;
+
+final class MercadoPagoWebhookEndpointTest extends TestCase
+{
+    private string $dbFile;
+    private PDO $pdo;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->dbFile = sys_get_temp_dir() . '/ovf_webhook_test_' . uniqid('', true) . '.sqlite';
+        $this->pdo = new PDO('sqlite:' . $this->dbFile, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+
+        $this->pdo->exec('
+            CREATE TABLE reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL UNIQUE,
+                property_id TEXT NOT NULL,
+                guest_name TEXT NOT NULL,
+                guest_email TEXT NOT NULL,
+                guest_phone TEXT NOT NULL,
+                check_in TEXT NOT NULL,
+                check_out TEXT NOT NULL,
+                total_price REAL NOT NULL,
+                refunded_amount REAL NOT NULL DEFAULT 0.00,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT "web",
+                mercadopago_preference_id TEXT DEFAULT NULL,
+                mercadopago_payment_id TEXT DEFAULT NULL,
+                payment_status TEXT DEFAULT NULL,
+                payment_method_id TEXT DEFAULT NULL,
+                payment_detail TEXT DEFAULT NULL,
+                notes TEXT DEFAULT NULL,
+                lang TEXT DEFAULT "en",
+                registry_completed INTEGER DEFAULT 0,
+                door_code TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE reservation_refunds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                mercadopago_refund_id TEXT UNIQUE DEFAULT NULL,
+                mercadopago_payment_id TEXT NOT NULL,
+                amount REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT "approved",
+                reason TEXT DEFAULT NULL,
+                source TEXT NOT NULL DEFAULT "mercadopago_webhook",
+                admin_user_id INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE admin_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER DEFAULT NULL,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                payload_before TEXT DEFAULT NULL,
+                payload_after TEXT DEFAULT NULL,
+                ip_address TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+
+        $rateLimitFile = sys_get_temp_dir() . '/ovf_webhook_rate_limits.json';
+        if (file_exists($rateLimitFile)) {
+            @unlink($rateLimitFile);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if (file_exists($this->dbFile)) {
+            @unlink($this->dbFile);
+        }
+        $rateLimitFile = sys_get_temp_dir() . '/ovf_webhook_rate_limits.json';
+        if (file_exists($rateLimitFile)) {
+            @unlink($rateLimitFile);
+        }
+        parent::tearDown();
+    }
+
+    /**
+     * Rule 1: Resurrection Defense.
+     * When a webhook payment approved event arrives for a reservation that is already 'cancelled',
+     * the webhook must ignore it and refuse resurrection.
+     */
+    public function testResurrectionDefenseRule1CancelledReservationRefusesApprovalResurrection(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status, mercadopago_payment_id)
+            VALUES ('ovf-resurrect-guard', '1606', 'Guarded Guest', 'guard@example.com', '+573001112233', '2026-11-20', '2026-11-25', 1500000.00, 'cancelled', 'cancelled', '99887766');
+        ");
+
+        $paymentPayload = [
+            'id' => '99887766',
+            'status' => 'approved',
+            'status_detail' => 'accredited',
+            'external_reference' => 'ovf-resurrect-guard',
+            'transaction_amount' => 1500000.00,
+            'transaction_amount_refunded' => 0.0,
+            'payment_method_id' => 'visa',
+        ];
+
+        $res = $this->callWebhook('99887766', $paymentPayload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success'] ?? false);
+        $this->assertSame('ignored_cancelled_terminal', $res['json']['status'] ?? null);
+
+        // Verify database state remains cancelled
+        $stmt = $this->pdo->query("SELECT status, payment_status FROM reservations WHERE reservation_uid = 'ovf-resurrect-guard'");
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('cancelled', $row['status']);
+    }
+
+    /**
+     * Rule 2: External Full Refund Synchronization.
+     * When an external full refund webhook arrives for a 'confirmed' reservation,
+     * the webhook must auto-cancel the reservation, update refunded_amount, record the refund row,
+     * and log an audit trail event.
+     */
+    public function testExternalFullRefundRule2AutoCancelsConfirmedReservationAndReleasesDates(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status, mercadopago_payment_id)
+            VALUES ('ovf-external-refund', '1707', 'Refunder Guest', 'ref@example.com', '+573001112233', '2026-12-01', '2026-12-05', 1200000.00, 'confirmed', 'approved', '88776655');
+        ");
+
+        $paymentPayload = [
+            'id' => '88776655',
+            'status' => 'refunded',
+            'status_detail' => 'refunded',
+            'external_reference' => 'ovf-external-refund',
+            'transaction_amount' => 1200000.00,
+            'transaction_amount_refunded' => 1200000.00,
+            'payment_method_id' => 'pse',
+            'refunds' => [
+                [
+                    'id' => 771122,
+                    'payment_id' => 88776655,
+                    'amount' => 1200000.00,
+                    'status' => 'approved',
+                ],
+            ],
+        ];
+
+        $res = $this->callWebhook('88776655', $paymentPayload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success'] ?? false);
+        $this->assertSame('refunded', $res['json']['status'] ?? null);
+        $this->assertSame('cancelled', $res['json']['reservation_status'] ?? null);
+
+        // Verify reservation updated to cancelled
+        $stmt = $this->pdo->query("SELECT status, payment_status, refunded_amount, notes FROM reservations WHERE reservation_uid = 'ovf-external-refund'");
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('cancelled', $row['status']);
+        $this->assertSame('refunded', $row['payment_status']);
+        $this->assertEquals(1200000.00, (float) $row['refunded_amount']);
+        $this->assertStringContainsString('External Refund Sync', (string) $row['notes']);
+
+        // Verify reservation_refunds record created
+        $stmt = $this->pdo->query("SELECT * FROM reservation_refunds WHERE reservation_uid = 'ovf-external-refund'");
+        $refundRow = $stmt->fetch();
+        $this->assertIsArray($refundRow);
+        $this->assertSame('771122', (string) $refundRow['mercadopago_refund_id']);
+        $this->assertEquals(1200000.00, (float) $refundRow['amount']);
+        $this->assertSame('mercadopago_webhook', $refundRow['source']);
+
+        // Verify audit log created
+        $stmt = $this->pdo->query("SELECT * FROM admin_audit_logs WHERE entity_id = 'ovf-external-refund'");
+        $auditRow = $stmt->fetch();
+        $this->assertIsArray($auditRow);
+        $this->assertSame('external_refund_cancellation', $auditRow['action']);
+    }
+
+    /**
+     * External Partial Refund Synchronization.
+     * When a partial refund arrives for a 'confirmed' reservation,
+     * status stays confirmed, but payment_status becomes partially_refunded and refund item is recorded.
+     */
+    public function testExternalPartialRefundUpdatesRefundedAmountAndRetainsConfirmedStay(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status, mercadopago_payment_id)
+            VALUES ('ovf-partial-sync', '1606', 'Partial Guest', 'part@example.com', '+573001112233', '2026-12-10', '2026-12-15', 2000000.00, 'confirmed', 'approved', '66554433');
+        ");
+
+        $paymentPayload = [
+            'id' => '66554433',
+            'status' => 'approved',
+            'status_detail' => 'partially_refunded',
+            'external_reference' => 'ovf-partial-sync',
+            'transaction_amount' => 2000000.00,
+            'transaction_amount_refunded' => 500000.00,
+            'payment_method_id' => 'visa',
+            'refunds' => [
+                [
+                    'id' => 332211,
+                    'payment_id' => 66554433,
+                    'amount' => 500000.00,
+                    'status' => 'approved',
+                ],
+            ],
+        ];
+
+        $res = $this->callWebhook('66554433', $paymentPayload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success'] ?? false);
+        $this->assertSame('partially_refunded', $res['json']['status'] ?? null);
+        $this->assertSame('confirmed', $res['json']['reservation_status'] ?? null);
+
+        // Verify reservation stayed confirmed
+        $stmt = $this->pdo->query("SELECT status, payment_status, refunded_amount FROM reservations WHERE reservation_uid = 'ovf-partial-sync'");
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('confirmed', $row['status']);
+        $this->assertSame('partially_refunded', $row['payment_status']);
+        $this->assertEquals(500000.00, (float) $row['refunded_amount']);
+
+        // Verify refund recorded
+        $stmt = $this->pdo->query("SELECT * FROM reservation_refunds WHERE reservation_uid = 'ovf-partial-sync'");
+        $refundRow = $stmt->fetch();
+        $this->assertIsArray($refundRow);
+        $this->assertSame('332211', (string) $refundRow['mercadopago_refund_id']);
+        $this->assertEquals(500000.00, (float) $refundRow['amount']);
+    }
+
+    /**
+     * Partial refund on an already cancelled reservation does NOT resurrect it.
+     */
+    public function testPartialRefundOnCancelledReservationDoesNotResurrect(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status, mercadopago_payment_id)
+            VALUES ('ovf-cancel-partial', '1606', 'Cancel Part Guest', 'cpart@example.com', '+573001112233', '2026-12-16', '2026-12-20', 1000000.00, 'cancelled', 'cancelled', '55443322');
+        ");
+
+        $paymentPayload = [
+            'id' => '55443322',
+            'status' => 'partially_refunded',
+            'status_detail' => 'partially_refunded',
+            'external_reference' => 'ovf-cancel-partial',
+            'transaction_amount' => 1000000.00,
+            'transaction_amount_refunded' => 400000.00,
+            'refunds' => [
+                [
+                    'id' => 443322,
+                    'amount' => 400000.00,
+                ],
+            ],
+        ];
+
+        $res = $this->callWebhook('55443322', $paymentPayload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $stmt = $this->pdo->query("SELECT status, payment_status, refunded_amount FROM reservations WHERE reservation_uid = 'ovf-cancel-partial'");
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('cancelled', $row['status']);
+        $this->assertSame('partially_refunded', $row['payment_status']);
+        $this->assertEquals(400000.00, (float) $row['refunded_amount']);
+    }
+
+    /**
+     * Full refund on an already cancelled reservation syncs refund line items without error.
+     */
+    public function testFullRefundOnAlreadyCancelledReservationSyncsRefundItems(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status, mercadopago_payment_id)
+            VALUES ('ovf-already-cancel', '1707', 'Already Cancelled', 'ac@example.com', '+573001112233', '2026-12-22', '2026-12-26', 1500000.00, 'cancelled', 'cancelled', '44332211');
+        ");
+
+        $paymentPayload = [
+            'id' => '44332211',
+            'status' => 'refunded',
+            'status_detail' => 'refunded',
+            'external_reference' => 'ovf-already-cancel',
+            'transaction_amount' => 1500000.00,
+            'transaction_amount_refunded' => 1500000.00,
+            'refunds' => [
+                [
+                    'id' => 556677,
+                    'amount' => 1500000.00,
+                ],
+            ],
+        ];
+
+        $res = $this->callWebhook('44332211', $paymentPayload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $stmt = $this->pdo->query("SELECT status, payment_status, refunded_amount FROM reservations WHERE reservation_uid = 'ovf-already-cancel'");
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('cancelled', $row['status']);
+        $this->assertSame('refunded', $row['payment_status']);
+        $this->assertEquals(1500000.00, (float) $row['refunded_amount']);
+
+        $stmt = $this->pdo->query("SELECT * FROM reservation_refunds WHERE reservation_uid = 'ovf-already-cancel'");
+        $refundRow = $stmt->fetch();
+        $this->assertIsArray($refundRow);
+        $this->assertSame('556677', (string) $refundRow['mercadopago_refund_id']);
+    }
+
+    /**
+     * Initial approval confirms pending_payment reservation.
+     */
+    public function testApprovedWebhookConfirmsPendingPaymentReservation(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status)
+            VALUES ('ovf-pending-approve', '1606', 'Pending Guest', 'pending@example.com', '+573001112233', '2026-12-28', '2026-12-31', 750000.00, 'pending_payment', 'pending');
+        ");
+
+        $paymentPayload = [
+            'id' => '33445566',
+            'status' => 'approved',
+            'status_detail' => 'accredited',
+            'external_reference' => 'ovf-pending-approve',
+            'transaction_amount' => 750000.00,
+            'transaction_amount_refunded' => 0.0,
+            'payment_method_id' => 'pse',
+        ];
+
+        $res = $this->callWebhook('33445566', $paymentPayload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $stmt = $this->pdo->query("SELECT status, payment_status, mercadopago_payment_id FROM reservations WHERE reservation_uid = 'ovf-pending-approve'");
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame('confirmed', $row['status']);
+        $this->assertSame('approved', $row['payment_status']);
+        $this->assertSame('33445566', (string) $row['mercadopago_payment_id']);
+    }
+
+    /**
+     * Helper to invoke public/api/mercadopago-webhook.php in an isolated PHP subprocess.
+     *
+     * @param string $paymentId
+     * @param array<string, mixed> $paymentData
+     * @return array{exitCode: int, stdout: string, stderr: string, json: ?array<string, mixed>}
+     */
+    private function callWebhook(string $paymentId, array $paymentData): array
+    {
+        $phpCode = sprintf(
+            '
+            $GLOBALS["DISABLE_RATE_LIMIT"] = true;
+            $GLOBALS["TEST_PDO"] = new PDO("sqlite:%s", null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+            $GLOBALS["TEST_MP_PAYMENT_DATA"] = %s;
+            $_SERVER["REQUEST_METHOD"] = "POST";
+            $_GET["id"] = %s;
+            $_GET["topic"] = "payment";
+            require %s;
+            ',
+            $this->dbFile,
+            var_export($paymentData, true),
+            var_export($paymentId, true),
+            var_export(dirname(__DIR__, 3) . '/public/api/mercadopago-webhook.php', true)
+        );
+
+        $process = proc_open(
+            ['php', '-r', $phpCode],
+            [
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes
+        );
+
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        return [
+            'exitCode' => $exitCode,
+            'stdout' => (string) $stdout,
+            'stderr' => (string) $stderr,
+            'json' => json_decode((string) $stdout, true),
+        ];
+    }
+}
