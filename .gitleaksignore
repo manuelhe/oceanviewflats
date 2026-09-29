@@ -1,0 +1,6 @@
+# Gitleaks ignore list
+# Format: <commit>:<file>:<rule-id>:<line>
+e3b1b1c521c972f4a1a276d85d968b8fb17c038f:docs/research/mercadopago-refund-protocol.md:curl-auth-header:71
+e3b1b1c521c972f4a1a276d85d968b8fb17c038f:docs/research/mercadopago-refund-protocol.md:curl-auth-header:83
+docs/research/mercadopago-refund-protocol.md:curl-auth-header:71
+docs/research/mercadopago-refund-protocol.md:curl-auth-header:83

@@ -56,6 +56,10 @@ _Avoid_: Booking, Booking Request, Order, Rental
 A Reservation originated and transacted directly through OceanViewFlats, maintaining full Guest identification, payment records, and access fulfillment workflows.
 _Avoid_: Internal Booking, Native Reservation, Website Booking, Direct Booking
 
+**Manual Reservation**:
+A Reservation originated directly by an administrator without an external payment gateway (e.g. phone inquiry, external bank wire, or owner occupancy), attributed to an administrative payment source and confirmed immediately to secure calendar dates.
+_Avoid_: Offline Booking, Phone Order, Admin Reservation, Walk-in
+
 **Pending Reservation**:
 A temporary hold on a Property's calendar created during checkout that preserves dates while awaiting payment confirmation, expiring automatically after either the Standard Hold Window or Voucher Hold Window depending on the selected Payment Method.
 _Avoid_: Unpaid Booking, Temporary Hold, Cart
@@ -116,6 +120,10 @@ _Avoid_: Calendar Sync, iCal Integration, Availability Mirror
 A period of calendar unavailability imported from an external Online Travel Agency (e.g., Airbnb) via calendar sync. Channel Blocks do not create Reservation records or Guest identities in OceanViewFlats.
 _Avoid_: External Reservation, Airbnb Booking, OTA Booking, Blackout Date
 
+**Maintenance Block**:
+A deliberate administrative unavailability hold applied to a Property's calendar for maintenance, repairs, or private host use. Maintenance Blocks do not create Reservation records, Guest identities, or financial transactions, but are projected onto Outbound Feeds to block external channels.
+_Avoid_: Admin Block, Blackout Dates, Owner Hold
+
 **Inbound Feed**:
 An external calendar subscription periodically fetched by OceanViewFlats to identify and enforce Channel Blocks against direct checkout requests.
 _Avoid_: Calendar Import, External Feed, Inbound iCal
@@ -155,4 +163,15 @@ _Avoid_: Check-in Summary, Guest Roster, Security Notification
 **Access Dispatch**:
 The communication issued only after the Guest Registry is submitted, delivering the Guest Guide link and temporal Access Credentials for physical property entry.
 _Avoid_: Key Code Email, Door PIN Message, Welcome Packet
+
+### Administration & Operations
+
+**Admin User**:
+An authorized internal operator possessing authenticated credentials to manage Reservations, Access Credentials, rates, and calendar blocks.
+_Avoid_: Staff, Employee, Operator, Superuser
+
+**Audit Log**:
+An immutable administrative record capturing operational actions (such as door PIN overrides, cancellations, refunds, or rate updates), attributing the change to a specific Admin User with timestamps and payload diffs.
+_Avoid_: History, Activity Feed, Event Log, Change Trail
+
 

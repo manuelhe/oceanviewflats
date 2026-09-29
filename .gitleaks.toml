@@ -1,0 +1,10 @@
+title = "OceanViewFlats Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Ignore documentation and research sample code"
+paths = [
+    '''^docs/research/.*''',
+]
