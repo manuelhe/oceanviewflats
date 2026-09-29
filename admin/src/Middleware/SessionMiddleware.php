@@ -34,12 +34,14 @@ final class SessionMiddleware
 
         // 1. Check absolute max lifetime timeout
         if (isset($session['created_at']) && ($now - (int) $session['created_at'] > $this->maxLifetime)) {
+            self::destroySession();
             $session = [];
             return Response::redirect('/login?reason=session_expired');
         }
 
         // 2. Check idle inactivity timeout
         if (isset($session['last_activity']) && ($now - (int) $session['last_activity'] > $this->idleTimeout)) {
+            self::destroySession();
             $session = [];
             return Response::redirect('/login?reason=idle_timeout');
         }
@@ -54,7 +56,7 @@ final class SessionMiddleware
 
         // 5. Ensure 256-bit CSRF token is present
         if (empty($session['csrf_token'])) {
-            $session['csrf_token'] = bin2hex(random_bytes(32));
+            $session['csrf_token'] = CsrfMiddleware::generateToken();
         }
 
         return null;

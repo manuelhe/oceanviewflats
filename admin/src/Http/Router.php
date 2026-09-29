@@ -144,6 +144,9 @@ final class Router
             $session['admin_user_email'] = (string) ($user['email'] ?? $email);
             $session['admin_user_role'] = (string) ($user['role'] ?? 'admin');
 
+            // Rotate CSRF token upon successful authentication per Spec
+            $session['csrf_token'] = CsrfMiddleware::generateToken();
+
             AuditLogger::log(
                 pdo: $this->pdo,
                 action: 'login_success',
@@ -180,6 +183,12 @@ final class Router
         );
 
         $statusCode = $result->getStatus() === LoginResult::STATUS_RATE_LIMITED ? 429 : 401;
+        $headers = [];
+        if ($result->getStatus() === LoginResult::STATUS_RATE_LIMITED) {
+            $retryAfter = $result->getRetryAfterSeconds() > 0 ? $result->getRetryAfterSeconds() : 900;
+            $headers['Retry-After'] = (string) $retryAfter;
+        }
+
         $csrfToken = (string) ($session['csrf_token'] ?? '');
 
         $html = $this->viewRenderer->render(
@@ -194,7 +203,7 @@ final class Router
             ]
         );
 
-        return Response::html($html, $statusCode);
+        return Response::html($html, $statusCode, $headers);
     }
 
     /**

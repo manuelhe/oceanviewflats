@@ -14,8 +14,9 @@ use OceanViewFlats\Admin\Http\Response;
 final class AuthMiddleware
 {
     public const DEFAULT_WHITELIST = [
-        '/login',
-        '/logout',
+        'GET /login',
+        'POST /login',
+        'GET /logout',
     ];
 
     /**
@@ -34,10 +35,11 @@ final class AuthMiddleware
      */
     public function process(Request $request, array &$session): ?Response
     {
+        $methodAndUri = $request->getMethod() . ' ' . $request->getUri();
         $uri = $request->getUri();
 
         // 1. Check whitelisted public routes
-        if (in_array($uri, $this->whitelist, true)) {
+        if (in_array($methodAndUri, $this->whitelist, true) || in_array($uri, $this->whitelist, true)) {
             return null;
         }
 

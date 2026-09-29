@@ -21,12 +21,14 @@ final class AuthService
         'threads' => 2,         // 2 parallel threads
     ];
 
+    public const DEFAULT_DUMMY_HASH = '$argon2id$v=19$m=65536,t=4,p=2$UzY4amJ3NUlMUzhMU1guOA$RRauyafdI692Zo6wI0n+DUxzmQKfNx+71ip9H6hnc/o';
+
     /**
      * @var array<string, int>
      */
     private array $argonOptions;
 
-    private ?string $dummyHash;
+    private string $dummyHash;
 
     /**
      * @param array<string, int> $argonOptions
@@ -38,7 +40,7 @@ final class AuthService
         ?string $dummyHash = null
     ) {
         $this->argonOptions = $argonOptions;
-        $this->dummyHash = $dummyHash;
+        $this->dummyHash = $dummyHash ?? self::DEFAULT_DUMMY_HASH;
     }
 
     /**
@@ -159,10 +161,6 @@ final class AuthService
 
     private function getDummyHash(): string
     {
-        if ($this->dummyHash === null) {
-            $this->dummyHash = $this->hashPassword('__ovf_timing_dummy_password__');
-        }
-
         return $this->dummyHash;
     }
 }

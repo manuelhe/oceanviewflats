@@ -191,6 +191,8 @@ final class AdminFrontControllerTest extends TestCase
         $this->assertSame('Alice Manager', $session['admin_user_name']);
         $this->assertSame('manager@oceanviewflats.com', $session['admin_user_email']);
         $this->assertSame('admin', $session['admin_user_role']);
+        $this->assertNotSame('valid_csrf_token', $session['csrf_token']);
+        $this->assertSame(64, strlen((string) $session['csrf_token']));
 
         // Verify audit log
         $stmt = $this->pdo->prepare('SELECT action, entity_type, entity_id, admin_user_id FROM admin_audit_logs WHERE action = "login_success"');
@@ -199,6 +201,34 @@ final class AdminFrontControllerTest extends TestCase
         $this->assertIsArray($log);
         $this->assertSame((string) $userId, $log['entity_id']);
         $this->assertSame($userId, (int) $log['admin_user_id']);
+    }
+
+    public function testPostLoginRateLimitedReturns429WithRetryAfterHeader(): void
+    {
+        $this->createAdminUser('rate_limited@oceanviewflats.com', 'ValidPass123!');
+        $session = ['csrf_token' => 'valid_csrf_token'];
+
+        // Exhaust IP attempts (10 max)
+        for ($i = 0; $i < 10; $i++) {
+            $this->rateLimiter->recordFailure('198.51.100.5');
+        }
+
+        $request = new Request(
+            method: 'POST',
+            uri: '/login',
+            post: [
+                'csrf_token' => 'valid_csrf_token',
+                'email' => 'rate_limited@oceanviewflats.com',
+                'password' => 'ValidPass123!',
+            ],
+            server: ['REMOTE_ADDR' => '198.51.100.5']
+        );
+
+        $response = $this->router->dispatch($request, $session);
+
+        $this->assertSame(429, $response->getStatusCode());
+        $this->assertSame('900', $response->getHeaders()['Retry-After'] ?? null);
+        $this->assertStringContainsString('Too many failed login attempts', $response->getBody());
     }
 
     public function testProtectedDashboardGatedByAuthMiddleware(): void

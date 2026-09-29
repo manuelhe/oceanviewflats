@@ -27,6 +27,27 @@ final class AuthMiddlewareTest extends TestCase
         $this->assertNull($response);
     }
 
+    public function testAllowsWhitelistedPostLoginRoute(): void
+    {
+        $session = [];
+        $request = new Request('POST', '/login');
+
+        $response = $this->middleware->process($request, $session);
+
+        $this->assertNull($response);
+    }
+
+    public function testBlocksUnwhitelistedVerbOnLoginRoute(): void
+    {
+        $session = [];
+        $request = new Request('DELETE', '/login');
+
+        $response = $this->middleware->process($request, $session);
+
+        $this->assertNotNull($response);
+        $this->assertSame(302, $response->getStatusCode());
+    }
+
     public function testAllowsWhitelistedLogoutRoute(): void
     {
         $session = [];

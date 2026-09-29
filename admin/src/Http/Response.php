@@ -19,11 +19,14 @@ final class Response
     ) {
     }
 
-    public static function html(string $html, int $statusCode = 200): self
+    /**
+     * @param array<string, string> $headers
+     */
+    public static function html(string $html, int $statusCode = 200, array $headers = []): self
     {
-        return new self($statusCode, $html, [
+        return new self($statusCode, $html, array_merge([
             'Content-Type' => 'text/html; charset=UTF-8',
-        ]);
+        ], $headers));
     }
 
     public static function redirect(string $url, int $statusCode = 302): self
