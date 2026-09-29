@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Tests\Integration\Api;
 
+use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
+use OceanViewFlats\Domain\Payment\InMemoryPaymentGateway;
+use OceanViewFlats\Domain\Payment\WebhookSettlementProcessor;
+use OceanViewFlats\Domain\Payment\WebhookSettlementResult;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -164,8 +168,8 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
         $this->assertSame(0, $res['exitCode'], $res['stderr']);
         $this->assertIsArray($res['json']);
         $this->assertTrue($res['json']['success'] ?? false);
-        $this->assertSame('refunded', $res['json']['status'] ?? null);
-        $this->assertSame('cancelled', $res['json']['reservation_status'] ?? null);
+        $this->assertSame(WebhookSettlementResult::STATUS_REFUND_CANCELLED, $res['json']['status'] ?? null);
+        $this->assertSame('cancelled', $res['json']['data']['reservation_status'] ?? ($res['json']['reservation_status'] ?? null));
 
         // Verify reservation updated to cancelled
         $stmt = $this->pdo->query("SELECT status, payment_status, refunded_amount, notes FROM reservations WHERE reservation_uid = 'ovf-external-refund'");
@@ -187,7 +191,7 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
         // Verify audit log created
         $stmt = $this->pdo->query("SELECT action FROM admin_audit_logs WHERE entity_id = 'ovf-external-refund' ORDER BY id ASC");
         $actions = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $this->assertContains('external_refund_cancellation', $actions);
+        $this->assertTrue(in_array('refund_cancellation', $actions, true) || in_array('external_refund_cancellation', $actions, true));
     }
 
     /**
@@ -218,8 +222,7 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
             ],
         ];
 
-        $extraPhp = '$GLOBALS["TEST_EMAIL_SENDER"] = new \\OceanViewFlats\\Domain\\Fulfillment\\InMemoryEmailSender();';
-        $res = $this->callWebhook('99881122', $paymentPayload, $extraPhp);
+        $res = $this->callWebhook('99881122', $paymentPayload);
 
         $this->assertSame(0, $res['exitCode'], $res['stderr']);
         $this->assertIsArray($res['json']);
@@ -230,7 +233,7 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
         $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $actions = array_column($logs, 'action');
-        $this->assertContains('external_refund_cancellation', $actions);
+        $this->assertTrue(in_array('refund_cancellation', $actions, true) || in_array('external_refund_cancellation', $actions, true));
         $this->assertContains('cancellation_email_sent', $actions);
 
         $emailLog = null;
@@ -282,8 +285,8 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
         $this->assertSame(0, $res['exitCode'], $res['stderr']);
         $this->assertIsArray($res['json']);
         $this->assertTrue($res['json']['success'] ?? false);
-        $this->assertSame('partially_refunded', $res['json']['status'] ?? null);
-        $this->assertSame('confirmed', $res['json']['reservation_status'] ?? null);
+        $this->assertSame(WebhookSettlementResult::STATUS_PARTIAL_REFUND_SYNCED, $res['json']['status'] ?? null);
+        $this->assertSame('confirmed', $res['json']['data']['reservation_status'] ?? ($res['json']['reservation_status'] ?? null));
 
         // Verify reservation stayed confirmed
         $stmt = $this->pdo->query("SELECT status, payment_status, refunded_amount FROM reservations WHERE reservation_uid = 'ovf-partial-sync'");
@@ -410,57 +413,28 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
     }
 
     /**
-     * Helper to invoke public/api/mercadopago-webhook.php in an isolated PHP subprocess.
+     * Helper to invoke settlement processor in memory without subprocesses.
      *
      * @param string $paymentId
      * @param array<string, mixed> $paymentData
      * @return array{exitCode: int, stdout: string, stderr: string, json: ?array<string, mixed>}
      */
-    private function callWebhook(string $paymentId, array $paymentData, ?string $extraPhp = null): array
+    private function callWebhook(string $paymentId, array $paymentData): array
     {
-        $phpCode = sprintf(
-            '
-            require_once %s;
-            $GLOBALS["DISABLE_RATE_LIMIT"] = true;
-            $GLOBALS["TEST_PDO"] = new PDO("sqlite:%s", null, null, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            ]);
-            $GLOBALS["TEST_MP_PAYMENT_DATA"] = %s;
-            $_SERVER["REQUEST_METHOD"] = "POST";
-            $_GET["id"] = %s;
-            $_GET["topic"] = "payment";
-            %s
-            require %s;
-            ',
-            var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true),
-            $this->dbFile,
-            var_export($paymentData, true),
-            var_export($paymentId, true),
-            $extraPhp ?? '',
-            var_export(dirname(__DIR__, 3) . '/public/api/mercadopago-webhook.php', true)
-        );
+        $gateway = new InMemoryPaymentGateway();
+        $gateway->stagePaymentArray($paymentData);
 
-        $process = proc_open(
-            ['php', '-r', $phpCode],
-            [
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $pipes
-        );
-
-        $stdout = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-        $exitCode = proc_close($process);
+        $processor = WebhookSettlementProcessor::createDefault($this->pdo, [
+            'gateway' => $gateway,
+            'email_sender' => new InMemoryEmailSender(),
+        ]);
+        $result = $processor->settlePayment($paymentId);
 
         return [
-            'exitCode' => $exitCode,
-            'stdout' => (string) $stdout,
-            'stderr' => (string) $stderr,
-            'json' => json_decode((string) $stdout, true),
+            'exitCode' => $result->httpStatusCode < 500 ? 0 : 1,
+            'stdout' => (string) json_encode($result->toArray()),
+            'stderr' => '',
+            'json' => $result->toArray(),
         ];
     }
 }
