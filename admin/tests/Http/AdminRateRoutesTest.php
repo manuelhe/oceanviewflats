@@ -4,17 +4,9 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Tests\Http;
 
-use OceanViewFlats\Admin\Audit\AuditLogger;
-use OceanViewFlats\Admin\Controller\RateController;
+use OceanViewFlats\Admin\AdminApp;
 use OceanViewFlats\Admin\Http\Request;
-use OceanViewFlats\Admin\Http\Router;
-use OceanViewFlats\Admin\Middleware\AuthMiddleware;
-use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
-use OceanViewFlats\Admin\Middleware\SessionMiddleware;
 use OceanViewFlats\Admin\Repository\AdminRateRepository;
-use OceanViewFlats\Admin\Views\ViewRenderer;
-use OceanViewFlats\Domain\Quote\CsvRateSource;
-use OceanViewFlats\Domain\Quote\PdoRateSource;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -22,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 final class AdminRateRoutesTest extends TestCase
 {
     private PDO $pdo;
-    private Router $router;
+    private AdminApp $app;
     private AdminRateRepository $rateRepo;
     private string $tempCsvPath;
 
@@ -80,36 +72,11 @@ final class AdminRateRoutesTest extends TestCase
 
         $ratesConfig = PropertyRatesConfig::createDefault();
         $this->rateRepo = new AdminRateRepository($this->pdo, $ratesConfig);
-        $rateSource = new PdoRateSource($this->pdo, new CsvRateSource());
-        $viewRenderer = new ViewRenderer(dirname(__DIR__, 2) . '/src/Views');
-        $auditLogger = new AuditLogger($this->pdo);
 
-        $rateController = new RateController(
-            rateRepository: $this->rateRepo,
-            rateSource: $rateSource,
-            viewRenderer: $viewRenderer,
-            auditLogger: $auditLogger,
-            ratesConfig: $ratesConfig,
-            csvPath: $this->tempCsvPath
-        );
-
-        $sessionMiddleware = new SessionMiddleware();
-        $csrfMiddleware = new CsrfMiddleware();
-        $authMiddleware = new AuthMiddleware();
-
-        $this->router = new Router(
-            sessionMiddleware: $sessionMiddleware,
-            csrfMiddleware: $csrfMiddleware,
-            authMiddleware: $authMiddleware
-        );
-
-        $this->router->get('/rates', [$rateController, 'index'])
-            ->get('/rates/new', [$rateController, 'newTier'])
-            ->post('/rates', [$rateController, 'create'])
-            ->get('/rates/{id}/edit', [$rateController, 'edit'])
-            ->post('/rates/{id}', [$rateController, 'update'])
-            ->delete('/rates/{id}', [$rateController, 'delete'])
-            ->post('/rates/seed-from-csv', [$rateController, 'seedFromCsv']);
+        $this->app = AdminApp::createDefault($this->pdo, [
+            'csv_path' => $this->tempCsvPath,
+            'rates_config' => $ratesConfig,
+        ]);
     }
 
     protected function tearDown(): void
@@ -124,7 +91,7 @@ final class AdminRateRoutesTest extends TestCase
         $request = new Request('GET', '/rates');
         $session = [];
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('/login', $response->getHeader('Location'));
     }
@@ -140,7 +107,7 @@ final class AdminRateRoutesTest extends TestCase
             'csrf_token' => 'valid-csrf-token',
         ];
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('Seasonal Pricing & Rates', $response->getBody());
     }
@@ -156,7 +123,7 @@ final class AdminRateRoutesTest extends TestCase
             'csrf_token' => 'valid-csrf-token',
         ];
 
-        $response = $this->router->dispatch($request, $session);
+        $response = $this->app->handle($request, $session);
         $this->assertSame(403, $response->getStatusCode());
         $this->assertStringContainsString('CSRF', $response->getBody());
     }
@@ -174,7 +141,7 @@ final class AdminRateRoutesTest extends TestCase
 
         // 1. GET /rates/new
         $reqNew = new Request('GET', '/rates/new', query: ['property_id' => '1606', 'year' => '2026']);
-        $resNew = $this->router->dispatch($reqNew, $session);
+        $resNew = $this->app->handle($reqNew, $session);
         $this->assertSame(200, $resNew->getStatusCode());
         $this->assertStringContainsString('Create Seasonal Rate Tier', $resNew->getBody());
 
@@ -189,7 +156,7 @@ final class AdminRateRoutesTest extends TestCase
             'min_stay' => '3',
             'year' => '2026',
         ]);
-        $resCreate = $this->router->dispatch($reqCreate, $session);
+        $resCreate = $this->app->handle($reqCreate, $session);
         $this->assertSame(200, $resCreate->getStatusCode());
         $this->assertSame('rateUpdated', $resCreate->getHeader('HX-Trigger'));
 
@@ -199,7 +166,7 @@ final class AdminRateRoutesTest extends TestCase
 
         // 3. GET /rates/{id}/edit
         $reqEdit = new Request('GET', "/rates/{$tierId}/edit");
-        $resEdit = $this->router->dispatch($reqEdit, $session);
+        $resEdit = $this->app->handle($reqEdit, $session);
         $this->assertSame(200, $resEdit->getStatusCode());
         $this->assertStringContainsString('Edit Seasonal Rate Tier', $resEdit->getBody());
         $this->assertStringContainsString('Mid-Year Vacation', $resEdit->getBody());
@@ -214,7 +181,7 @@ final class AdminRateRoutesTest extends TestCase
             'min_stay' => '4',
             'year' => '2026',
         ]);
-        $resUpdate = $this->router->dispatch($reqUpdate, $session);
+        $resUpdate = $this->app->handle($reqUpdate, $session);
         $this->assertSame(200, $resUpdate->getStatusCode());
         $this->assertSame('rateUpdated', $resUpdate->getHeader('HX-Trigger'));
 
@@ -228,7 +195,7 @@ final class AdminRateRoutesTest extends TestCase
             "/rates/{$tierId}",
             server: ['HTTP_X_CSRF_TOKEN' => $csrf]
         );
-        $resDelete = $this->router->dispatch($reqDelete, $session);
+        $resDelete = $this->app->handle($reqDelete, $session);
         $this->assertSame(200, $resDelete->getStatusCode());
         $this->assertSame('rateUpdated', $resDelete->getHeader('HX-Trigger'));
 
@@ -252,7 +219,7 @@ final class AdminRateRoutesTest extends TestCase
             'year' => '2026',
         ]);
 
-        $resSeed = $this->router->dispatch($reqSeed, $session);
+        $resSeed = $this->app->handle($reqSeed, $session);
         $this->assertSame(200, $resSeed->getStatusCode());
         $this->assertSame('rateUpdated', $resSeed->getHeader('HX-Trigger'));
         $this->assertStringContainsString('Successfully imported 2 seasonal rate tiers', $resSeed->getBody());
