@@ -83,6 +83,15 @@ return [
             'footer' => 'In compliance with Colombian statutory hospitality regulations and Playa Salguero condominium security requirements, complete identification for all staying guests is required before property access credentials can be issued.',
             'btn_registry' => 'Complete Guest Registry',
             'access_notice' => 'Property access credentials and check-in instructions will be released once your Guest Registry has been verified.'
+        ],
+        // Guest Guide Access Gating (guide-access.php)
+        'guide' => [
+            'err_missing_code' => 'Reservation code is required.',
+            'err_not_found' => 'No reservation found matching this code.',
+            'err_unauthorized' => 'Reservation is not active or has been cancelled.',
+            'err_payment_pending' => 'Reservation payment is pending verification. Access credentials unlock upon confirmed payment and registry completion.',
+            'err_registry_required' => 'Guest registry must be submitted before access credentials are released (ADR 0001).',
+            'msg_verified' => 'Access credentials verified successfully.',
         ]
     ],
     'es' => [
@@ -161,6 +170,15 @@ return [
             'footer' => 'En cumplimiento con las normas legales de hotelería en Colombia y las políticas de seguridad del condominio en Playa Salguero, se requiere el registro de identificación de todos los huéspedes antes de expedir las credenciales de acceso a la propiedad.',
             'btn_registry' => 'Completar Registro de Huéspedes',
             'access_notice' => 'Las credenciales de acceso y las instrucciones de llegada se enviarán una vez que el Registro de Huéspedes haya sido completado y verificado.'
+        ],
+        // Control de Acceso Guía del Huésped (guide-access.php)
+        'guide' => [
+            'err_missing_code' => 'El código de reserva es requerido.',
+            'err_not_found' => 'No se encontró ninguna reserva asociada a este código.',
+            'err_unauthorized' => 'La reserva no está activa o ha sido cancelada.',
+            'err_payment_pending' => 'El pago de la reserva está pendiente de verificación. Las credenciales se liberan tras confirmar el pago y el registro.',
+            'err_registry_required' => 'El registro de huéspedes debe completarse antes de liberar las credenciales de acceso (ADR 0001).',
+            'msg_verified' => 'Credenciales de acceso verificadas exitosamente.',
         ]
     ],
     'fr' => [
@@ -239,6 +257,15 @@ return [
             'footer' => 'Conformément aux réglementations hôtelières colombiennes et aux exigences de sécurité de la copropriété à Playa Salguero, l\'enregistrement complet de tous les occupants est obligatoire avant l\'émission des codes d\'accès à la propriété.',
             'btn_registry' => 'Remplir le registre des voyageurs',
             'access_notice' => 'Les identifiants d\'accès et les instructions d\'arrivée vous seront transmis après validation du registre des voyageurs.'
+        ],
+        // Contrôle d'accès au Guide des Voyageurs (guide-access.php)
+        'guide' => [
+            'err_missing_code' => 'Le code de réservation est requis.',
+            'err_not_found' => 'Aucune réservation trouvée correspondant à ce code.',
+            'err_unauthorized' => 'La réservation n\'est pas active ou a été annulée.',
+            'err_payment_pending' => 'Le paiement est en attente de vérification. Les identifiants sont délivrés après paiement et enregistrement.',
+            'err_registry_required' => 'Le registre des voyageurs doit être rempli avant la délivrance des identifiants d\'accès (ADR 0001).',
+            'msg_verified' => 'Identifiants d\'accès vérifiés avec succès.',
         ]
     ],
     'it' => [
@@ -317,6 +344,15 @@ return [
             'footer' => 'In conformità alle normative alberghiere colombiane e ai requisiti di sicurezza del condominio a Playa Salguero, è richiesta la registrazione completa di tutti gli ospiti prima del rilascio delle credenziali di accesso.',
             'btn_registry' => 'Completa il registro degli ospiti',
             'access_notice' => 'Le credenziali di accesso e le istruzioni di arrivo saranno trasmesse dopo la verifica del registro degli ospiti.'
+        ],
+        // Controllo di accesso Guida per gli Ospiti (guide-access.php)
+        'guide' => [
+            'err_missing_code' => 'Il codice di prenotazione è obbligatorio.',
+            'err_not_found' => 'Nessuna prenotazione trovata per questo codice.',
+            'err_unauthorized' => 'La prenotazione non è attiva o è stata cancellata.',
+            'err_payment_pending' => 'Il pagamento è in attesa di verifica. Le credenziali vengono sbloccate dopo il pagamento e la registrazione.',
+            'err_registry_required' => 'Il registro degli ospiti deve essere completato prima di rilasciare le credenziali di accesso (ADR 0001).',
+            'msg_verified' => 'Credenziali di accesso verificate con successo.',
         ]
     ],
     'de' => [
@@ -395,6 +431,15 @@ return [
             'footer' => 'Gemäß den kolumbianischen Gastgewerbevorschriften und den Sicherheitsanforderungen der Wohnanlage in Playa Salguero müssen alle anreisenden Gäste registriert sein, bevor Zugangsberechtigungen für die Unterkunft erteilt werden können.',
             'btn_registry' => 'Gästeregistrierung ausfüllen',
             'access_notice' => 'Die Zugangsdaten und Anreisehinweise werden nach Prüfung des ausgefüllten Gästeregisters freigegeben.'
+        ],
+        // Zugangskontrolle zum Gästehandbuch (guide-access.php)
+        'guide' => [
+            'err_missing_code' => 'Reservierungscode ist erforderlich.',
+            'err_not_found' => 'Keine Reservierung für diesen Code gefunden.',
+            'err_unauthorized' => 'Reservierung ist nicht aktiv oder wurde storniert.',
+            'err_payment_pending' => 'Zahlungsüberprüfung ausstehend. Zugangsdaten werden nach Zahlung und Registrierung freigeschaltet.',
+            'err_registry_required' => 'Das Gästeregister muss vor Freigabe der Zugangsdaten übermittelt werden (ADR 0001).',
+            'msg_verified' => 'Zugangsdaten erfolgreich bestätigt.',
         ]
     ],
     'ja' => [
@@ -473,6 +518,15 @@ return [
             'footer' => 'コロンビアの宿泊施設関連法規およびプラヤ・サルゲロのマンション管理組合セキュリティ規則に基づき、入室用暗証番号を発行する前に、すべてのご宿泊者の本人確認（宿泊者名簿登録）が義務付けられております。',
             'btn_registry' => '宿泊者名簿に登録する',
             'access_notice' => '入室用暗証番号およびチェックイン手順は、宿泊者名簿の確認完了後にご案内いたします。'
+        ],
+        // ゲストガイドアクセス制御 (guide-access.php)
+        'guide' => [
+            'err_missing_code' => '予約コードが必要です。',
+            'err_not_found' => '該当する予約コードが見つかりません。',
+            'err_unauthorized' => '予約が無効またはキャンセルされています。',
+            'err_payment_pending' => 'お支払いの確認中です。確認および宿泊者登録完了後にアクセス情報が開示されます。',
+            'err_registry_required' => 'アクセス情報を確認する前に宿泊者名簿登録が必要です (ADR 0001)。',
+            'msg_verified' => 'アクセス情報が正常に確認されました。',
         ]
     ]
 ];

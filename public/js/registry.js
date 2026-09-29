@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const hiddenProperty = document.getElementById('hidden-property');
     const hiddenCheckIn = document.getElementById('hidden-check-in');
     const hiddenCheckOut = document.getElementById('hidden-check-out');
+    const hiddenReservationCode = document.getElementById('hidden-reservation-code');
+    const btnUnlockedGuide = document.getElementById('btn-unlocked-guide');
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');
@@ -69,8 +71,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkInVal = urlParams.get('check_in') || '';
     const checkOutVal = urlParams.get('check_out') || '';
     const propertyVal = urlParams.get('property') || '';
+    const reservationCodeVal = urlParams.get('code') || urlParams.get('reservation_code') || '';
 
     // Show details to user and populate hidden form fields
+    if (hiddenReservationCode && reservationCodeVal) {
+        hiddenReservationCode.value = reservationCodeVal;
+    }
+
     if (propertyVal) {
         displayProperty.textContent = `OceanViewFlats ${propertyVal}`;
         hiddenProperty.value = propertyVal;
@@ -277,8 +284,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     const checkOutParam = urlParams.get('check_out') || urlParams.get('checkout') || 'unspecified';
                     const stayKey = `stay_reg_${cleanPropNo || '1606'}_${checkInParam.replace(/\s+/g, '_')}_${checkOutParam.replace(/\s+/g, '_')}`;
                     localStorage.setItem(stayKey, 'completed');
+
+                    const effectiveCode = result.reservation_code || reservationCodeVal;
+                    if (effectiveCode) {
+                        localStorage.setItem(`stay_reg_code_${effectiveCode}`, 'completed');
+                    }
                 } catch (err) {
                     console.error('Error saving stay registration status:', err);
+                }
+
+                // Update Unlocked Guide button URL if provided
+                if (btnUnlockedGuide) {
+                    if (result.guide_url) {
+                        btnUnlockedGuide.href = result.guide_url;
+                    } else {
+                        const effectiveCode = result.reservation_code || reservationCodeVal;
+                        const pageName = lang === 'en' ? 'index.html' : `${lang}.html`;
+                        const guideBase = `guide/${pageName}`;
+                        const query = effectiveCode ? `?code=${encodeURIComponent(effectiveCode)}` : '';
+                        btnUnlockedGuide.href = `${guideBase}${query}`;
+                    }
                 }
 
                 // Success: Hide form and show success message

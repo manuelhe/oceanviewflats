@@ -20,50 +20,116 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
 
     public function save(Reservation $reservation): Reservation
     {
-        $sql = "INSERT INTO `reservations` (
-            `reservation_uid`,
-            `property_id`,
-            `guest_name`,
-            `guest_email`,
-            `guest_phone`,
-            `check_in`,
-            `check_out`,
-            `total_price`,
-            `status`,
-            `payment_method_id`,
-            `mercadopago_preference_id`,
-            `mercadopago_payment_id`,
-            `payment_status`,
-            `payment_detail`,
-            `lang`
-        ) VALUES (
-            :reservation_uid,
-            :property_id,
-            :guest_name,
-            :guest_email,
-            :guest_phone,
-            :check_in,
-            :check_out,
-            :total_price,
-            :status,
-            :payment_method_id,
-            :mercadopago_preference_id,
-            :mercadopago_payment_id,
-            :payment_status,
-            :payment_detail,
-            :lang
-        ) ON DUPLICATE KEY UPDATE
-            `guest_name` = VALUES(`guest_name`),
-            `guest_email` = VALUES(`guest_email`),
-            `guest_phone` = VALUES(`guest_phone`),
-            `total_price` = VALUES(`total_price`),
-            `status` = VALUES(`status`),
-            `payment_method_id` = VALUES(`payment_method_id`),
-            `mercadopago_preference_id` = VALUES(`mercadopago_preference_id`),
-            `mercadopago_payment_id` = VALUES(`mercadopago_payment_id`),
-            `payment_status` = VALUES(`payment_status`),
-            `payment_detail` = VALUES(`payment_detail`),
-            `lang` = VALUES(`lang`)";
+        $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'sqlite') {
+            $sql = "INSERT INTO `reservations` (
+                `reservation_uid`,
+                `property_id`,
+                `guest_name`,
+                `guest_email`,
+                `guest_phone`,
+                `check_in`,
+                `check_out`,
+                `total_price`,
+                `status`,
+                `payment_method_id`,
+                `mercadopago_preference_id`,
+                `mercadopago_payment_id`,
+                `payment_status`,
+                `payment_detail`,
+                `lang`,
+                `registry_completed`,
+                `registry_completed_at`,
+                `door_code`
+            ) VALUES (
+                :reservation_uid,
+                :property_id,
+                :guest_name,
+                :guest_email,
+                :guest_phone,
+                :check_in,
+                :check_out,
+                :total_price,
+                :status,
+                :payment_method_id,
+                :mercadopago_preference_id,
+                :mercadopago_payment_id,
+                :payment_status,
+                :payment_detail,
+                :lang,
+                :registry_completed,
+                :registry_completed_at,
+                :door_code
+            ) ON CONFLICT(`reservation_uid`) DO UPDATE SET
+                `guest_name` = excluded.`guest_name`,
+                `guest_email` = excluded.`guest_email`,
+                `guest_phone` = excluded.`guest_phone`,
+                `total_price` = excluded.`total_price`,
+                `status` = excluded.`status`,
+                `payment_method_id` = excluded.`payment_method_id`,
+                `mercadopago_preference_id` = excluded.`mercadopago_preference_id`,
+                `mercadopago_payment_id` = excluded.`mercadopago_payment_id`,
+                `payment_status` = excluded.`payment_status`,
+                `payment_detail` = excluded.`payment_detail`,
+                `lang` = excluded.`lang`,
+                `registry_completed` = excluded.`registry_completed`,
+                `registry_completed_at` = excluded.`registry_completed_at`,
+                `door_code` = excluded.`door_code`";
+        } else {
+            $sql = "INSERT INTO `reservations` (
+                `reservation_uid`,
+                `property_id`,
+                `guest_name`,
+                `guest_email`,
+                `guest_phone`,
+                `check_in`,
+                `check_out`,
+                `total_price`,
+                `status`,
+                `payment_method_id`,
+                `mercadopago_preference_id`,
+                `mercadopago_payment_id`,
+                `payment_status`,
+                `payment_detail`,
+                `lang`,
+                `registry_completed`,
+                `registry_completed_at`,
+                `door_code`
+            ) VALUES (
+                :reservation_uid,
+                :property_id,
+                :guest_name,
+                :guest_email,
+                :guest_phone,
+                :check_in,
+                :check_out,
+                :total_price,
+                :status,
+                :payment_method_id,
+                :mercadopago_preference_id,
+                :mercadopago_payment_id,
+                :payment_status,
+                :payment_detail,
+                :lang,
+                :registry_completed,
+                :registry_completed_at,
+                :door_code
+            ) ON DUPLICATE KEY UPDATE
+                `guest_name` = VALUES(`guest_name`),
+                `guest_email` = VALUES(`guest_email`),
+                `guest_phone` = VALUES(`guest_phone`),
+                `total_price` = VALUES(`total_price`),
+                `status` = VALUES(`status`),
+                `payment_method_id` = VALUES(`payment_method_id`),
+                `mercadopago_preference_id` = VALUES(`mercadopago_preference_id`),
+                `mercadopago_payment_id` = VALUES(`mercadopago_payment_id`),
+                `payment_status` = VALUES(`payment_status`),
+                `payment_detail` = VALUES(`payment_detail`),
+                `lang` = VALUES(`lang`),
+                `registry_completed` = VALUES(`registry_completed`),
+                `registry_completed_at` = VALUES(`registry_completed_at`),
+                `door_code` = VALUES(`door_code`)";
+        }
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
@@ -82,6 +148,9 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':payment_status' => $reservation->paymentStatus,
             ':payment_detail' => $reservation->paymentDetail,
             ':lang' => $reservation->lang,
+            ':registry_completed' => $reservation->registryCompleted ? 1 : 0,
+            ':registry_completed_at' => $reservation->registryCompletedAt?->format('Y-m-d H:i:s'),
+            ':door_code' => $reservation->doorCode,
         ]);
 
         return $this->findByUid($reservation->reservationUid) ?? $reservation;
@@ -266,6 +335,69 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         return $this->findByUid($reservationUid);
     }
 
+    public function markRegistryCompleted(
+        string $reservationUid,
+        ?DateTimeImmutable $completedAt = null,
+        ?string $doorCode = null
+    ): ?Reservation {
+        $timestamp = $completedAt ?? new DateTimeImmutable();
+
+        if ($doorCode !== null) {
+            $stmt = $this->pdo->prepare("
+                UPDATE `reservations`
+                SET `registry_completed` = 1,
+                    `registry_completed_at` = :completed_at,
+                    `door_code` = :door_code
+                WHERE `reservation_uid` = :uid
+            ");
+            $stmt->execute([
+                ':completed_at' => $timestamp->format('Y-m-d H:i:s'),
+                ':door_code' => $doorCode,
+                ':uid' => $reservationUid,
+            ]);
+        } else {
+            $stmt = $this->pdo->prepare("
+                UPDATE `reservations`
+                SET `registry_completed` = 1,
+                    `registry_completed_at` = :completed_at
+                WHERE `reservation_uid` = :uid
+            ");
+            $stmt->execute([
+                ':completed_at' => $timestamp->format('Y-m-d H:i:s'),
+                ':uid' => $reservationUid,
+            ]);
+        }
+
+        return $this->findByUid($reservationUid);
+    }
+
+    public function findByPropertyAndDates(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?Reservation {
+        $stmt = $this->pdo->prepare("
+            SELECT * FROM `reservations`
+            WHERE `property_id` = :property_id
+              AND `check_in` = :check_in
+              AND `check_out` = :check_out
+            ORDER BY `id` DESC
+            LIMIT 1
+        ");
+        $stmt->execute([
+            ':property_id' => $propertyId,
+            ':check_in' => $checkIn,
+            ':check_out' => $checkOut,
+        ]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            return null;
+        }
+
+        return $this->rowToEntity($row);
+    }
+
     /**
      * @param array<string, mixed> $row
      */
@@ -289,7 +421,10 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             paymentDetail: isset($row['payment_detail']) ? (string) $row['payment_detail'] : null,
             lang: isset($row['lang']) ? (string) $row['lang'] : 'en',
             createdAt: isset($row['created_at']) ? new DateTimeImmutable((string) $row['created_at']) : null,
-            updatedAt: isset($row['updated_at']) ? new DateTimeImmutable((string) $row['updated_at']) : null
+            updatedAt: isset($row['updated_at']) ? new DateTimeImmutable((string) $row['updated_at']) : null,
+            registryCompleted: !empty($row['registry_completed']),
+            registryCompletedAt: !empty($row['registry_completed_at']) ? new DateTimeImmutable((string) $row['registry_completed_at']) : null,
+            doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null
         );
     }
 }

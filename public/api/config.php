@@ -21,5 +21,17 @@ return [
     'ical_feeds' => [
         '1606' => 'https://www.airbnb.com/calendar/ical/1584825560087571592.ics?t=55e0ddced658497c89743275f7c3a9c9',
         '1707' => 'https://www.airbnb.com/calendar/ical/1500108514798091235.ics?t=0dc27b409a1a4e64be6445f5dc2efd39'
+    ],
+    'credentials' => [
+        '1606' => [
+            'door_code' => $_ENV['PROPERTY_1606_DOOR_CODE'] ?? $_SERVER['PROPERTY_1606_DOOR_CODE'] ?? getenv('PROPERTY_1606_DOOR_CODE') ?: '0160600#',
+            'wifi_ssid' => $_ENV['PROPERTY_1606_WIFI_SSID'] ?? $_SERVER['PROPERTY_1606_WIFI_SSID'] ?? getenv('PROPERTY_1606_WIFI_SSID') ?: 'APTO1606',
+            'wifi_password' => $_ENV['PROPERTY_1606_WIFI_PASSWORD'] ?? $_SERVER['PROPERTY_1606_WIFI_PASSWORD'] ?? getenv('PROPERTY_1606_WIFI_PASSWORD') ?: 'Invitado@1606@HN',
+        ],
+        '1707' => [
+            'door_code' => $_ENV['PROPERTY_1707_DOOR_CODE'] ?? $_SERVER['PROPERTY_1707_DOOR_CODE'] ?? getenv('PROPERTY_1707_DOOR_CODE') ?: '0170700#',
+            'wifi_ssid' => $_ENV['PROPERTY_1707_WIFI_SSID'] ?? $_SERVER['PROPERTY_1707_WIFI_SSID'] ?? getenv('PROPERTY_1707_WIFI_SSID') ?: 'APTO1707',
+            'wifi_password' => $_ENV['PROPERTY_1707_WIFI_PASSWORD'] ?? $_SERVER['PROPERTY_1707_WIFI_PASSWORD'] ?? getenv('PROPERTY_1707_WIFI_PASSWORD') ?: 'Invitado@1707@HN',
+        ],
     ]
 ];

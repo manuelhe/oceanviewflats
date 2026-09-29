@@ -1,0 +1,157 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OceanViewFlats\Tests\Unit\Domain\Reservation;
+
+use DateTimeImmutable;
+use OceanViewFlats\Domain\Reservation\InMemoryReservationRepository;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationStatus;
+use PDO;
+use PHPUnit\Framework\TestCase;
+
+final class ReservationRepositoryTest extends TestCase
+{
+    private function createSampleReservation(string $uid = 'ovf_sample_123'): Reservation
+    {
+        return new Reservation(
+            reservationUid: $uid,
+            propertyId: '1606',
+            guestName: 'Jane Doe',
+            guestEmail: 'jane@example.com',
+            guestPhone: '+57 300 123 4567',
+            checkIn: '2026-11-15',
+            checkOut: '2026-11-20',
+            totalPrice: 1500000.0,
+            status: ReservationStatus::CONFIRMED,
+            paymentMethodId: 'card_visa',
+            mercadopagoPaymentId: 'mp_pay_12345',
+            paymentStatus: 'approved',
+            paymentDetail: 'accredited',
+            lang: 'en',
+            registryCompleted: false,
+            registryCompletedAt: null,
+            createdAt: new DateTimeImmutable('2026-10-01 10:00:00'),
+            updatedAt: new DateTimeImmutable('2026-10-01 10:00:00')
+        );
+    }
+
+    private function createSqlitePdo(): PDO
+    {
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        $pdo->exec("CREATE TABLE reservations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reservation_uid TEXT UNIQUE,
+            property_id TEXT,
+            guest_name TEXT,
+            guest_email TEXT,
+            guest_phone TEXT,
+            check_in TEXT,
+            check_out TEXT,
+            total_price REAL,
+            status TEXT,
+            payment_method_id TEXT,
+            mercadopago_preference_id TEXT,
+            mercadopago_payment_id TEXT,
+            payment_status TEXT,
+            payment_detail TEXT,
+            lang TEXT,
+            registry_completed INTEGER DEFAULT 0,
+            registry_completed_at TEXT,
+            door_code TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )");
+        return $pdo;
+    }
+
+    public function testInMemoryRepositoryMarkRegistryCompleted(): void
+    {
+        $repo = new InMemoryReservationRepository();
+        $reservation = $this->createSampleReservation('ovf_inmem_1');
+        $repo->save($reservation);
+
+        $this->assertFalse($repo->findByUid('ovf_inmem_1')->registryCompleted);
+        $this->assertNull($repo->findByUid('ovf_inmem_1')->registryCompletedAt);
+
+        $now = new DateTimeImmutable('2026-11-10 14:30:00');
+        $updated = $repo->markRegistryCompleted('ovf_inmem_1', $now);
+
+        $this->assertNotNull($updated);
+        $this->assertTrue($updated->registryCompleted);
+        $fetched = $repo->findByUid('ovf_inmem_1');
+        $this->assertNotNull($fetched);
+        $this->assertTrue($fetched->registryCompleted);
+        $this->assertSame($now->format('Y-m-d H:i:s'), $fetched->registryCompletedAt?->format('Y-m-d H:i:s'));
+    }
+
+    public function testInMemoryRepositoryFindByPropertyAndDates(): void
+    {
+        $repo = new InMemoryReservationRepository();
+        $reservation = $this->createSampleReservation('ovf_inmem_2');
+        $repo->save($reservation);
+
+        $found = $repo->findByPropertyAndDates('1606', '2026-11-15', '2026-11-20');
+        $this->assertNotNull($found);
+        $this->assertSame('ovf_inmem_2', $found->reservationUid);
+
+        $notFound = $repo->findByPropertyAndDates('1606', '2026-11-15', '2026-11-22');
+        $this->assertNull($notFound);
+    }
+
+    public function testPdoRepositorySaveAndFind(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $repo = new PdoReservationRepository($pdo);
+        $reservation = $this->createSampleReservation('ovf_pdo_1');
+
+        $repo->save($reservation);
+
+        $fetched = $repo->findByUid('ovf_pdo_1');
+        $this->assertNotNull($fetched);
+        $this->assertSame('ovf_pdo_1', $fetched->reservationUid);
+        $this->assertSame('Jane Doe', $fetched->guestName);
+        $this->assertSame('1606', $fetched->propertyId);
+        $this->assertFalse($fetched->registryCompleted);
+        $this->assertNull($fetched->registryCompletedAt);
+    }
+
+    public function testPdoRepositoryMarkRegistryCompleted(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $repo = new PdoReservationRepository($pdo);
+        $reservation = $this->createSampleReservation('ovf_pdo_2');
+        $repo->save($reservation);
+
+        $now = new DateTimeImmutable('2026-11-12 09:15:00');
+        $updated = $repo->markRegistryCompleted('ovf_pdo_2', $now, '0765432#');
+
+        $this->assertNotNull($updated);
+        $this->assertTrue($updated->registryCompleted);
+        $this->assertSame('0765432#', $updated->doorCode);
+        $fetched = $repo->findByUid('ovf_pdo_2');
+        $this->assertNotNull($fetched);
+        $this->assertTrue($fetched->registryCompleted);
+        $this->assertSame($now->format('Y-m-d H:i:s'), $fetched->registryCompletedAt?->format('Y-m-d H:i:s'));
+        $this->assertSame('0765432#', $fetched->doorCode);
+    }
+
+    public function testPdoRepositoryFindByPropertyAndDates(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $repo = new PdoReservationRepository($pdo);
+        $reservation = $this->createSampleReservation('ovf_pdo_3');
+        $repo->save($reservation);
+
+        $found = $repo->findByPropertyAndDates('1606', '2026-11-15', '2026-11-20');
+        $this->assertNotNull($found);
+        $this->assertSame('ovf_pdo_3', $found->reservationUid);
+
+        $notFound = $repo->findByPropertyAndDates('1707', '2026-11-15', '2026-11-20');
+        $this->assertNull($notFound);
+    }
+}

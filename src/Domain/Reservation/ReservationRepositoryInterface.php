@@ -65,4 +65,23 @@ interface ReservationRepositoryInterface
         int $standardHoldMinutes = Reservation::DEFAULT_STANDARD_HOLD_MINUTES,
         int $voucherHoldHours = Reservation::DEFAULT_VOUCHER_HOLD_HOURS
     ): Reservation;
+
+    /**
+     * Marks the guest registry as completed for the specified reservation (ADR 0001)
+     * and optionally assigns the generated smart lock door code.
+     */
+    public function markRegistryCompleted(
+        string $reservationUid,
+        ?DateTimeImmutable $completedAt = null,
+        ?string $doorCode = null
+    ): ?Reservation;
+
+    /**
+     * Finds a reservation by property and exact stay dates.
+     */
+    public function findByPropertyAndDates(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?Reservation;
 }

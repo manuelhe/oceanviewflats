@@ -39,7 +39,9 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
             paymentDetail: $reservation->paymentDetail,
             lang: $reservation->lang,
             createdAt: $createdAt,
-            updatedAt: $reservation->updatedAt
+            updatedAt: $reservation->updatedAt,
+            registryCompleted: $reservation->registryCompleted,
+            registryCompletedAt: $reservation->registryCompletedAt
         );
 
         $this->records[$saved->reservationUid] = $saved;
@@ -136,6 +138,39 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
         }
 
         return $this->save($reservation);
+    }
+
+    public function markRegistryCompleted(
+        string $reservationUid,
+        ?DateTimeImmutable $completedAt = null,
+        ?string $doorCode = null
+    ): ?Reservation {
+        $existing = $this->findByUid($reservationUid);
+        if ($existing === null) {
+            return null;
+        }
+
+        $updated = $existing->withRegistryCompleted($completedAt, $doorCode);
+        $this->records[$reservationUid] = $updated;
+        return $updated;
+    }
+
+    public function findByPropertyAndDates(
+        string $propertyId,
+        string $checkIn,
+        string $checkOut
+    ): ?Reservation {
+        foreach ($this->records as $reservation) {
+            if (
+                $reservation->propertyId === $propertyId
+                && $reservation->checkIn === $checkIn
+                && $reservation->checkOut === $checkOut
+            ) {
+                return $reservation;
+            }
+        }
+
+        return null;
     }
 
     /**
