@@ -1,38 +1,38 @@
 interface TemplateProps {
-  markup: string;
-  lang: 'en' | 'es' | 'fr' | 'it' | 'de' | 'ja';
-  title: string;
-  description: string;
-  url: string;
-  baseUrl: string;
-  ogImage: string;
-  hrefLangTags: string;
-  structuredData: string;
-  assetPrefix: string;
-  customScripts?: string[];
+	markup: string;
+	lang: "en" | "es" | "fr" | "it" | "de" | "ja";
+	title: string;
+	description: string;
+	url: string;
+	baseUrl: string;
+	ogImage: string;
+	hrefLangTags: string;
+	structuredData: string;
+	assetPrefix: string;
+	customScripts?: string[];
 }
 
 const LOCALE_MAP = {
-  en: 'en_US',
-  es: 'es_ES',
-  fr: 'fr_FR',
-  it: 'it_IT',
-  de: 'de_DE',
-  ja: 'ja_JP'
+	en: "en_US",
+	es: "es_ES",
+	fr: "fr_FR",
+	it: "it_IT",
+	de: "de_DE",
+	ja: "ja_JP",
 };
 
 export const baseTemplate = ({
-  markup,
-  lang,
-  title,
-  description,
-  url,
-  baseUrl,
-  ogImage,
-  hrefLangTags,
-  structuredData,
-  assetPrefix,
-  customScripts = []
+	markup,
+	lang,
+	title,
+	description,
+	url,
+	baseUrl,
+	ogImage,
+	hrefLangTags,
+	structuredData,
+	assetPrefix,
+	customScripts = [],
 }: TemplateProps) => `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
@@ -58,9 +58,12 @@ export const baseTemplate = ({
     <meta property="og:url" content="${url}">
     <meta property="og:locale" content="${LOCALE_MAP[lang]}">
     ${Object.keys(LOCALE_MAP)
-      .filter(l => l !== lang)
-      .map(l => `<meta property="og:locale:alternate" content="${LOCALE_MAP[l as keyof typeof LOCALE_MAP]}">`)
-      .join('\n    ')}
+			.filter((l) => l !== lang)
+			.map(
+				(l) =>
+					`<meta property="og:locale:alternate" content="${LOCALE_MAP[l as keyof typeof LOCALE_MAP]}">`,
+			)
+			.join("\n    ")}
     <link rel="canonical" href="${url}">
 
     <!-- Twitter Card -->
@@ -88,6 +91,6 @@ ${hrefLangTags}
 </head>
 <body>
     <div id="root">${markup}</div>
-    ${customScripts.map(src => `<script src="${assetPrefix}${src}"></script>`).join('\n    ')}
+    ${customScripts.map((src) => `<script src="${assetPrefix}${src}"></script>`).join("\n    ")}
 </body>
 </html>`;

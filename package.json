@@ -1,31 +1,35 @@
 {
-  "name": "17071606",
-  "version": "1.0.0",
-  "description": "Static page generator for rental properties landing pages",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "docs:api": "php scripts/generate-docs.php",
-    "build:docs": "php scripts/generate-docs.php",
-    "build": "tsx render.tsx && vite build && npx terser public/js/main.js -o dist/js/main.js -c -m && npx terser public/js/lang-detect.js -o dist/js/lang-detect.js -c -m && npx terser public/js/registry.js -o dist/js/registry.js -c -m && npx terser public/js/guide.js -o dist/js/guide.js -c -m"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "lucide-react": "^1.8.0",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "tsx": "^4.23.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.2.2",
-    "@types/node": "^25.6.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "tailwindcss": "^4.2.2",
-    "terser": "^5.46.1",
-    "vite": "^8.1.4"
-  }
+	"name": "17071606",
+	"version": "1.0.0",
+	"description": "Static page generator for rental properties landing pages",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"docs:api": "php scripts/generate-docs.php",
+		"build:docs": "php scripts/generate-docs.php",
+		"build": "tsx render.tsx && vite build && npx terser public/js/main.js -o dist/js/main.js -c -m && npx terser public/js/lang-detect.js -o dist/js/lang-detect.js -c -m && npx terser public/js/registry.js -o dist/js/registry.js -c -m && npx terser public/js/guide.js -o dist/js/guide.js -c -m"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"type": "commonjs",
+	"dependencies": {
+		"lucide-react": "^1.8.0",
+		"react": "^19.2.5",
+		"react-dom": "^19.2.5",
+		"tsx": "^4.23.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.14",
+		"@tailwindcss/vite": "^4.2.2",
+		"@types/node": "^25.6.0",
+		"@types/react": "^19.2.14",
+		"@types/react-dom": "^19.2.3",
+		"tailwindcss": "^4.2.2",
+		"terser": "^5.46.1",
+		"typescript": "^7.0.2",
+		"vite": "^8.1.4"
+	}
 }
