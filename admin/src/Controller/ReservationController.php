@@ -12,6 +12,8 @@ use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
+use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
+use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
@@ -27,6 +29,8 @@ use Throwable;
  */
 final class ReservationController
 {
+    private readonly CancellationEmailRendererInterface $cancellationEmailRenderer;
+
     public function __construct(
         private readonly AdminReservationRepository $repository,
         private readonly ViewRenderer $viewRenderer,
@@ -36,8 +40,10 @@ final class ReservationController
         private readonly ConfirmationEmailRendererInterface $emailRenderer,
         private readonly EmailSenderInterface $emailSender,
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
-        private readonly ?MercadoPagoRefundClientInterface $refundClient = null
+        private readonly ?MercadoPagoRefundClientInterface $refundClient = null,
+        ?CancellationEmailRendererInterface $cancellationEmailRenderer = null
     ) {
+        $this->cancellationEmailRenderer = $cancellationEmailRenderer ?? new CancellationEmailRenderer($this->publicSiteUrl);
     }
 
     /**
@@ -500,6 +506,48 @@ final class ReservationController
     /**
      * @param array<string, mixed> $currentUser
      */
+    private function sendCancellationEmailSafely(
+        Reservation $reservation,
+        float $refundAmount,
+        float $policyRetention,
+        array $currentUser,
+        Request $request
+    ): void {
+        try {
+            $subject = $this->cancellationEmailRenderer->renderGuestSubject($reservation);
+            $htmlBody = $this->cancellationEmailRenderer->renderGuestCancellationHtml(
+                reservation: $reservation,
+                refundAmount: $refundAmount,
+                policyRetention: $policyRetention
+            );
+            $sent = $this->emailSender->send($reservation->guestEmail, $subject, $htmlBody);
+
+            if ($sent) {
+                $this->auditLogger->record(
+                    action: 'cancellation_email_sent',
+                    entityType: 'reservation',
+                    entityId: $reservation->reservationUid,
+                    before: null,
+                    after: [
+                        'recipient' => $reservation->guestEmail,
+                        'refund_amount' => $refundAmount,
+                        'policy_retention' => $policyRetention,
+                    ],
+                    adminUserId: $currentUser['id'],
+                    ipAddress: $request->getClientIp(),
+                    userAgent: (string) $request->getHeader('User-Agent', '')
+                );
+            } else {
+                $this->logEmailFailure($reservation->reservationUid, 'Email sender returned false', $currentUser, $request);
+            }
+        } catch (Throwable $e) {
+            $this->logEmailFailure($reservation->reservationUid, $e->getMessage(), $currentUser, $request);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $currentUser
+     */
     private function logEmailFailure(string $uid, string $error, array $currentUser, Request $request): void
     {
         $this->auditLogger->record(
@@ -624,6 +672,7 @@ final class ReservationController
             $reason = trim((string) $request->getPost('reason', ''));
             $refundType = trim((string) $request->getPost('refund_type', 'none'));
             $refundAmountInput = (float) $request->getPost('refund_amount', 0.0);
+            $sendCancellationEmailRaw = $request->getPost('send_cancellation_email');
 
             // 4. Validate Reason
             if ($reason === '') {
@@ -637,6 +686,7 @@ final class ReservationController
                         'reason' => $reason,
                         'refund_type' => $refundType,
                         'refund_amount' => $refundAmountInput,
+                        'send_cancellation_email' => $sendCancellationEmailRaw,
                     ],
                     csrfToken: (string) ($session['csrf_token'] ?? '')
                 );
@@ -657,6 +707,7 @@ final class ReservationController
                             'reason' => $reason,
                             'refund_type' => $refundType,
                             'refund_amount' => $refundAmountInput,
+                            'send_cancellation_email' => $sendCancellationEmailRaw,
                         ],
                         csrfToken: (string) ($session['csrf_token'] ?? '')
                     );
@@ -684,6 +735,7 @@ final class ReservationController
                             'reason' => $reason,
                             'refund_type' => $refundType,
                             'refund_amount' => $refundAmountInput,
+                            'send_cancellation_email' => $sendCancellationEmailRaw,
                         ],
                         csrfToken: (string) ($session['csrf_token'] ?? '')
                     );
@@ -705,6 +757,7 @@ final class ReservationController
                             'reason' => $reason,
                             'refund_type' => $refundType,
                             'refund_amount' => $refundAmountInput,
+                            'send_cancellation_email' => $sendCancellationEmailRaw,
                         ],
                         csrfToken: (string) ($session['csrf_token'] ?? '')
                     );
@@ -719,6 +772,7 @@ final class ReservationController
                             'reason' => $reason,
                             'refund_type' => $refundType,
                             'refund_amount' => $refundAmountInput,
+                            'send_cancellation_email' => $sendCancellationEmailRaw,
                         ],
                         csrfToken: (string) ($session['csrf_token'] ?? '')
                     );
@@ -786,7 +840,37 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Cancellation failed unexpectedly: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 500);
         }
 
-        // 10. Render response
+        // 10. Resilient Post-Commit Guest Cancellation Email Dispatch
+        $sendCancellationEmail = !empty($sendCancellationEmailRaw);
+        if ($sendCancellationEmail) {
+            $reservationEntity = new Reservation(
+                reservationUid: $uid,
+                propertyId: (string) $reservation['property_id'],
+                guestName: (string) $reservation['guest_name'],
+                guestEmail: (string) $reservation['guest_email'],
+                guestPhone: (string) $reservation['guest_phone'],
+                checkIn: (string) $reservation['check_in'],
+                checkOut: (string) $reservation['check_out'],
+                totalPrice: $totalPrice,
+                status: ReservationStatus::CANCELLED,
+                paymentMethodId: $reservation['payment_method_id'] ?? null,
+                id: isset($reservation['id']) ? (int) $reservation['id'] : null,
+                mercadopagoPreferenceId: $reservation['mercadopago_preference_id'] ?? null,
+                mercadopagoPaymentId: $reservation['mercadopago_payment_id'] ?? null,
+                paymentStatus: $refundType === 'full' ? 'refunded' : ($refundType === 'partial' ? 'partially_refunded' : ($reservation['payment_status'] ?? null)),
+                lang: (string) ($reservation['lang'] ?? 'en')
+            );
+
+            $this->sendCancellationEmailSafely(
+                reservation: $reservationEntity,
+                refundAmount: $refundAmount,
+                policyRetention: max(0.0, round($totalPrice - ($currentRefunded + $refundAmount), 2)),
+                currentUser: $currentUser,
+                request: $request
+            );
+        }
+
+        // 11. Render response
         $updatedData = $this->repository->findReservationWithAuditTrail($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
             'reservation' => $updatedData !== null ? $updatedData['reservation'] : $reservation,

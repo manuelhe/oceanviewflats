@@ -30,6 +30,7 @@ use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\CsvRateSource;
@@ -77,6 +78,7 @@ try {
         csvPath: 'public/data/prices.csv'
     );
     $emailRenderer = new ConfirmationEmailRenderer($publicSiteUrl);
+    $cancellationEmailRenderer = new CancellationEmailRenderer($publicSiteUrl);
     $emailSender = new PhpMailSender();
     $mpAccessToken = $_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: '';
     $refundClient = new MercadoPagoRefundClient($mpAccessToken);
@@ -91,8 +93,9 @@ try {
         quoteEngine: $quoteEngine,
         emailRenderer: $emailRenderer,
         emailSender: $emailSender,
+        publicSiteUrl: $publicSiteUrl,
         refundClient: $refundClient,
-        publicSiteUrl: $publicSiteUrl
+        cancellationEmailRenderer: $cancellationEmailRenderer
     );
 
     $calendarBlockRepo = new AdminCalendarBlockRepository($pdo);

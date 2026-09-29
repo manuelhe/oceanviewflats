@@ -17,6 +17,10 @@ if (count(get_included_files()) === 1 && !defined('ALLOW_WEBHOOK_RUN')) {
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use OceanViewFlats\Domain\Fulfillment\BookingFulfillment;
+use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
+use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
+use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
+use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
 
@@ -143,16 +147,16 @@ if (!function_exists('sync_refund_items')) {
  * @param PDO $pdo
  * @param string $action
  * @param string $uid
- * @param array<string, mixed> $payloadBefore
- * @param array<string, mixed> $payloadAfter
+ * @param array<string, mixed>|null $payloadBefore
+ * @param array<string, mixed>|null $payloadAfter
  */
 if (!function_exists('record_webhook_audit_log')) {
     function record_webhook_audit_log(
         PDO $pdo,
         string $action,
         string $uid,
-        array $payloadBefore,
-        array $payloadAfter
+        ?array $payloadBefore = null,
+        ?array $payloadAfter = null
     ): void {
         try {
             $stmt = $pdo->prepare('
@@ -165,8 +169,8 @@ if (!function_exists('record_webhook_audit_log')) {
             $stmt->execute([
                 'action' => $action,
                 'entity_id' => $uid,
-                'payload_before' => json_encode($payloadBefore, JSON_UNESCAPED_SLASHES),
-                'payload_after' => json_encode($payloadAfter, JSON_UNESCAPED_SLASHES),
+                'payload_before' => $payloadBefore !== null ? json_encode($payloadBefore, JSON_UNESCAPED_SLASHES) : null,
+                'payload_after' => $payloadAfter !== null ? json_encode($payloadAfter, JSON_UNESCAPED_SLASHES) : null,
                 'ip_address' => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
             ]);
         } catch (Exception $e) {
@@ -330,6 +334,77 @@ if ($isFullRefund) {
 
             $pdo->commit();
             log_webhook_message("Reservation {$uid} CANCELLED via external Mercado Pago full refund webhook.");
+
+            // Post-commit resilient guest cancellation email notification
+            try {
+                $cancelledReservation = new Reservation(
+                    reservationUid: (string) $reservation['reservation_uid'],
+                    propertyId: (string) $reservation['property_id'],
+                    guestName: (string) $reservation['guest_name'],
+                    guestEmail: (string) $reservation['guest_email'],
+                    guestPhone: (string) $reservation['guest_phone'],
+                    checkIn: (string) $reservation['check_in'],
+                    checkOut: (string) $reservation['check_out'],
+                    totalPrice: (float) $reservation['total_price'],
+                    status: ReservationStatus::CANCELLED,
+                    paymentMethodId: $reservation['payment_method_id'] ?? null,
+                    mercadopagoPaymentId: (string) $paymentId,
+                    paymentStatus: 'refunded',
+                    lang: $reservation['lang'] ?? null,
+                    createdAt: new DateTimeImmutable($reservation['created_at'] ?? 'now')
+                );
+
+                /** @var \OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface $cancelRenderer */
+                $cancelRenderer = $GLOBALS['TEST_CANCELLATION_RENDERER'] ?? new CancellationEmailRenderer();
+                /** @var \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface $mailSender */
+                $mailSender = $GLOBALS['TEST_EMAIL_SENDER'] ?? new PhpMailSender();
+                $actualRefundAmt = (float) $actualRefundAmount;
+                $totPrice = (float) $reservation['total_price'];
+                $policyRetention = max(0.0, round($totPrice - $actualRefundAmt, 2));
+
+                $gSubject = $cancelRenderer->renderGuestSubject($cancelledReservation);
+                $gHtml = $cancelRenderer->renderGuestCancellationHtml($cancelledReservation, $actualRefundAmt, $policyRetention);
+                $mailSent = $mailSender->send($cancelledReservation->guestEmail, $gSubject, $gHtml);
+
+                if ($mailSent) {
+                    record_webhook_audit_log(
+                        $pdo,
+                        'cancellation_email_sent',
+                        $uid,
+                        null,
+                        [
+                            'recipient' => $cancelledReservation->guestEmail,
+                            'refund_amount' => $actualRefundAmt,
+                            'policy_retention' => $policyRetention,
+                            'trigger' => 'mercadopago_webhook',
+                        ]
+                    );
+                } else {
+                    record_webhook_audit_log(
+                        $pdo,
+                        'email_delivery_failed',
+                        $uid,
+                        null,
+                        [
+                            'recipient' => $cancelledReservation->guestEmail,
+                            'error' => 'Email sender returned false',
+                            'trigger' => 'mercadopago_webhook',
+                        ]
+                    );
+                }
+            } catch (Throwable $mailEx) {
+                log_webhook_message("Cancellation email dispatch error for {$uid}: " . $mailEx->getMessage());
+                record_webhook_audit_log(
+                    $pdo,
+                    'email_delivery_failed',
+                    $uid,
+                    null,
+                    [
+                        'error' => $mailEx->getMessage(),
+                        'trigger' => 'mercadopago_webhook',
+                    ]
+                );
+            }
         } catch (Exception $txEx) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();

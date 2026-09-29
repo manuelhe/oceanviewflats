@@ -21,6 +21,9 @@ $mpPaymentId = (string) ($reservation['mercadopago_payment_id'] ?? '');
 $selectedRefundType = (string) ($oldInput['refund_type'] ?? ($refundableBalance > 0 ? 'full' : 'none'));
 $inputRefundAmount = (float) ($oldInput['refund_amount'] ?? $refundableBalance);
 $inputReason = (string) ($oldInput['reason'] ?? '');
+$sendCancellationEmail = !empty($oldInput)
+    ? !empty($oldInput['send_cancellation_email'])
+    : true;
 ?>
 
 <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -218,6 +221,20 @@ $inputReason = (string) ($oldInput['reason'] ?? '');
                 <!-- Warning Notice -->
                 <div class="text-[11px] text-gray-500 border-t border-gray-100 pt-3">
                     <strong>Notice:</strong> Cancellation is terminal and cannot be reversed. Calendar dates will be immediately freed for new bookings.
+                </div>
+
+                <!-- Guest Notification Checkbox -->
+                <div class="bg-gray-50 border border-gray-200 rounded-xl p-3 flex items-start space-x-3">
+                    <input type="checkbox"
+                           id="send_cancellation_email"
+                           name="send_cancellation_email"
+                           value="1"
+                           <?= $sendCancellationEmail ? 'checked' : '' ?>
+                           class="mt-0.5 rounded text-rose-600 focus:ring-rose-500 h-4 w-4 border-gray-300">
+                    <label for="send_cancellation_email" class="text-xs text-gray-700 cursor-pointer select-none">
+                        <span class="font-semibold block text-gray-900">Send cancellation notice to guest</span>
+                        <span class="text-gray-500 block text-[11px]">Dispatches a localized email with the refund breakdown to <code><?= htmlspecialchars($guestEmail) ?></code></span>
+                    </label>
                 </div>
 
                 <!-- Modal Actions -->

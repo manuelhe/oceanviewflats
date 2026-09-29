@@ -185,10 +185,66 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
         $this->assertSame('mercadopago_webhook', $refundRow['source']);
 
         // Verify audit log created
-        $stmt = $this->pdo->query("SELECT * FROM admin_audit_logs WHERE entity_id = 'ovf-external-refund'");
-        $auditRow = $stmt->fetch();
-        $this->assertIsArray($auditRow);
-        $this->assertSame('external_refund_cancellation', $auditRow['action']);
+        $stmt = $this->pdo->query("SELECT action FROM admin_audit_logs WHERE entity_id = 'ovf-external-refund' ORDER BY id ASC");
+        $actions = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        $this->assertContains('external_refund_cancellation', $actions);
+    }
+
+    /**
+     * External Full Refund triggers localized cancellation email notification and audit log.
+     */
+    public function testExternalFullRefundDispatchesCancellationEmailNotificationAndRecordsAuditLog(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, payment_status, mercadopago_payment_id, lang)
+            VALUES ('ovf-ext-email-test', '1707', 'Maria Host', 'maria@example.com', '+573009998877', '2026-12-01', '2026-12-05', 1200000.00, 'confirmed', 'approved', '99881122', 'es');
+        ");
+
+        $paymentPayload = [
+            'id' => '99881122',
+            'status' => 'refunded',
+            'status_detail' => 'refunded',
+            'external_reference' => 'ovf-ext-email-test',
+            'transaction_amount' => 1200000.00,
+            'transaction_amount_refunded' => 1200000.00,
+            'payment_method_id' => 'pse',
+            'refunds' => [
+                [
+                    'id' => 881122,
+                    'payment_id' => 99881122,
+                    'amount' => 1200000.00,
+                    'status' => 'approved',
+                ],
+            ],
+        ];
+
+        $extraPhp = '$GLOBALS["TEST_EMAIL_SENDER"] = new \\OceanViewFlats\\Domain\\Fulfillment\\InMemoryEmailSender();';
+        $res = $this->callWebhook('99881122', $paymentPayload, $extraPhp);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success'] ?? false);
+
+        // Verify audit logs
+        $stmt = $this->pdo->query("SELECT action, payload_after FROM admin_audit_logs WHERE entity_id = 'ovf-ext-email-test' ORDER BY id ASC");
+        $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $actions = array_column($logs, 'action');
+        $this->assertContains('external_refund_cancellation', $actions);
+        $this->assertContains('cancellation_email_sent', $actions);
+
+        $emailLog = null;
+        foreach ($logs as $log) {
+            if ($log['action'] === 'cancellation_email_sent') {
+                $emailLog = json_decode((string) $log['payload_after'], true);
+                break;
+            }
+        }
+        $this->assertNotNull($emailLog);
+        $this->assertSame('maria@example.com', $emailLog['recipient']);
+        $this->assertEquals(1200000.0, (float) $emailLog['refund_amount']);
+        $this->assertEquals(0.0, (float) $emailLog['policy_retention']);
+        $this->assertSame('mercadopago_webhook', $emailLog['trigger']);
     }
 
     /**
@@ -360,10 +416,11 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
      * @param array<string, mixed> $paymentData
      * @return array{exitCode: int, stdout: string, stderr: string, json: ?array<string, mixed>}
      */
-    private function callWebhook(string $paymentId, array $paymentData): array
+    private function callWebhook(string $paymentId, array $paymentData, ?string $extraPhp = null): array
     {
         $phpCode = sprintf(
             '
+            require_once %s;
             $GLOBALS["DISABLE_RATE_LIMIT"] = true;
             $GLOBALS["TEST_PDO"] = new PDO("sqlite:%s", null, null, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -373,11 +430,14 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
             $_SERVER["REQUEST_METHOD"] = "POST";
             $_GET["id"] = %s;
             $_GET["topic"] = "payment";
+            %s
             require %s;
             ',
+            var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true),
             $this->dbFile,
             var_export($paymentData, true),
             var_export($paymentId, true),
+            $extraPhp ?? '',
             var_export(dirname(__DIR__, 3) . '/public/api/mercadopago-webhook.php', true)
         );
 
