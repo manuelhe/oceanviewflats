@@ -1,0 +1,530 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OceanViewFlats\Domain\Fulfillment;
+
+use DateTimeImmutable;
+use OceanViewFlats\Domain\Access\DoorCodeGenerator;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+use PDO;
+use Throwable;
+
+/**
+ * Authoritative domain service managing the guest registration lifecycle,
+ * ADR 0001 access credential generation and disclosure, administrative manual registry,
+ * PIN overrides, PIN regeneration, and post-settlement booking fulfillment.
+ */
+final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmentServiceInterface
+{
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly ReservationRepositoryInterface $reservationRepository,
+        private readonly HostRegistryEmailRendererInterface $hostRegistryRenderer,
+        private readonly EmailSenderInterface $emailSender,
+        private readonly SpreadsheetSyncInterface $spreadsheetSync,
+        private readonly ConfirmationEmailRendererInterface $confirmationEmailRenderer,
+        private readonly string $hostNotificationEmail = 'rentals@oceanviewflats.com',
+        private readonly string $publicSiteUrl = 'https://oceanviewflats.com'
+    ) {}
+
+    /**
+     * Factory creating a service configured with production defaults or custom overrides.
+     *
+     * @param array<string, mixed> $options
+     */
+    public static function createDefault(PDO $pdo, array $options = []): self
+    {
+        $resolvedHost = (string) (
+            $options['host_notification_email']
+            ?? $_ENV['RECIPIENT_EMAIL']
+            ?? $_SERVER['RECIPIENT_EMAIL']
+            ?? getenv('RECIPIENT_EMAIL')
+            ?: (defined('RECIPIENT_EMAIL') ? constant('RECIPIENT_EMAIL') : 'rentals@oceanviewflats.com')
+        );
+
+        $resolvedPublicSiteUrl = (string) (
+            $options['public_site_url']
+            ?? $_ENV['PUBLIC_SITE_URL']
+            ?? $_SERVER['PUBLIC_SITE_URL']
+            ?? getenv('PUBLIC_SITE_URL')
+            ?: (defined('PUBLIC_SITE_URL') ? constant('PUBLIC_SITE_URL') : 'https://oceanviewflats.com')
+        );
+
+        /** @var ReservationRepositoryInterface $reservationRepository */
+        $reservationRepository = $options['reservation_repository'] ?? new PdoReservationRepository($pdo);
+        /** @var HostRegistryEmailRendererInterface $hostRegistryRenderer */
+        $hostRegistryRenderer = $options['host_registry_renderer'] ?? new HostRegistryEmailRenderer();
+        /** @var EmailSenderInterface $emailSender */
+        $emailSender = $options['email_sender'] ?? new PhpMailSender();
+        /** @var SpreadsheetSyncInterface $spreadsheetSync */
+        $spreadsheetSync = $options['spreadsheet_sync'] ?? GoogleSheetWebhookSync::createFromEnv();
+        /** @var ConfirmationEmailRendererInterface $confirmationEmailRenderer */
+        $confirmationEmailRenderer = $options['confirmation_email_renderer'] ?? new ConfirmationEmailRenderer($resolvedPublicSiteUrl);
+
+        return new self(
+            pdo: $pdo,
+            reservationRepository: $reservationRepository,
+            hostRegistryRenderer: $hostRegistryRenderer,
+            emailSender: $emailSender,
+            spreadsheetSync: $spreadsheetSync,
+            confirmationEmailRenderer: $confirmationEmailRenderer,
+            hostNotificationEmail: $resolvedHost,
+            publicSiteUrl: $resolvedPublicSiteUrl
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function submitRegistry(GuestRegistrySubmission $submission): RegistryFulfillmentResult
+    {
+        // 1. Validate stay dates if provided
+        if ($submission->checkIn !== '' || $submission->checkOut !== '') {
+            if (!$submission->hasValidDates()) {
+                return RegistryFulfillmentResult::validationFailure([
+                    'Check-in and check-out dates are invalid or improperly ordered.',
+                ]);
+            }
+        }
+
+        // 2. Validate guest count: at least 1, max 6
+        $guestCount = $submission->getGuestCount();
+        if ($guestCount < 1 || $guestCount > 6) {
+            return RegistryFulfillmentResult::validationFailure([
+                'A reservation must register between 1 and 6 guests.',
+            ]);
+        }
+
+        // 3. Validate occupant details defensively
+        $validationErrors = [];
+        foreach ($submission->occupants as $occupant) {
+            $trimmedName = trim($occupant->name);
+            if (strlen($trimmedName) < 2 || strlen($occupant->name) > 100) {
+                $validationErrors[] = sprintf('Guest %d name must be between 2 and 100 characters.', $occupant->index);
+            }
+            if ($occupant->age < 0 || $occupant->age > 120) {
+                $validationErrors[] = sprintf('Guest %d age must be between 0 and 120.', $occupant->index);
+            }
+            $trimmedDoc = trim($occupant->docNum);
+            if (strlen($trimmedDoc) < 2 || strlen($occupant->docNum) > 50) {
+                $validationErrors[] = sprintf('Guest %d document number must be between 2 and 50 characters.', $occupant->index);
+            }
+        }
+        if (!empty($validationErrors)) {
+            return RegistryFulfillmentResult::validationFailure($validationErrors);
+        }
+
+        // 3. Resolve reservation
+        $reservation = null;
+        if ($submission->reservationCode !== '') {
+            $reservation = $this->reservationRepository->findByUid($submission->reservationCode);
+        }
+        if ($reservation === null && $submission->propertyId !== '' && $submission->checkIn !== '' && $submission->checkOut !== '') {
+            $reservation = $this->reservationRepository->findByPropertyAndDates(
+                $submission->propertyId,
+                $submission->checkIn,
+                $submission->checkOut
+            );
+        }
+        if ($reservation === null) {
+            return RegistryFulfillmentResult::notFound(
+                $submission->reservationCode,
+                'No confirmed reservation matches the provided booking details.'
+            );
+        }
+
+        // 4. Check reservation status
+        if ($reservation->status->isCancelled()) {
+            return RegistryFulfillmentResult::validationFailure([
+                'Cannot register guests for a cancelled reservation.',
+            ]);
+        }
+
+        // 5. Generate algorithmic PIN per ADR 0001
+        $primary = $submission->getPrimaryOccupant();
+        $primaryDoc = $primary !== null ? $primary->docNum : '';
+        $doorCode = DoorCodeGenerator::generate($primaryDoc, $reservation->guestPhone);
+
+        // 6. Atomic PDO transaction
+        $this->pdo->beginTransaction();
+        try {
+            $this->reservationRepository->markRegistryCompleted(
+                $reservation->reservationUid,
+                new DateTimeImmutable(),
+                $doorCode
+            );
+
+            $this->insertGuestRegistry(
+                reservationUid: $reservation->reservationUid,
+                propertyId: $reservation->propertyId,
+                checkIn: $reservation->checkIn,
+                checkOut: $reservation->checkOut,
+                occupants: $submission->occupants,
+                carPlates: $submission->carPlates,
+                carModel: $submission->carModel,
+                ipAddress: $submission->ipAddress
+            );
+
+            $stmtAudit = $this->pdo->prepare("
+                INSERT INTO `admin_audit_logs` (
+                    `action`, `entity_type`, `entity_id`,
+                    `payload_after`, `ip_address`, `created_at`
+                ) VALUES (
+                    'guest_registry_submitted', 'reservation', :entity_id,
+                    :payload_after, :ip_address, CURRENT_TIMESTAMP
+                )
+            ");
+            $stmtAudit->execute([
+                ':entity_id' => $reservation->reservationUid,
+                ':payload_after' => json_encode($submission->toArray(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                ':ip_address' => $submission->ipAddress ?? '127.0.0.1',
+            ]);
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return RegistryFulfillmentResult::systemError('Database transaction failed: ' . $e->getMessage());
+        }
+
+        // 7. Side effects (after commit, catching exceptions)
+        $spreadsheetSynced = false;
+        $spreadsheetError = null;
+        try {
+            $spreadsheetSynced = $this->spreadsheetSync->sync($reservation, [
+                'event' => 'guest_registry',
+                'door_code' => $doorCode,
+                'occupants' => $submission->toArray(),
+            ]);
+            if (!$spreadsheetSynced) {
+                $spreadsheetError = 'Spreadsheet synchronization returned false.';
+            }
+        } catch (Throwable $e) {
+            $spreadsheetError = $e->getMessage();
+        }
+
+        $hostReportSent = false;
+        try {
+            $subject = $this->hostRegistryRenderer->renderSubject($submission);
+            $html = $this->hostRegistryRenderer->renderHtml(
+                $submission,
+                $doorCode,
+                $spreadsheetSynced,
+                $spreadsheetError
+            );
+            $hostReportSent = $this->emailSender->send($this->hostNotificationEmail, $subject, $html);
+        } catch (Throwable) {
+            $hostReportSent = false;
+        }
+
+        // 8. Generate unlocked guide URL
+        $guideUrl = rtrim($this->publicSiteUrl, '/') . '/guide/?code=' . urlencode($reservation->reservationUid) . '&lang=' . urlencode($submission->lang);
+
+        // 9. Fetch fresh reservation
+        $freshReservation = $this->reservationRepository->findByUid($reservation->reservationUid)
+            ?? $reservation->withRegistryCompleted(new DateTimeImmutable(), $doorCode);
+
+        return RegistryFulfillmentResult::success(
+            reservation: $freshReservation,
+            doorCode: $doorCode,
+            guideUrl: $guideUrl,
+            hostReportDispatched: $hostReportSent,
+            spreadsheetSynced: $spreadsheetSynced
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function completeRegistryManually(
+        string $reservationUid,
+        ?AdminContext $admin = null,
+        ?GuestRegistrySubmission $submission = null
+    ): RegistryFulfillmentResult {
+        $reservation = $this->reservationRepository->findByUid($reservationUid);
+        if ($reservation === null) {
+            return RegistryFulfillmentResult::notFound(
+                $reservationUid,
+                'Reservation not found'
+            );
+        }
+
+        $existingCode = $reservation->doorCode;
+        $doorCode = ($existingCode !== null && $existingCode !== '')
+            ? $existingCode
+            : DoorCodeGenerator::generateRandom();
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->reservationRepository->markRegistryCompleted(
+                $reservationUid,
+                new DateTimeImmutable(),
+                $doorCode
+            );
+
+            if ($submission !== null) {
+                $this->insertGuestRegistry(
+                    reservationUid: $reservationUid,
+                    propertyId: $submission->propertyId !== '' ? $submission->propertyId : $reservation->propertyId,
+                    checkIn: $submission->checkIn !== '' ? $submission->checkIn : $reservation->checkIn,
+                    checkOut: $submission->checkOut !== '' ? $submission->checkOut : $reservation->checkOut,
+                    occupants: $submission->occupants,
+                    carPlates: $submission->carPlates,
+                    carModel: $submission->carModel,
+                    ipAddress: $submission->ipAddress ?? $admin?->ipAddress
+                );
+            }
+
+            $stmtAudit = $this->pdo->prepare("
+                INSERT INTO `admin_audit_logs` (
+                    `admin_user_id`, `action`, `entity_type`, `entity_id`,
+                    `payload_before`, `payload_after`, `ip_address`, `user_agent`, `created_at`
+                ) VALUES (
+                    :admin_user_id, 'registry_manual_complete', 'reservation', :entity_id,
+                    :payload_before, :payload_after, :ip_address, :user_agent, CURRENT_TIMESTAMP
+                )
+            ");
+            $stmtAudit->execute([
+                ':admin_user_id' => $admin?->adminUserId,
+                ':entity_id' => $reservationUid,
+                ':payload_before' => json_encode([
+                    'registry_completed' => (int) $reservation->registryCompleted,
+                    'door_code' => $existingCode,
+                ], JSON_UNESCAPED_SLASHES),
+                ':payload_after' => json_encode([
+                    'registry_completed' => 1,
+                    'door_code' => $doorCode,
+                ], JSON_UNESCAPED_SLASHES),
+                ':ip_address' => $admin !== null && $admin->ipAddress !== null ? $admin->ipAddress : '127.0.0.1',
+                ':user_agent' => $admin?->userAgent,
+            ]);
+
+            $this->pdo->commit();
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return RegistryFulfillmentResult::systemError('Database transaction failed: ' . $e->getMessage());
+        }
+
+        $lang = $submission !== null ? $submission->lang : $reservation->lang;
+        $guideUrl = rtrim($this->publicSiteUrl, '/') . '/guide/?code=' . urlencode($reservationUid) . '&lang=' . urlencode($lang);
+
+        $freshReservation = $this->reservationRepository->findByUid($reservationUid)
+            ?? $reservation->withRegistryCompleted(new DateTimeImmutable(), $doorCode);
+
+        return RegistryFulfillmentResult::success(
+            reservation: $freshReservation,
+            doorCode: $doorCode,
+            guideUrl: $guideUrl,
+            hostReportDispatched: false,
+            spreadsheetSynced: false
+        );
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function overrideDoorCode(
+        string $reservationUid,
+        string $rawDoorCode,
+        ?AdminContext $admin = null
+    ): DoorCodeResult {
+        $reservation = $this->reservationRepository->findByUid($reservationUid);
+        if ($reservation === null) {
+            return DoorCodeResult::failure('Reservation not found');
+        }
+
+        if (!$reservation->status->isConfirmed()) {
+            return DoorCodeResult::failure('PIN modification is strictly restricted to confirmed reservations.');
+        }
+
+        $trimmed = trim($rawDoorCode);
+        if (!preg_match('/^[0-9]{4,10}#?$/', $trimmed)) {
+            return DoorCodeResult::failure('Invalid PIN format. Code must be 4 to 10 digits optionally ending with #.');
+        }
+
+        $formattedCode = str_ends_with($trimmed, '#') ? $trimmed : $trimmed . '#';
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->reservationRepository->updateDoorCode($reservationUid, $formattedCode);
+
+            $stmtAudit = $this->pdo->prepare("
+                INSERT INTO `admin_audit_logs` (
+                    `admin_user_id`, `action`, `entity_type`, `entity_id`,
+                    `payload_before`, `payload_after`, `ip_address`, `user_agent`, `created_at`
+                ) VALUES (
+                    :admin_user_id, 'pin_override', 'reservation', :entity_id,
+                    :payload_before, :payload_after, :ip_address, :user_agent, CURRENT_TIMESTAMP
+                )
+            ");
+            $stmtAudit->execute([
+                ':admin_user_id' => $admin?->adminUserId,
+                ':entity_id' => $reservationUid,
+                ':payload_before' => json_encode(['door_code' => $reservation->doorCode], JSON_UNESCAPED_SLASHES),
+                ':payload_after' => json_encode(['door_code' => $formattedCode], JSON_UNESCAPED_SLASHES),
+                ':ip_address' => $admin !== null && $admin->ipAddress !== null ? $admin->ipAddress : '127.0.0.1',
+                ':user_agent' => $admin?->userAgent,
+            ]);
+
+            $this->pdo->commit();
+            return DoorCodeResult::success($formattedCode);
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return DoorCodeResult::failure('Failed to update door PIN: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function regenerateDoorCode(
+        string $reservationUid,
+        ?AdminContext $admin = null
+    ): DoorCodeResult {
+        $reservation = $this->reservationRepository->findByUid($reservationUid);
+        if ($reservation === null) {
+            return DoorCodeResult::failure('Reservation not found');
+        }
+
+        if (!$reservation->status->isConfirmed()) {
+            return DoorCodeResult::failure('PIN modification is strictly restricted to confirmed reservations.');
+        }
+
+        $newCode = DoorCodeGenerator::generateRandom();
+
+        $this->pdo->beginTransaction();
+        try {
+            $this->reservationRepository->updateDoorCode($reservationUid, $newCode);
+
+            $stmtAudit = $this->pdo->prepare("
+                INSERT INTO `admin_audit_logs` (
+                    `admin_user_id`, `action`, `entity_type`, `entity_id`,
+                    `payload_before`, `payload_after`, `ip_address`, `user_agent`, `created_at`
+                ) VALUES (
+                    :admin_user_id, 'pin_regenerate', 'reservation', :entity_id,
+                    :payload_before, :payload_after, :ip_address, :user_agent, CURRENT_TIMESTAMP
+                )
+            ");
+            $stmtAudit->execute([
+                ':admin_user_id' => $admin?->adminUserId,
+                ':entity_id' => $reservationUid,
+                ':payload_before' => json_encode(['door_code' => $reservation->doorCode], JSON_UNESCAPED_SLASHES),
+                ':payload_after' => json_encode(['door_code' => $newCode], JSON_UNESCAPED_SLASHES),
+                ':ip_address' => $admin !== null && $admin->ipAddress !== null ? $admin->ipAddress : '127.0.0.1',
+                ':user_agent' => $admin?->userAgent,
+            ]);
+
+            $this->pdo->commit();
+            return DoorCodeResult::success($newCode);
+        } catch (Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            return DoorCodeResult::failure('Failed to regenerate door PIN: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function fulfillBookingConfirmation(
+        Reservation $reservation,
+        array $extra = []
+    ): FulfillmentResult {
+        $errors = [];
+
+        // 1. Spreadsheet Synchronization
+        $spreadsheetSynced = false;
+        try {
+            $spreadsheetSynced = $this->spreadsheetSync->sync($reservation, $extra);
+            if (!$spreadsheetSynced) {
+                $errors[] = 'Spreadsheet synchronization did not complete successfully.';
+            }
+        } catch (Throwable $e) {
+            $errors[] = 'Spreadsheet synchronization error: ' . $e->getMessage();
+        }
+
+        // 2. Localized Reservation Confirmation Email to Primary Guest
+        $guestEmailSent = false;
+        try {
+            $guestSubject = $this->confirmationEmailRenderer->renderGuestSubject($reservation);
+            $guestHtml = $this->confirmationEmailRenderer->renderGuestConfirmationHtml($reservation);
+            $guestEmailSent = $this->emailSender->send($reservation->guestEmail, $guestSubject, $guestHtml);
+            if (!$guestEmailSent) {
+                $errors[] = 'Failed to dispatch confirmation email to Primary Guest.';
+            }
+        } catch (Throwable $e) {
+            $errors[] = 'Primary Guest confirmation email error: ' . $e->getMessage();
+        }
+
+        // 3. Host Notification Email
+        $hostEmailSent = false;
+        try {
+            $hostSubject = $this->confirmationEmailRenderer->renderHostSubject($reservation);
+            $hostHtml = $this->confirmationEmailRenderer->renderHostNotificationHtml($reservation);
+            $hostEmailSent = $this->emailSender->send($this->hostNotificationEmail, $hostSubject, $hostHtml);
+            if (!$hostEmailSent) {
+                $errors[] = 'Failed to dispatch notification email to Host.';
+            }
+        } catch (Throwable $e) {
+            $errors[] = 'Host notification email error: ' . $e->getMessage();
+        }
+
+        return new FulfillmentResult(
+            isGuestEmailSent: $guestEmailSent,
+            isHostEmailSent: $hostEmailSent,
+            isSpreadsheetSynced: $spreadsheetSynced,
+            errors: $errors
+        );
+    }
+
+    /**
+     * Helper to persist guest registry occupant records uniformly.
+     *
+     * @param array<int, OccupantDetails> $occupants
+     */
+    private function insertGuestRegistry(
+        string $reservationUid,
+        string $propertyId,
+        string $checkIn,
+        string $checkOut,
+        array $occupants,
+        ?string $carPlates,
+        ?string $carModel,
+        ?string $ipAddress
+    ): void {
+        $stmtReg = $this->pdo->prepare("
+            INSERT INTO `guest_registries` (
+                `reservation_uid`, `property_id`, `check_in`, `check_out`,
+                `guest_count`, `guests_payload`, `car_plates`, `car_model`,
+                `ip_address`, `created_at`
+            ) VALUES (
+                :reservation_uid, :property_id, :check_in, :check_out,
+                :guest_count, :guests_payload, :car_plates, :car_model,
+                :ip_address, CURRENT_TIMESTAMP
+            )
+        ");
+        $stmtReg->execute([
+            ':reservation_uid' => $reservationUid,
+            ':property_id' => $propertyId,
+            ':check_in' => $checkIn,
+            ':check_out' => $checkOut,
+            ':guest_count' => count($occupants),
+            ':guests_payload' => json_encode(
+                array_map(fn (OccupantDetails $o): array => $o->toArray(), $occupants),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            ),
+            ':car_plates' => $carPlates,
+            ':car_model' => $carModel,
+            ':ip_address' => $ipAddress,
+        ]);
+    }
+}

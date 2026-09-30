@@ -1,34 +1,17 @@
 <?php
 /**
  * OceanViewFlats Secure Guest Registry Processor
- * PHP 8 Compatible
+ * PHP 8 Compatible HTTP Adapter
  */
 
 declare(strict_types=1);
 
-// 1. Load Shared Utilities & Configuration
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
-use OceanViewFlats\Domain\Access\DoorCodeGenerator;
-use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
-
-$config = require __DIR__ . '/config.php';
-
-// Load Unified Translations
-$all_translations = require __DIR__ . '/translations.php';
-$lang = get_validated_lang();
-$t = $all_translations[$lang]['registry'];
-
-// Configuration from Environment Variables ($_ENV)
-define('RECIPIENT_EMAIL', $_ENV['RECIPIENT_EMAIL'] ?? $_SERVER['RECIPIENT_EMAIL'] ?? getenv('RECIPIENT_EMAIL') ?: 'rentals@oceanviewflats.com');
-define('CAPTCHA_SECRET', $_ENV['CAPTCHA_SECRET'] ?? $_SERVER['CAPTCHA_SECRET'] ?? getenv('CAPTCHA_SECRET') ?: 'securesaltsecret');
-define('GOOGLE_SHEET_WEBAPP_URL', $_ENV['GOOGLE_SHEET_WEBAPP_URL'] ?? $_SERVER['GOOGLE_SHEET_WEBAPP_URL'] ?? getenv('GOOGLE_SHEET_WEBAPP_URL') ?: '');
-
-const RATE_LIMIT_FILE = 'ovf_registry_rate_limits.json';
-const MAX_SUBMISSIONS = 5; // Allow more submissions in case they are registering multiple booking sets
-const RATE_LIMIT_WINDOW = 600; // 10 minutes (600 seconds)
-const LOCAL_BACKUP_FILE = 'ovf_registries_backup.json';
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestRegistrySubmission;
 
 // Enforce security headers & CORS policy dynamically
 enforce_security_headers_and_cors(['POST', 'OPTIONS']);
@@ -42,281 +25,107 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // Enforce referer check for actual submissions (prevent direct script browsing)
 enforce_referer_check();
 
-$is_ajax = is_ajax_request();
-
-// 2. Honeypot check (Abuse prevention)
-$honeypot = $_POST['website_url'] ?? '';
-if ($honeypot !== '') {
-    send_json_response(true, $t['msg_success']);
+// Read input from request body with CLI STDIN support and $_POST fallback
+$rawInput = file_get_contents('php://input');
+if (($rawInput === false || $rawInput === '') && PHP_SAPI === 'cli' && defined('STDIN')) {
+    $rawInput = @stream_get_contents(STDIN);
+}
+$data = !empty($rawInput) ? json_decode((string) $rawInput, true) : [];
+if (!is_array($data)) {
+    $data = [];
+}
+if (!empty($_POST)) {
+    $data = array_merge($_POST, $data);
+}
+if (empty($data['ip_address']) && isset($_SERVER['REMOTE_ADDR'])) {
+    $data['ip_address'] = $_SERVER['REMOTE_ADDR'];
 }
 
-// 3. Rate Limiting (Abuse prevention)
-enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, $t['err_rate_limit']);
+// Sanitize input array
+$sanitizedData = [];
+foreach ($data as $key => $val) {
+    if (is_string($val)) {
+        $sanitizedData[$key] = clean_input($val);
+    } elseif (is_array($val)) {
+        $sanitizedData[$key] = array_map(function ($item) {
+            if (is_array($item)) {
+                return array_map(fn ($v) => is_string($v) ? clean_input($v) : $v, $item);
+            }
+            return is_string($item) ? clean_input($item) : $item;
+        }, $val);
+    } else {
+        $sanitizedData[$key] = $val;
+    }
+}
+$data = $sanitizedData;
 
-// 4. Captcha Inputs & Verification
-$captcha_challenge = $_POST['captcha_challenge'] ?? '';
-$captcha_signature = $_POST['captcha_signature'] ?? '';
-$captcha_response = $_POST['captcha_response'] ?? '';
+// Validate language and load translations
+$lang = get_validated_lang((string) ($data['lang'] ?? ''));
+$allTranslations = require __DIR__ . '/translations.php';
+$t = $allTranslations[$lang]['registry'] ?? $allTranslations['en']['registry'];
+$successMessage = $t['msg_success'] ?? 'Registration successfully processed.';
 
-$captcha_check = verify_captcha_challenge($captcha_challenge, $captcha_signature, $captcha_response, CAPTCHA_SECRET, 
-    $all_translations[$lang]['booking']['err_captcha_sign'], 
-    $all_translations[$lang]['booking']['err_captcha_invalid'], 
-    $all_translations[$lang]['booking']['err_captcha_wrong']
+// Honeypot check (Abuse prevention)
+if (!empty($data['website_hp']) || !empty($data['website_url'])) {
+    send_json_response(true, $successMessage);
+}
+
+// Rate Limiting (Abuse prevention)
+const RATE_LIMIT_FILE = 'ovf_registry_rate_limits.json';
+const MAX_SUBMISSIONS = 5;
+const RATE_LIMIT_WINDOW = 600; // 10 minutes
+
+enforce_rate_limit(RATE_LIMIT_FILE, MAX_SUBMISSIONS, RATE_LIMIT_WINDOW, $t['err_rate_limit'] ?? 'Too many requests. Please wait a few minutes and try again.');
+
+// Mathematical CAPTCHA Verification
+$captchaSecret = (string) ($_ENV['CAPTCHA_SECRET'] ?? $_SERVER['CAPTCHA_SECRET'] ?? getenv('CAPTCHA_SECRET') ?: 'securesaltsecret');
+$captchaCheck = verify_captcha_challenge(
+    clean_input((string) ($data['captcha_challenge'] ?? '')),
+    clean_input((string) ($data['captcha_signature'] ?? '')),
+    clean_input((string) ($data['captcha_response'] ?? '')),
+    $captchaSecret,
+    $allTranslations[$lang]['booking']['err_captcha_sign'] ?? 'Security check failed. Please refresh the page and try again.',
+    $allTranslations[$lang]['booking']['err_captcha_invalid'] ?? 'Invalid verification challenge.',
+    $allTranslations[$lang]['booking']['err_captcha_wrong'] ?? 'Incorrect answer to the security verification question.'
 );
-if ($captcha_check !== true) {
-    send_json_response(false, $captcha_check);
+if ($captchaCheck !== true) {
+    send_json_response(false, $captchaCheck);
 }
 
-// 5. Validate Stay Details
-$reservation_code = clean_input($_POST['reservation_code'] ?? $_POST['code'] ?? '');
-$property = clean_input($_POST['property'] ?? '');
-$check_in = clean_input($_POST['check_in'] ?? '');
-$check_out = clean_input($_POST['check_out'] ?? '');
-
-if (!empty($check_in)) {
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $check_in) || strtotime($check_in) === false) {
-        send_json_response(false, $all_translations[$lang]['contact']['err_dates_format']);
-    }
-}
-if (!empty($check_out)) {
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $check_out) || strtotime($check_out) === false) {
-        send_json_response(false, $all_translations[$lang]['contact']['err_dates_format']);
-    }
-}
-if (!empty($check_in) && !empty($check_out)) {
-    if (strtotime($check_in) >= strtotime($check_out)) {
-        send_json_response(false, $all_translations[$lang]['contact']['err_dates_invalid']);
-    }
-}
-
-// 6. Validate & Parse Guests List
-$guest_count_raw = $_POST['guest_count'] ?? '1';
-$guest_count = min(6, max(1, (int)$guest_count_raw));
-$guests = [];
-
-for ($i = 1; $i <= $guest_count; $i++) {
-    $g_name = clean_input($_POST["guest_name_$i"] ?? '');
-    $g_age_raw = $_POST["guest_age_$i"] ?? '';
-    $g_doc_type = clean_input($_POST["guest_doc_type_$i"] ?? '');
-    $g_doc_num = clean_input($_POST["guest_doc_num_$i"] ?? '');
-
-    if (empty($g_name) || strlen($g_name) < 2 || strlen($g_name) > 100) {
-        send_json_response(false, sprintf($t['err_guest_name'], $i));
-    }
-
-    $g_age = (int)$g_age_raw;
-    if ($g_age_raw === '' || $g_age < 0 || $g_age > 120) {
-        send_json_response(false, sprintf($t['err_guest_age'], $i));
-    }
-
-    $valid_types = ['Passport', 'National ID', 'Driver License', 'Other ID', 'Cédula de Ciudadanía', 'Tarjeta de Identidad', 'Registro Civil'];
-    if (!in_array($g_doc_type, $valid_types, true)) {
-        $g_doc_type = 'Other ID';
-    }
-
-    if (empty($g_doc_num) || strlen($g_doc_num) < 2 || strlen($g_doc_num) > 50) {
-        send_json_response(false, sprintf($t['err_guest_doc'], $i));
-    }
-
-    $guests[] = [
-        'index' => $i,
-        'name' => $g_name,
-        'age' => $g_age,
-        'doc_type' => $g_doc_type,
-        'doc_num' => $g_doc_num
-    ];
-}
-
-// 7. Validate Optional Car Registration
-$car_plates = clean_input($_POST['car_plates'] ?? '');
-$car_model = clean_input($_POST['car_model'] ?? '');
-
-if (strlen($car_plates) > 20) {
-    send_json_response(false, $t['err_car_plates']);
-}
-if (strlen($car_model) > 100) {
-    send_json_response(false, $t['err_car_model']);
-}
-
-// 8. Database Persistence, Dynamic Door Code Calculation & ADR 0001 Registry Completion
-$pdo = null;
-if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
-    try {
+// Database & Service Resolution
+if (isset($GLOBALS['TEST_LIFECYCLE_SERVICE']) && $GLOBALS['TEST_LIFECYCLE_SERVICE'] instanceof GuestLifecycleFulfillmentServiceInterface) {
+    $service = $GLOBALS['TEST_LIFECYCLE_SERVICE'];
+} else {
+    if (isset($GLOBALS['TEST_PDO']) && $GLOBALS['TEST_PDO'] instanceof PDO) {
+        $pdo = $GLOBALS['TEST_PDO'];
+    } else {
+        $config = require __DIR__ . '/config.php';
         $pdo = get_db_connection($config['db']);
-    } catch (PDOException $e) {
-        error_log('Registry DB connection error: ' . $e->getMessage());
     }
+    $service = GuestLifecycleFulfillmentService::createDefault($pdo);
 }
 
-$matchedUid = $reservation_code;
-$guestPhone = '';
-$primaryGuestDoc = (string)$guests[0]['doc_num'];
-
-if ($pdo !== null) {
-    try {
-        $repo = new PdoReservationRepository($pdo);
-        $existingRes = null;
-        if ($reservation_code !== '') {
-            $existingRes = $repo->findByUid($reservation_code);
-        } elseif ($property !== '' && $check_in !== '' && $check_out !== '') {
-            $existingRes = $repo->findByPropertyAndDates($property, $check_in, $check_out);
-        }
-
-        if ($existingRes !== null) {
-            $matchedUid = $existingRes->reservationUid;
-            $guestPhone = $existingRes->guestPhone;
-        }
-
-        // Calculate dynamic 7-digit door code (+ #)
-        $doorCode = DoorCodeGenerator::generate($primaryGuestDoc, $guestPhone);
-
-        if ($existingRes !== null) {
-            $repo->markRegistryCompleted($matchedUid, null, $doorCode);
-        }
-
-        // Record structured entry in guest_registries table
-        $stmtReg = $pdo->prepare("
-            INSERT INTO `guest_registries` (
-                `reservation_uid`, `property_id`, `check_in`, `check_out`,
-                `guest_count`, `guests_payload`, `car_plates`, `car_model`, `ip_address`
-            ) VALUES (
-                :reservation_uid, :property_id, :check_in, :check_out,
-                :guest_count, :guests_payload, :car_plates, :car_model, :ip_address
-            )
-        ");
-        $stmtReg->execute([
-            ':reservation_uid' => $matchedUid ?: ('unmatched_' . bin2hex(random_bytes(4))),
-            ':property_id' => $property ?: 'unknown',
-            ':check_in' => $check_in ?: date('Y-m-d'),
-            ':check_out' => $check_out ?: date('Y-m-d', strtotime('+1 day')),
-            ':guest_count' => count($guests),
-            ':guests_payload' => json_encode($guests, JSON_UNESCAPED_UNICODE),
-            ':car_plates' => $car_plates ?: null,
-            ':car_model' => $car_model ?: null,
-            ':ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
-        ]);
-    } catch (Throwable $e) {
-        error_log('Guest registry DB logging error: ' . $e->getMessage());
-        $doorCode = DoorCodeGenerator::generate($primaryGuestDoc, $guestPhone);
-    }
-} else {
-    $doorCode = DoorCodeGenerator::generate($primaryGuestDoc, $guestPhone);
-}
-
-// 8.1 Store Locally (Fallback Safety)
-$temp_dir = sys_get_temp_dir();
-$backup_path = $temp_dir . '/' . LOCAL_BACKUP_FILE;
-$backup_data = [];
-if (file_exists($backup_path)) {
-    $backup_content = @file_get_contents($backup_path);
-    if ($backup_content !== false) {
-        $backup_data = json_decode($backup_content, true) ?: [];
-    }
-}
-$new_entry = [
-    'timestamp' => date('Y-m-d H:i:s'),
-    'reservation_code' => $reservation_code,
-    'matched_uid' => $matchedUid,
-    'door_code' => $doorCode,
-    'property' => $property,
-    'check_in' => $check_in,
-    'check_out' => $check_out,
-    'car_plates' => $car_plates,
-    'car_model' => $car_model,
-    'guests' => $guests,
-    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'Unknown'
-];
-$backup_data[] = $new_entry;
-@file_put_contents($backup_path, json_encode($backup_data, JSON_PRETTY_PRINT), LOCK_EX);
-
-// 9. Forward to Google Spreadsheet Web App (if configured)
-$google_sheet_success = false;
-$http_code = 0;
-$webhook_url = GOOGLE_SHEET_WEBAPP_URL;
-if (!empty($webhook_url) && filter_var($webhook_url, FILTER_VALIDATE_URL)) {
-    $ch = curl_init($webhook_url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($new_entry));
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Content-Type: application/json',
-        'User-Agent: OceanViewFlats Guest Registry PHP'
+try {
+    $submission = GuestRegistrySubmission::fromArray($data);
+    $result = $service->submitRegistry($submission);
+} catch (InvalidArgumentException $e) {
+    http_response_code(400);
+    send_json_response(false, $e->getMessage(), [
+        'errors' => [$e->getMessage()],
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($http_code === 200) {
-        $google_sheet_success = true;
-    }
 }
 
-// 10. Construct and Send Email
-$subject = sprintf($t['email_subject'], ($property ?: 'Unspecified'));
-$subject = strip_newlines($subject);
-
-// Format plain text email
-$email_body = "OceanViewFlats Official Guest Registry Report\n";
-$email_body .= "==================================================\n\n";
-$email_body .= "STAY INFORMATION\n";
-$email_body .= "--------------------------------------------------\n";
-$email_body .= "Property:      " . ($property ? "OceanViewFlats $property" : "Not specified") . "\n";
-$email_body .= "Check-in:      " . ($check_in ?: "Not specified") . "\n";
-$email_body .= "Check-out:     " . ($check_out ?: "Not specified") . "\n";
-$email_body .= "Total Guests:  " . count($guests) . "\n\n";
-
-if (!empty($car_plates) || !empty($car_model)) {
-    $email_body .= "VEHICLE INFORMATION (OPTIONAL)\n";
-    $email_body .= "--------------------------------------------------\n";
-    $email_body .= "Plates:        " . ($car_plates ?: "None") . "\n";
-    $email_body .= "Make & Model:  " . ($car_model ?: "None") . "\n\n";
+if (!$result->success) {
+    $firstError = !empty($result->errors) ? $result->errors[0] : 'Validation failed';
+    http_response_code(400);
+    send_json_response(false, $firstError, [
+        'errors' => $result->errors,
+    ]);
 }
 
-$email_body .= "REGISTERED GUESTS DETAILS\n";
-$email_body .= "--------------------------------------------------\n";
-foreach ($guests as $g) {
-    $email_body .= "Guest #" . $g['index'] . ":\n";
-    $email_body .= "  Name:     " . strip_newlines($g['name']) . "\n";
-    $email_body .= "  ID/Doc:   " . strip_newlines($g['doc_type']) . " (" . strip_newlines($g['doc_num']) . ")\n";
-    $email_body .= "  Age:      " . $g['age'] . "\n";
-    $email_body .= "--------------------------------------------------\n";
-}
-
-$email_body .= "\nSMART LOCK ACCESS PIN (ACTION REQUIRED)\n";
-$email_body .= "--------------------------------------------------\n";
-$email_body .= "Generated Door PIN:  " . $doorCode . "\n";
-$email_body .= "Primary Guest Doc:   " . strip_newlines($primaryGuestDoc) . "\n";
-$email_body .= "Lock Instructions:   Program this 7-digit code (ending in #)\n";
-$email_body .= "                     into the apartment smart lock companion app.\n";
-
-$email_body .= "\nSYSTEM LOGS\n";
-$email_body .= "--------------------------------------------------\n";
-$email_body .= "Submission IP:  " . ($_SERVER['REMOTE_ADDR'] ?? 'Unknown') . "\n";
-$email_body .= "Timestamp:      " . date('Y-m-d H:i:s') . "\n";
-$email_body .= "Local Backup:   Logged successfully.\n";
-$email_body .= "Google Sheet:   " . ($google_sheet_success ? "Recorded successfully." : (empty($webhook_url) ? "Not configured." : "FAILED (HTTP $http_code)")) . "\n";
-$email_body .= "==================================================\n";
-
-$headers = [
-    'From' => 'no-reply@oceanviewflats.com',
-    'Reply-To' => 'rentals@oceanviewflats.com',
-    'Content-Type' => 'text/plain; charset=UTF-8',
-    'X-Mailer' => 'PHP/' . phpversion()
-];
-
-// Send the mail
-$mail_sent = mail(RECIPIENT_EMAIL, $subject, $email_body, $headers);
-
-$guideUrl = $matchedUid ? "/guide/?code={$matchedUid}&lang={$lang}" : "/guide/?lang={$lang}";
-$extraResponse = [
-    'reservation_code' => $matchedUid,
-    'guide_url' => $guideUrl,
-    'door_code' => $doorCode,
-];
-
-if ($mail_sent) {
-    send_json_response(true, $t['msg_success'], $extraResponse);
-} else {
-    send_json_response(true, $t['msg_success_backed_up'], $extraResponse);
-}
+http_response_code(200);
+send_json_response(true, $successMessage, [
+    'door_code' => $result->doorCode,
+    'guide_url' => $result->guideUrl,
+    'reservation_code' => $result->reservation->reservationUid ?? $submission->reservationCode,
+]);

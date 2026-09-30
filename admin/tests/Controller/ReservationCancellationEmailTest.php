@@ -14,6 +14,8 @@ use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
@@ -36,6 +38,7 @@ final class ReservationCancellationEmailTest extends TestCase
     private InMemoryEmailSender $emailSender;
     private InMemoryMercadoPagoRefundClient $refundClient;
     private CancellationEmailRenderer $cancellationEmailRenderer;
+    private GuestLifecycleFulfillmentServiceInterface $lifecycleService;
     private ReservationController $controller;
 
     /**
@@ -145,14 +148,20 @@ final class ReservationCancellationEmailTest extends TestCase
         $this->refundClient = new InMemoryMercadoPagoRefundClient();
         $this->cancellationEmailRenderer = new CancellationEmailRenderer('https://oceanviewflats.com');
 
+        $this->lifecycleService = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'email_sender' => $this->emailSender,
+            'public_site_url' => 'https://oceanviewflats.com',
+            'confirmation_email_renderer' => $this->confirmationEmailRenderer,
+        ]);
+
         $this->controller = new ReservationController(
             repository: $this->repository,
             viewRenderer: $this->viewRenderer,
             auditLogger: $this->auditLogger,
             ledger: $this->ledger,
             quoteEngine: $this->quoteEngine,
-            emailRenderer: $this->confirmationEmailRenderer,
             emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
             publicSiteUrl: 'https://oceanviewflats.com',
             refundClient: $this->refundClient,
             cancellationEmailRenderer: $this->cancellationEmailRenderer
@@ -341,8 +350,8 @@ final class ReservationCancellationEmailTest extends TestCase
             auditLogger: $this->auditLogger,
             ledger: $this->ledger,
             quoteEngine: $this->quoteEngine,
-            emailRenderer: $this->confirmationEmailRenderer,
             emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
             publicSiteUrl: 'https://oceanviewflats.com',
             refundClient: $this->refundClient,
             cancellationEmailRenderer: $mockRenderer

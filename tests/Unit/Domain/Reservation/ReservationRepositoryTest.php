@@ -154,4 +154,42 @@ final class ReservationRepositoryTest extends TestCase
         $notFound = $repo->findByPropertyAndDates('1707', '2026-11-15', '2026-11-20');
         $this->assertNull($notFound);
     }
+
+    public function testInMemoryRepositoryUpdateDoorCode(): void
+    {
+        $repo = new InMemoryReservationRepository();
+        $reservation = $this->createSampleReservation('ovf_inmem_pin');
+        $repo->save($reservation);
+
+        $updated = $repo->updateDoorCode('ovf_inmem_pin', '0999888#');
+        $this->assertNotNull($updated);
+        $this->assertSame('0999888#', $updated->doorCode);
+
+        $fetched = $repo->findByUid('ovf_inmem_pin');
+        $this->assertNotNull($fetched);
+        $this->assertSame('0999888#', $fetched->doorCode);
+
+        $notFound = $repo->updateDoorCode('ovf_nonexistent', '0999888#');
+        $this->assertNull($notFound);
+    }
+
+    public function testPdoRepositoryUpdateDoorCode(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $repo = new PdoReservationRepository($pdo);
+        $reservation = $this->createSampleReservation('ovf_pdo_pin');
+        $repo->save($reservation);
+
+        $updated = $repo->updateDoorCode('ovf_pdo_pin', '0111222#');
+        $this->assertNotNull($updated);
+        $this->assertSame('0111222#', $updated->doorCode);
+
+        $fetched = $repo->findByUid('ovf_pdo_pin');
+        $this->assertNotNull($fetched);
+        $this->assertSame('0111222#', $fetched->doorCode);
+
+        $notFound = $repo->updateDoorCode('ovf_nonexistent', '0111222#');
+        $this->assertNull($notFound);
+    }
 }
+

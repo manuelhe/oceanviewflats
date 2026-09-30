@@ -398,6 +398,22 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         return $this->rowToEntity($row);
     }
 
+    public function updateDoorCode(string $reservationUid, string $doorCode): ?Reservation
+    {
+        $stmt = $this->pdo->prepare("
+            UPDATE `reservations`
+            SET `door_code` = :code,
+                `updated_at` = CURRENT_TIMESTAMP
+            WHERE `reservation_uid` = :uid
+        ");
+        $stmt->execute([
+            ':code' => $doorCode,
+            ':uid' => $reservationUid,
+        ]);
+
+        return $this->findByUid($reservationUid);
+    }
+
     /**
      * @param array<string, mixed> $row
      */
