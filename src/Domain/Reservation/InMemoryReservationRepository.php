@@ -42,7 +42,10 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
             updatedAt: $reservation->updatedAt,
             registryCompleted: $reservation->registryCompleted,
             registryCompletedAt: $reservation->registryCompletedAt,
-            doorCode: $reservation->doorCode
+            doorCode: $reservation->doorCode,
+            source: $reservation->source,
+            notes: $reservation->notes,
+            refundedAmount: $reservation->refundedAmount
         );
 
         $this->records[$saved->reservationUid] = $saved;

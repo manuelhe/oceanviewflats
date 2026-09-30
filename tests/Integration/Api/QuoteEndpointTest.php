@@ -8,6 +8,18 @@ use PHPUnit\Framework\TestCase;
 
 final class QuoteEndpointTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        @unlink(sys_get_temp_dir() . '/ovf_quote_rate_limits.json');
+    }
+
+    protected function tearDown(): void
+    {
+        @unlink(sys_get_temp_dir() . '/ovf_quote_rate_limits.json');
+        parent::tearDown();
+    }
+
     public function testQuoteEndpointReturnsSuccessfulQuoteFor1606(): void
     {
         $res = $this->callEndpoint([

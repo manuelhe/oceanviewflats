@@ -39,7 +39,10 @@ final class Reservation
         public readonly ?DateTimeImmutable $updatedAt = null,
         public readonly bool $registryCompleted = false,
         public readonly ?DateTimeImmutable $registryCompletedAt = null,
-        public readonly ?string $doorCode = null
+        public readonly ?string $doorCode = null,
+        public readonly string $source = 'web',
+        public readonly ?string $notes = null,
+        public readonly float $refundedAmount = 0.0
     ) {
         if ($this->reservationUid === '') {
             throw new InvalidArgumentException('Reservation UID cannot be empty');
@@ -52,6 +55,146 @@ final class Reservation
                 sprintf('Check-out date (%s) must be after check-in date (%s)', $this->checkOut, $this->checkIn)
             );
         }
+    }
+
+    /**
+     * Factory method to create a new reservation instance with standard defaults.
+     */
+    public static function create(
+        string $reservationUid,
+        string $propertyId,
+        string $guestName,
+        string $guestEmail,
+        string $guestPhone,
+        string $checkIn,
+        string $checkOut,
+        float $totalPrice,
+        ReservationStatus $status = ReservationStatus::PENDING_PAYMENT,
+        ?string $paymentMethodId = null,
+        ?int $id = null,
+        ?string $mercadopagoPreferenceId = null,
+        ?string $mercadopagoPaymentId = null,
+        ?string $paymentStatus = null,
+        ?string $paymentDetail = null,
+        string $lang = 'en',
+        ?DateTimeImmutable $createdAt = null,
+        ?DateTimeImmutable $updatedAt = null,
+        bool $registryCompleted = false,
+        ?DateTimeImmutable $registryCompletedAt = null,
+        ?string $doorCode = null,
+        string $source = 'web',
+        ?string $notes = null,
+        float $refundedAmount = 0.0
+    ): self {
+        return new self(
+            reservationUid: $reservationUid,
+            propertyId: $propertyId,
+            guestName: $guestName,
+            guestEmail: $guestEmail,
+            guestPhone: $guestPhone,
+            checkIn: $checkIn,
+            checkOut: $checkOut,
+            totalPrice: $totalPrice,
+            status: $status,
+            paymentMethodId: $paymentMethodId,
+            id: $id,
+            mercadopagoPreferenceId: $mercadopagoPreferenceId,
+            mercadopagoPaymentId: $mercadopagoPaymentId,
+            paymentStatus: $paymentStatus,
+            paymentDetail: $paymentDetail,
+            lang: $lang,
+            createdAt: $createdAt,
+            updatedAt: $updatedAt,
+            registryCompleted: $registryCompleted,
+            registryCompletedAt: $registryCompletedAt,
+            doorCode: $doorCode,
+            source: $source,
+            notes: $notes,
+            refundedAmount: $refundedAmount
+        );
+    }
+
+    /**
+     * Factory method to hydrate a reservation from an associative array.
+     * Supports both snake_case and camelCase keys.
+     *
+     * @param array<string, mixed> $data
+     */
+    public static function fromArray(array $data): self
+    {
+        $statusRaw = $data['status'] ?? ReservationStatus::PENDING_PAYMENT;
+        if ($statusRaw instanceof ReservationStatus) {
+            $status = $statusRaw;
+        } elseif (is_string($statusRaw)) {
+            $status = ReservationStatus::tryFrom($statusRaw) ?? ReservationStatus::PENDING_PAYMENT;
+        } else {
+            $status = ReservationStatus::PENDING_PAYMENT;
+        }
+
+        $createdAtRaw = $data['created_at'] ?? $data['createdAt'] ?? null;
+        $createdAt = null;
+        if ($createdAtRaw instanceof DateTimeImmutable) {
+            $createdAt = $createdAtRaw;
+        } elseif (is_string($createdAtRaw) && $createdAtRaw !== '') {
+            $createdAt = new DateTimeImmutable($createdAtRaw);
+        }
+
+        $updatedAtRaw = $data['updated_at'] ?? $data['updatedAt'] ?? null;
+        $updatedAt = null;
+        if ($updatedAtRaw instanceof DateTimeImmutable) {
+            $updatedAt = $updatedAtRaw;
+        } elseif (is_string($updatedAtRaw) && $updatedAtRaw !== '') {
+            $updatedAt = new DateTimeImmutable($updatedAtRaw);
+        }
+
+        $registryCompletedAtRaw = $data['registry_completed_at'] ?? $data['registryCompletedAt'] ?? null;
+        $registryCompletedAt = null;
+        if ($registryCompletedAtRaw instanceof DateTimeImmutable) {
+            $registryCompletedAt = $registryCompletedAtRaw;
+        } elseif (is_string($registryCompletedAtRaw) && $registryCompletedAtRaw !== '') {
+            $registryCompletedAt = new DateTimeImmutable($registryCompletedAtRaw);
+        }
+
+        $regCompleted = $data['registry_completed'] ?? $data['registryCompleted'] ?? false;
+
+        return new self(
+            reservationUid: (string) ($data['reservation_uid'] ?? $data['reservationUid'] ?? ''),
+            propertyId: (string) ($data['property_id'] ?? $data['propertyId'] ?? ''),
+            guestName: (string) ($data['guest_name'] ?? $data['guestName'] ?? ''),
+            guestEmail: (string) ($data['guest_email'] ?? $data['guestEmail'] ?? ''),
+            guestPhone: (string) ($data['guest_phone'] ?? $data['guestPhone'] ?? ''),
+            checkIn: (string) ($data['check_in'] ?? $data['checkIn'] ?? ''),
+            checkOut: (string) ($data['check_out'] ?? $data['checkOut'] ?? ''),
+            totalPrice: (float) ($data['total_price'] ?? $data['totalPrice'] ?? 0.0),
+            status: $status,
+            paymentMethodId: isset($data['payment_method_id']) || isset($data['paymentMethodId'])
+                ? (string) ($data['payment_method_id'] ?? $data['paymentMethodId'])
+                : null,
+            id: isset($data['id']) ? (int) $data['id'] : null,
+            mercadopagoPreferenceId: isset($data['mercadopago_preference_id']) || isset($data['mercadopagoPreferenceId'])
+                ? (string) ($data['mercadopago_preference_id'] ?? $data['mercadopagoPreferenceId'])
+                : null,
+            mercadopagoPaymentId: isset($data['mercadopago_payment_id']) || isset($data['mercadopagoPaymentId'])
+                ? (string) ($data['mercadopago_payment_id'] ?? $data['mercadopagoPaymentId'])
+                : null,
+            paymentStatus: isset($data['payment_status']) || isset($data['paymentStatus'])
+                ? (string) ($data['payment_status'] ?? $data['paymentStatus'])
+                : null,
+            paymentDetail: isset($data['payment_detail']) || isset($data['paymentDetail'])
+                ? (string) ($data['payment_detail'] ?? $data['paymentDetail'])
+                : null,
+            lang: (string) ($data['lang'] ?? 'en'),
+            createdAt: $createdAt,
+            updatedAt: $updatedAt,
+            registryCompleted: (bool) $regCompleted,
+            registryCompletedAt: $registryCompletedAt,
+            doorCode: isset($data['door_code']) || isset($data['doorCode'])
+                ? (string) ($data['door_code'] ?? $data['doorCode'])
+                : null,
+            source: (string) ($data['source'] ?? 'web'),
+            notes: isset($data['notes']) ? (string) $data['notes'] : null,
+            refundedAmount: (float) ($data['refunded_amount'] ?? $data['refundedAmount'] ?? 0.0)
+        );
     }
 
     /**
@@ -156,7 +299,10 @@ final class Reservation
             updatedAt: $updatedAt ?? new DateTimeImmutable(),
             registryCompleted: $this->registryCompleted,
             registryCompletedAt: $this->registryCompletedAt,
-            doorCode: $this->doorCode
+            doorCode: $this->doorCode,
+            source: $this->source,
+            notes: $this->notes,
+            refundedAmount: $this->refundedAmount
         );
     }
 
@@ -188,7 +334,10 @@ final class Reservation
             updatedAt: $this->updatedAt,
             registryCompleted: true,
             registryCompletedAt: $timestamp,
-            doorCode: $doorCode ?? $this->doorCode
+            doorCode: $doorCode ?? $this->doorCode,
+            source: $this->source,
+            notes: $this->notes,
+            refundedAmount: $this->refundedAmount
         );
     }
 
@@ -218,7 +367,82 @@ final class Reservation
             updatedAt: $this->updatedAt,
             registryCompleted: $this->registryCompleted,
             registryCompletedAt: $this->registryCompletedAt,
-            doorCode: $doorCode
+            doorCode: $doorCode,
+            source: $this->source,
+            notes: $this->notes,
+            refundedAmount: $this->refundedAmount
+        );
+    }
+
+    /**
+     * Creates an updated clone recording an additional refund amount and optional note/status.
+     */
+    public function withRefund(
+        float $additionalRefundAmount,
+        ?string $notes = null,
+        ?ReservationStatus $status = null,
+        ?string $paymentStatus = null,
+        ?DateTimeImmutable $updatedAt = null
+    ): self {
+        $newRefundedAmount = round($this->refundedAmount + max(0.0, $additionalRefundAmount), 2);
+        return new self(
+            reservationUid: $this->reservationUid,
+            propertyId: $this->propertyId,
+            guestName: $this->guestName,
+            guestEmail: $this->guestEmail,
+            guestPhone: $this->guestPhone,
+            checkIn: $this->checkIn,
+            checkOut: $this->checkOut,
+            totalPrice: $this->totalPrice,
+            status: $status ?? $this->status,
+            paymentMethodId: $this->paymentMethodId,
+            id: $this->id,
+            mercadopagoPreferenceId: $this->mercadopagoPreferenceId,
+            mercadopagoPaymentId: $this->mercadopagoPaymentId,
+            paymentStatus: $paymentStatus ?? $this->paymentStatus,
+            paymentDetail: $this->paymentDetail,
+            lang: $this->lang,
+            createdAt: $this->createdAt,
+            updatedAt: $updatedAt ?? new DateTimeImmutable(),
+            registryCompleted: $this->registryCompleted,
+            registryCompletedAt: $this->registryCompletedAt,
+            doorCode: $this->doorCode,
+            source: $this->source,
+            notes: $notes ?? $this->notes,
+            refundedAmount: $newRefundedAmount
+        );
+    }
+
+    /**
+     * Creates an updated clone with updated notes.
+     */
+    public function withNotes(?string $notes): self
+    {
+        return new self(
+            reservationUid: $this->reservationUid,
+            propertyId: $this->propertyId,
+            guestName: $this->guestName,
+            guestEmail: $this->guestEmail,
+            guestPhone: $this->guestPhone,
+            checkIn: $this->checkIn,
+            checkOut: $this->checkOut,
+            totalPrice: $this->totalPrice,
+            status: $this->status,
+            paymentMethodId: $this->paymentMethodId,
+            id: $this->id,
+            mercadopagoPreferenceId: $this->mercadopagoPreferenceId,
+            mercadopagoPaymentId: $this->mercadopagoPaymentId,
+            paymentStatus: $this->paymentStatus,
+            paymentDetail: $this->paymentDetail,
+            lang: $this->lang,
+            createdAt: $this->createdAt,
+            updatedAt: new DateTimeImmutable(),
+            registryCompleted: $this->registryCompleted,
+            registryCompletedAt: $this->registryCompletedAt,
+            doorCode: $this->doorCode,
+            source: $this->source,
+            notes: $notes,
+            refundedAmount: $this->refundedAmount
         );
     }
 
@@ -237,6 +461,8 @@ final class Reservation
             'check_in' => $this->checkIn,
             'check_out' => $this->checkOut,
             'total_price' => $this->totalPrice,
+            'refunded_amount' => $this->refundedAmount,
+            'source' => $this->source,
             'status' => $this->status->value,
             'payment_method_id' => $this->paymentMethodId,
             'mercadopago_preference_id' => $this->mercadopagoPreferenceId,
@@ -247,6 +473,7 @@ final class Reservation
             'registry_completed' => $this->registryCompleted,
             'registry_completed_at' => $this->registryCompletedAt?->format('Y-m-d H:i:s'),
             'door_code' => $this->doorCode,
+            'notes' => $this->notes,
             'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
         ];
