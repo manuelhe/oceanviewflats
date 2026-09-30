@@ -1,0 +1,102 @@
+name: Admin Interface Deployment (SFTP)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'admin/**'
+      - 'src/Domain/**'
+      - 'scripts/**'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/admin-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin-deploy:
+    name: Admin Interface Deployment (SFTP)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo, pdo_mysql, sqlite3, argon2, json
+          coverage: none
+
+      - name: Install Composer Dependencies (Dev & Quality Gates)
+        run: composer install --prefer-dist --no-interaction
+
+      - name: PHP Syntax Check (admin/)
+        run: find admin -name "*.php" -exec php -l {} +
+
+      - name: Run PHPStan Static Analysis (Level 8)
+        run: composer admin:phpstan
+
+      - name: Run Admin Test Suite
+        run: composer admin:test
+
+      - name: Run Shared Domain Regression Test Suite
+        run: ./vendor/bin/phpunit --filter Domain
+
+      - name: Install Production Composer Dependencies
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+      - name: Inject Environment Variables into .htaccess
+        run: |
+          echo "" >> admin/public/.htaccess
+          echo "SetEnv APP_ENV \"production\"" >> admin/public/.htaccess
+          echo "SetEnv DB_HOST \"${{ secrets.DB_HOST }}\"" >> admin/public/.htaccess
+          echo "SetEnv DB_NAME \"${{ secrets.DB_NAME }}\"" >> admin/public/.htaccess
+          echo "SetEnv DB_USER \"${{ secrets.DB_USER }}\"" >> admin/public/.htaccess
+          echo "SetEnv DB_PASS \"${{ secrets.DB_PASS }}\"" >> admin/public/.htaccess
+          echo "SetEnv MERCADOPAGO_ACCESS_TOKEN \"${{ secrets.MERCADOPAGO_ACCESS_TOKEN }}\"" >> admin/public/.htaccess
+          echo "SetEnv MERCADOPAGO_PUBLIC_KEY \"${{ secrets.MERCADOPAGO_PUBLIC_KEY }}\"" >> admin/public/.htaccess
+          echo "SetEnv MERCADOPAGO_SANDBOX \"${{ secrets.MERCADOPAGO_SANDBOX }}\"" >> admin/public/.htaccess
+          echo "SetEnv PROPERTY_1606_DOOR_CODE \"${{ secrets.PROPERTY_1606_DOOR_CODE }}\"" >> admin/public/.htaccess
+          echo "SetEnv PROPERTY_1606_WIFI_SSID \"${{ secrets.PROPERTY_1606_WIFI_SSID }}\"" >> admin/public/.htaccess
+          echo "SetEnv PROPERTY_1606_WIFI_PASSWORD \"${{ secrets.PROPERTY_1606_WIFI_PASSWORD }}\"" >> admin/public/.htaccess
+          echo "SetEnv PROPERTY_1707_DOOR_CODE \"${{ secrets.PROPERTY_1707_DOOR_CODE }}\"" >> admin/public/.htaccess
+          echo "SetEnv PROPERTY_1707_WIFI_SSID \"${{ secrets.PROPERTY_1707_WIFI_SSID }}\"" >> admin/public/.htaccess
+          echo "SetEnv PROPERTY_1707_WIFI_PASSWORD \"${{ secrets.PROPERTY_1707_WIFI_PASSWORD }}\"" >> admin/public/.htaccess
+          if [ -n "${{ secrets.OVF_ADMIN_SESSION_SECRET }}" ]; then
+            echo "SetEnv OVF_ADMIN_SESSION_SECRET \"${{ secrets.OVF_ADMIN_SESSION_SECRET }}\"" >> admin/public/.htaccess
+          fi
+
+      - name: Stage Deployment Payload
+        run: |
+          rm -rf staging
+          mkdir -p staging/src
+          cp -R admin staging/admin
+          rm -rf staging/admin/tests staging/admin/phpunit.xml staging/admin/phpstan.neon staging/admin/.phpunit*
+          cp -R src/Domain staging/src/
+          cp -R vendor staging/vendor
+          cp -R scripts staging/scripts
+
+      - name: Compute Remote Destination Path
+        run: |
+          if [ -n "${{ secrets.FTP_ADMIN_REMOTE_PATH }}" ]; then
+            REMOTE_DEST="${{ secrets.FTP_ADMIN_REMOTE_PATH }}"
+          else
+            REMOTE_DEST="$(dirname "${{ secrets.FTP_REMOTE_PATH }}")"
+          fi
+          echo "REMOTE_DESTINATION=$REMOTE_DEST" >> $GITHUB_ENV
+
+      - name: Deploy to SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.6
+        with:
+          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ secrets.FTP_SERVER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: 2223
+          local_path: './staging/*'
+          remote_path: ${{ env.REMOTE_DESTINATION }}
+          sftpArgs: '-o ConnectTimeout=5'

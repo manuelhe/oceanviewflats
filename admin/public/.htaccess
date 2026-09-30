@@ -1,0 +1,53 @@
+# =============================================================================
+# OceanViewFlats - Admin Subdomain Apache Configuration (Pattern A)
+# Subdomain: admin.oceanviewflats.com
+# DocumentRoot: /home/<user>/admin/public
+# =============================================================================
+
+# 1. Directory Indexing & Directory Browsing
+DirectoryIndex index.php
+Options -Indexes
+
+# 2. Block direct web access to hidden files and directories (.env, .git, .htaccess, etc.)
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order Deny,Allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 3. HTTP Security Headers
+<IfModule mod_headers.c>
+    Header set X-Frame-Options "DENY"
+    Header set X-Content-Type-Options "nosniff"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 4. Front-Controller URL Rewriting
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Route all non-file and non-directory requests to the front-controller
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# =============================================================================
+# Environment Variables (Injected during deployment)
+# =============================================================================
+# Production secrets and environment variables are injected below during deployment.
+# Do not commit live credentials to version control.
+#
+# Examples:
+# SetEnv DB_HOST "localhost"
+# SetEnv DB_NAME "oceanview_db"
+# SetEnv DB_USER "oceanview_user"
+# SetEnv DB_PASS "secret_password"
+# SetEnv MERCADOPAGO_ACCESS_TOKEN "APP_USR-..."
+# SetEnv MERCADOPAGO_PUBLIC_KEY "APP_USR-..."
+# SetEnv PROPERTY_ID "1"
+# SetEnv APP_ENV "production"

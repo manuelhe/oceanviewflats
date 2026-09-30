@@ -1,49 +1,55 @@
 # OceanViewFlats System Architecture
 
-Welcome to the **OceanViewFlats** direct booking system. This document outlines the core architecture, static site compilation pipelines, secure PHP REST APIs, and database lifecycle configurations.
+Welcome to the **OceanViewFlats** direct booking and property management system. This document outlines the core architecture, static site compilation pipelines, secure PHP REST APIs, administrative portal, and database lifecycle configurations.
 
 ---
 
 ## 🏗️ Technical Architecture & Philosophy
 
-OceanViewFlats is engineered as a high-performance **custom Static Site Generator (SSG)** paired with a secure, decoupled **PHP REST API backend**. It is optimized for near-instantaneous page-load speeds, high SEO ranking, robust security, and seamless direct-booking flows.
+OceanViewFlats is engineered as a high-performance, hybrid platform comprising three integrated layers:
+1. **Public Direct-Booking Portal**: A custom zero-hydration **Static Site Generator (SSG)** paired with lightweight Vanilla JavaScript islands and a hardened PHP REST backend.
+2. **Administrative Management Portal (PMS)**: A server-rendered PHP 8.3 application enhanced with **HTMX** and Tailwind CSS, hosted on an isolated subdomain (`admin.oceanviewflats.com`) using **cPanel Pattern A** topology.
+3. **Shared Core Domain Layer**: Reusable, framework-agnostic domain models (`src/Domain/`) that enforce authoritative business rules for quote pricing, calendar availability, and guest access PIN generation.
 
 ```text
-                               +-----------------------------+
-                               |     Static site (React)     |
-                               +-----------------------------+
-                                              |
-                     1. User selects dates    | 2. Local validation request (Overlap check)
-                     and clicks book          v
-                               +-----------------------------+
-                               | public/api/book-request.php |
-                               +-----------------------------+
-                                              |
-                                              | 3. Returns reservation_uid & total_price
-                                              v
-                               +-----------------------------+
-                               |    MP Payment Brick (UI)    |
-                               | (Credit/Debit/PSE/Efecty)   |
-                               +-----------------------------+
-                                              |
-                       4. Guest submits       | 5. Processed payload dispatch
-                       payment inside iframe  v
-                               +-----------------------------+
-                               |   public/api/payment.php    |
-                               +-----------------------------+
-                                              |
-                                              | 6. Server-to-server transaction call
-                                              v
-                               +-----------------------------+
-                               |    MercadoPago REST API     |
-                               +-----------------------------+
+[Guest Facing: oceanviewflats.com]             [Admin Facing: admin.oceanviewflats.com]
+         │                                                      │
+         ▼                                                      ▼
++----------------------------------+          +----------------------------------+
+|   Public SSG (React/TypeScript)  |          |   Admin UI (PHP 8.3 / HTMX)      |
+|   Zero-hydration static HTML     |          |   Server-rendered components     |
+|   Vanilla JS booking widgets     |          |   Subdomain-isolated sessions    |
++----------------------------------+          +----------------------------------+
+         │                                                      │
+         ├───────────────► /api/ REST Endpoints ◄───────────────┤
+         │                 (public_html/api/)                   │
+         │                                                      │
+         ▼                                                      ▼
++--------------------------------------------------------------------------------+
+|                        Shared Core Domain (src/Domain/)                        |
+|   - QuoteEngine: Authoritative seasonal pricing, fees, and minimum stay rules  |
+|   - ReservationLedger: Double-booking prevention & maintenance block tracking   |
+|   - DoorCodeGenerator: Dynamic 7-digit PIN generation from primary guest ID   |
++--------------------------------------------------------------------------------+
+                                         │
+                                         ▼
++--------------------------------------------------------------------------------+
+|                   MySQL Database (InnoDB / UTF-8 mb4)                          |
+|   - reservations (booking ledger, registry status, dynamic door_code)          |
+|   - guest_registries (statutory Colombian guest audit records)                 |
+|   - calendar_blocks (internal maintenance holds)                               |
+|   - payment_idempotency (double-charge short-circuit protection)               |
+|   - admin_users (Argon2id credentials, roles, lockout tracking)                |
+|   - admin_audit_logs (immutable administrative audit log)                      |
++--------------------------------------------------------------------------------+
 ```
 
 ### Key Technical Pillars:
 *   **Zero-Hydration React-to-HTML Compiler**: React components (with TypeScript) and Tailwind CSS are used exclusively at build time to pre-compile structural, SEO, and styling parameters.
 *   **Framework-Free Native Interactivity**: There is no bulky React runtime running on the client. Interactivity (menus, calendars, pricing calculations, validations, and dynamic card registers) is managed via highly minified, lightweight native Vanilla JavaScript inside `public/js/`.
-*   **Custom Inline Checkout (Bricks)**: Secure card tokenization, bank transfers (PSE), and voucher payments (Efecty) are rendered natively within an inline iframe and validated via a backend server-to-server API.
-*   **Centralized CLI Migrations**: No dynamic SQL schema modification occurs inside transactional API scripts. Structural updates are handled by a dedicated CLI tool.
+*   **Subdomain-Isolated Administration (Pattern A)**: Property management workflows run on `admin.oceanviewflats.com`. Its DocumentRoot is strictly isolated at `/home/<user>/admin/public`, placing all sensitive PHP code, shared domain models, vendor libraries, and CLI tools outside the web root.
+*   **Dual-Pipeline Deployment Architecture**: Decoupled CI/CD pipelines allow static marketing releases to deploy independently from backend administrative updates.
+*   **Centralized CLI Migrations & Provisioning**: No dynamic SQL schema modification occurs inside transactional API scripts. Structural updates are handled by `scripts/migrate.php`, and administrator user provisioning is handled by `scripts/create-admin-user.php`.
 
 ---
 
@@ -56,44 +62,140 @@ OceanViewFlats is engineered as a high-performance **custom Static Site Generato
 │   └── skills/               # Custom instructions for AI Developer agents
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml        # CI pipeline injecting secrets and deploying via SFTP
-├── public/                   # Public assets output exactly to 'dist' folder
+│       ├── deploy.yml        # CI/CD: Compiles SSG and deploys to public_html via SFTP
+│       ├── admin-deploy.yml  # CI/CD: Deploys admin, domain, vendor, & scripts to /home/<user>/
+│       └── admin-ci.yml      # CI: Validates admin PHP test suite & PHPStan Level 8
+├── admin/                    # Administrative PMS Monorepo Subsystem
+│   ├── public/               # DocumentRoot for admin.oceanviewflats.com (Pattern A)
+│   │   ├── index.php         # Admin front-controller entry point
+│   │   └── .htaccess         # Mod_rewrite clean URL routing & security headers
+│   ├── src/                  # Admin controllers, middleware, and authentication logic
+│   ├── templates/            # Server-rendered PHP templates & HTMX partials
+│   ├── tests/                # Automated PHPUnit tests for administrative routes
+│   └── phpstan.neon          # PHPStan static analysis configuration (Level 8)
+├── public/                   # Public static assets & REST APIs (compiled to 'dist/')
 │   ├── api/                  # Secure PHP REST endpoints
-│   │   ├── .htaccess         # Hardened Apache headers, CORS whitelisting, and browse blocks
+│   │   ├── .htaccess         # Hardened Apache headers, CORS whitelisting, browse blocks
 │   │   ├── config.php        # Central environment config loading
 │   │   ├── translations.php  # Unified back-end multi-language dictionary (6 languages)
-│   │   ├── utils.php         # Shared API utilities (sanitization, referers, Signed CAPTCHAs)
+│   │   ├── utils.php         # Shared API utilities (PDO, sanitization, rate limiting)
 │   │   ├── book-request.php  # Validates room availability and locks pending reservation
 │   │   ├── payment.php       # Processes inline payments server-to-server with MercadoPago
-│   │   ├── mercadopago-webhook.php # Listener for offline payment statuses (PSE/Efecty)
-│   │   ├── availability.php  # iCal Airbnb reservation block proxy
-│   │   ├── contact-processor.php  # Captcha-validated contact handler
-│   │   └── registry-processor.php # Captcha-validated guest register handler
-│   ├── js/                   # Native Client-side JS scripts
-│   │   ├── main.js           # Main interaction controller (Dynamic SDK lazy-loader, MP Brick handler)
-│   │   ├── registry.js       # Dynamic multi-card guest validator & transmitter
-│   │   ├── guide.js          # Guest dashboard copier & temporal routing handler
-│   │   └── lang-detect.js    # Automatic locale detection & redirection engine
-│   ├── robots.txt            # Explicit permissions mapping for AI crawlers & search bots
+│   │   ├── guide-access.php  # Statutory gate releasing credentials only upon registry completion
+│   │   ├── quote.php         # Authoritative runtime quote computation
+│   │   └── registry-processor.php # Validates legal Colombian Guest Registry submission
+│   ├── js/                   # Native Client-side JS scripts (main.js, registry.js, guide.js)
+│   ├── robots.txt            # Search and AI crawler permissions
 │   └── llms.txt              # Markdown outline explicitly compiled for LLM ingestions
 ├── src/
+│   ├── Domain/               # Shared Domain Models (Single Source of Truth)
+│   │   ├── Quote/            # SeasonalPricer, QuoteEngine, RateRules
+│   │   ├── Reservation/      # ReservationLedger, MaintenanceBlock, Availability
+│   │   └── Security/         # DoorCodeGenerator (7-digit PIN extraction)
 │   ├── components/           # Modular React layout blocks (Footer, Nav, Booking Form)
-│   ├── config/
-│   │   └── pages.ts          # Central router compiling slugs, SEO headers, & structured JSON-LD schemas
-│   ├── constants/
-│   │   └── config.ts         # Constant declarations (Airbnb targets, public MercadoPago tokens)
-│   ├── i18n/
-│   │   └── dict.ts           # Unified translation dictionaries mapping UI terms in 6 languages
-│   ├── pages/                # Top-level Page components (Home, Oceanview1707, Oceanview1606, Registry)
-│   └── templates/
-│       └── base.ts           # Master HTML shell document definition
+│   ├── config/               # pages.ts (routes, SEO headers, JSON-LD schemas)
+│   ├── constants/            # Constants (theme colors, Airbnb feed IDs, MP public keys)
+│   ├── i18n/                 # dict.ts (UI translation dictionary across 6 languages)
+│   ├── pages/                # Top-level Page components (Home, Oceanview1707, Oceanview1606)
+│   └── templates/            # Master HTML shell document definition (base.ts)
 ├── scripts/
 │   ├── schema.sql            # Master MySQL relational schema
-│   └── migrate.php           # Central CLI self-healing migration runner
-├── render.tsx                # Dynamic Node pre-compiler converting React elements into HTML files
-├── vite.config.ts            # Tailwind CSS compiler
-└── package.json              # Development commands (build, minify, compile, post-processing)
+│   ├── migrate.php           # Central CLI self-healing migration runner
+│   ├── create-admin-user.php # CLI-exclusive administrator user provisioning utility
+│   └── generate-docs.php     # OpenAPI documentation generator
+├── composer.json             # PHP dependencies and PSR-4 autoload mapping
+├── package.json              # Node.js build commands (SSG compilation, Terser, Vite)
+└── render.tsx                # Dynamic Node pre-compiler converting React to HTML
 ```
+
+---
+
+## 🚀 Dual-Pipeline CI/CD Architecture
+
+OceanViewFlats implements a **dual-pipeline deployment model** to optimize deployment velocity and security:
+
+```text
+                                [Developer Push to 'main']
+                                             │
+                       ┌─────────────────────┴─────────────────────┐
+                       ▼                                           ▼
+          Path matches public site?                    Path matches admin/domain?
+                       │                                           │
+                       ▼                                           ▼
+      +---------------------------------+         +---------------------------------+
+      |    .github/workflows/           |         |    .github/workflows/           |
+      |    deploy.yml                   |         |    admin-deploy.yml             |
+      +---------------------------------+         +---------------------------------+
+                       │                                           │
+       1. Node 24: npm ci                        1. PHP 8.3: composer install
+       2. Inject public .htaccess secrets           (--no-dev --optimize-autoloader)
+       3. Compile SSG: npm run build             2. Inject admin/public/.htaccess
+       4. SFTP Deploy to:                        3. Stage: admin/, Domain/, vendor/, scripts/
+          /home/<user>/public_html/              4. SFTP Deploy to:
+             (Port 2223)                            /home/<user>/ (Port 2223)
+                       │                                           │
+                       ▼                                           ▼
+         oceanviewflats.com                        admin.oceanviewflats.com
+```
+
+### 1. Public Static Site Pipeline (`deploy.yml`)
+- **Execution Speed**: Rapid execution because it only compiles static assets without installing heavy PHP dev dependencies.
+- **Payload**: Deploys `./dist/.` into `/home/<user>/public_html`.
+- **Target**: Public marketing views (`https://oceanviewflats.com`) and public REST endpoints (`/api/*.php`).
+
+### 2. Admin & Domain/Vendor Pipeline (`admin-deploy.yml`)
+- **Selective Triggering**: Automatically executes when changes occur in `admin/**`, `src/Domain/**`, `scripts/**`, or `composer.*`.
+- **Production Optimization**: Executes `composer install --no-dev --prefer-dist --optimize-autoloader`, packaging lean production dependencies.
+- **Payload**: Deploys to `/home/<user>/`, updating:
+  - `/home/<user>/admin/`: Admin front-controller and application code.
+  - `/home/<user>/src/Domain/`: Canonical domain business logic.
+  - `/home/<user>/vendor/`: Single source of truth Composer autoloader.
+  - `/home/<user>/scripts/`: CLI operational utilities.
+
+---
+
+## 🌐 Hosting Topology: cPanel Pattern A
+
+To protect administrative source code from accidental exposure over HTTP, the server uses **Pattern A**:
+
+```text
+/home/<user>/
+├── public_html/              <-- DocumentRoot for oceanviewflats.com
+└── admin/
+    └── public/               <-- DocumentRoot for admin.oceanviewflats.com
+```
+
+### Advantages of Pattern A:
+1. **Physical Webroot Isolation**: Application controllers (`admin/src/`), templates (`admin/templates/`), domain models (`src/Domain/`), Composer dependencies (`vendor/`), and migration scripts (`scripts/`) are located in the user's home folder completely outside any web-accessible DocumentRoot.
+2. **Failure Resistance**: If an Apache `.htaccess` rule fails or mod_rewrite is misconfigured, raw PHP source code or sensitive configuration cannot be accessed or indexed over HTTP.
+3. **Shared Runtime Autoloader**: Both `public_html/api/*.php` and `admin/public/index.php` share the production autoloader at `/home/<user>/vendor/autoload.php`:
+   - `public_html/api/*.php` calls `require_once dirname(__DIR__, 2) . '/vendor/autoload.php';`
+   - `admin/public/index.php` calls `require_once dirname(__DIR__, 2) . '/vendor/autoload.php';`
+4. **Resilient Configuration (`ConfigPathResolver`)**: The admin application and CLI migration runner locate database credentials by sequentially checking `public/api/config.php` and `public_html/api/config.php`.
+
+---
+
+## 🔒 Hardened API, Authentication, & Relational Schema Layer
+
+### 1. Robust Public API Middleware (`utils.php`)
+*   **Database Connections**: Standardizes PDO handles with strict errors, UTF-8 character attributes, and disabled prepare emulation to prevent SQL injection.
+*   **Strict CORS Policy**: Whitelists authorized origins while maintaining localhost development support.
+*   **State-Free Signed CAPTCHAs**: Solves math challenges via signed HMAC tokens, stopping automated spam without holding heavy database session records.
+*   **IP-Based Rate Limiting**: Throttles guest-facing submissions using dynamic temporary JSON tracking tables.
+
+### 2. Administrative Security Perimeter
+*   **Subdomain-Scoped Cookies**: Admin sessions use native PHP cookies configured with `Secure`, `HttpOnly`, and `SameSite=Lax`, restricted to `admin.oceanviewflats.com`.
+*   **Argon2id Hashing**: Admin credentials use `PASSWORD_ARGON2ID` with high-security memory cost (64MB) and time cost (4 iterations).
+*   **Brute-Force Lockout**: 5 failed consecutive login attempts trigger an automatic 15-minute account lockout recorded in `admin_users`.
+*   **CLI Provisioning**: User accounts can only be created or modified via the command line (`scripts/create-admin-user.php`), eliminating web-based privilege escalation.
+*   **Immutable Audit Trail**: All administrative actions (reservation cancellations, date changes, door code overrides, calendar holds) are recorded with timestamps, user IDs, and client IP addresses in `admin_audit_logs`.
+
+### 3. Centralized Database Schema Migrations
+*   No database creations or `ALTER TABLE` operations occur inside client transactional API endpoints.
+*   Database updates are compiled under [`scripts/schema.sql`](../scripts/schema.sql) and ran through the CLI-exclusive self-healing migrator [`scripts/migrate.php`](../scripts/migrate.php).
+
+### 4. Double-Charge Protection (Idempotency Engine)
+Payments utilize unique reservation identifier codes as idempotency keys. Pre-payment steps check the `payment_idempotency` table before routing to MercadoPago, short-circuiting duplicate transactions instantly.
 
 ---
 
@@ -105,17 +207,17 @@ Static page assets are generated and post-processed in an automated chained comm
 +------------------+     1. Clean dist/     +-----------------------------+
 |    render.tsx    | ---------------------> | Compile prices.csv to JSON  |
 +------------------+                        +-----------------------------+
-         |
-         | 2. Iterate pages.ts & languages
-         v
+         │
+         │ 2. Iterate pages.ts & languages
+         ▼
 +------------------+     3. Inject Shell    +-----------------------------+
-| renderToStatic() | ---------------------> |   Write HTML to output paths |
+| renderToStatic() | ---------------------> |  Write HTML to output paths |
 +------------------+                        +-----------------------------+
-         |
-         | 4. Compile Tailwind CSS via Vite
-         v
+         │
+         │ 4. Compile Tailwind CSS via Vite
+         ▼
 +------------------+     5. Minify Scripts  +-----------------------------+
-|    vite build    | ---------------------> | Distribute dist/ assets      |
+|    vite build    | ---------------------> | Distribute dist/ assets     |
 +------------------+                        +-----------------------------+
 ```
 
@@ -132,33 +234,13 @@ Static page assets are generated and post-processed in an automated chained comm
 
 ---
 
-## 🔒 Hardened API & Relational Schema Layer
-
-All dynamic network traffic routes to standalone transaction endpoints under `/public/api/`, fortified against modern injection, spam, and DoS vectors.
-
-### 1. Robust Middleware (`utils.php`)
-*   **Database Connections**: Standardizes PDO handles with strict errors, UTF-8 character attributes, and disabled prepare emulation to prevent SQL injection.
-*   **XSS Mitigation**: Cleans and validates parameters using native sanitizers.
-*   **Strict Whitelisted CORS**: Rejects request origins not matching `"https://www.oceanviewflats.com"` (while maintaining localhost exceptions for local development pipelines).
-*   **State-free signed CAPTCHAs**: Solves math challenges via signed HMAC tokens, stopping automated spam without holding heavy database session records.
-*   **IP-Based Rate Limiting**: Throttles submissions using dynamic temporary JSON tracking tables.
-
-### 2. Centralized Database Schema Migrations
-*   No database creations or `ALTER TABLE` operations occur inside client transactional API endpoints.
-*   Database updates are compiled under [`scripts/schema.sql`](scripts/schema.sql) and ran through the CLI-exclusive self-healing migrator [`scripts/migrate.php`](scripts/migrate.php).
-
-### 3. Double-Charge Protection (Idempotency Key)
-Payments utilize unique reservation identifier codes as idempotency keys. Pre-payment steps check the `payment_idempotency` table before routing to MercadoPago, short-circuiting duplicate transactions instantly.
-
----
-
 ## 🌐 Dynamic Localizations Bridge
 
 We maintain clean separation between pre-compiled static structures and dynamic script notifications:
-*   **Core Dictionary**: Standard UI terms are mapped inside the central React translation sheet ([`src/i18n/dict.ts`](src/i18n/dict.ts)).
+*   **Core Dictionary**: Standard UI terms are mapped inside the central React translation sheet ([`src/i18n/dict.ts`](../src/i18n/dict.ts)).
 *   **Bridging System**: React embeds translated terms inside custom parent HTML node attributes (e.g., `data-msg-success="Trans_Val"`).
 *   **Client Parsing**: Native JS scripts query these attributes on load. This completely prevents hardcoded English terms from leaking onto Spanish, French, Italian, German, or Japanese viewports.
-*   **API Translation Keys**: Dynamic server outputs are matched against the validated client request language query and loaded from the central backend dictionary [`public/api/translations.php`](public/api/translations.php).
+*   **API Translation Keys**: Dynamic server outputs are matched against the validated client request language query and loaded from the central backend dictionary [`public/api/translations.php`](../public/api/translations.php).
 
 ---
 
