@@ -11,6 +11,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use OceanViewFlats\Admin\AdminApp;
+use OceanViewFlats\Admin\Config\ConfigPathResolver;
 use OceanViewFlats\Admin\Db\DatabaseFactory;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
@@ -22,8 +23,10 @@ try {
     SessionMiddleware::startNativeSession();
 
     // 2. Load Core Configuration & Establish PDO Connection
+    $root = dirname(__DIR__, 2);
+    $configPath = ConfigPathResolver::resolveConfigPath($root);
     /** @var array{db: array{host?: string, dbname?: string, user?: string, pass?: string}} $config */
-    $config = require dirname(__DIR__, 2) . '/public/api/config.php';
+    $config = require $configPath;
     $pdo = DatabaseFactory::createConnection($config['db']);
 
     // 3. Initialize Authoritative Application Kernel

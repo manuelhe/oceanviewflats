@@ -14,13 +14,15 @@ if (php_sapi_name() !== 'cli') {
     exit("This script must be run from the command line.\n");
 }
 
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
+use OceanViewFlats\Admin\Config\ConfigPathResolver;
+
 echo "=== OceanViewFlats Database Migration Running ===\n";
 
 // 1. Load config
-$configPath = dirname(__DIR__) . '/public/api/config.php';
-if (!file_exists($configPath)) {
-    exit("Error: Configuration file not found at $configPath\n");
-}
+$root = dirname(__DIR__);
+$configPath = ConfigPathResolver::resolveConfigPath($root);
 $config = require $configPath;
 
 $dbHost = $config['db']['host'] ?? '127.0.0.1';
