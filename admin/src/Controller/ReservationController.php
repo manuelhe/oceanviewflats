@@ -12,10 +12,12 @@ use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
+use OceanViewFlats\Domain\Fulfillment\AdminContext;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
@@ -31,14 +33,16 @@ final class ReservationController
 {
     private readonly CancellationEmailRendererInterface $cancellationEmailRenderer;
 
+    // @phpstan-ignore constructor.unusedParameter (retained for backward compatibility; confirmation email fulfillment is delegated to lifecycleService)
     public function __construct(
         private readonly AdminReservationRepository $repository,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger,
         private readonly ReservationLedgerInterface $ledger,
         private readonly QuoteEngineInterface $quoteEngine,
-        private readonly ConfirmationEmailRendererInterface $emailRenderer,
+        ?ConfirmationEmailRendererInterface $emailRenderer,
         private readonly EmailSenderInterface $emailSender,
+        private readonly GuestLifecycleFulfillmentServiceInterface $lifecycleService,
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         private readonly ?MercadoPagoRefundClientInterface $refundClient = null,
         ?CancellationEmailRendererInterface $cancellationEmailRenderer = null
@@ -327,10 +331,12 @@ final class ReservationController
                 checkOut: $checkOut,
                 totalPrice: $totalPrice,
                 status: ReservationStatus::CONFIRMED,
+                paymentMethodId: 'manual',
+                paymentStatus: 'approved',
                 lang: 'es'
             );
 
-            $this->sendConfirmationEmailSafely($reservationEntity, $currentUser, $request);
+            $this->lifecycleService->fulfillBookingConfirmation($reservationEntity);
         }
 
         if ($request->isHtmx()) {
@@ -361,33 +367,24 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
         }
 
-        $existingCode = $reservation['door_code'] ?? null;
-        $doorCode = ($existingCode === null || $existingCode === '') ? DoorCodeGenerator::generateRandom() : null;
-
-        $this->repository->updateRegistryCompleted($uid, $doorCode);
-
         $currentUser = $this->buildCurrentUser($session);
-        $this->auditLogger->record(
-            action: 'registry_manual_complete',
-            entityType: 'reservation',
-            entityId: $uid,
-            before: [
-                'registry_completed' => (int) $reservation['registry_completed'],
-                'door_code' => $existingCode,
-            ],
-            after: [
-                'registry_completed' => 1,
-                'door_code' => $doorCode ?? $existingCode,
-            ],
+        $adminContext = new AdminContext(
             adminUserId: $currentUser['id'],
             ipAddress: $request->getClientIp(),
             userAgent: (string) $request->getHeader('User-Agent', '')
         );
 
+        $result = $this->lifecycleService->completeRegistryManually($uid, $adminContext);
+        if (!$result->success) {
+            $errorMessage = !empty($result->errors) ? implode(', ', $result->errors) : 'Failed to complete registry.';
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</div>', 400);
+        }
+
         $data = $this->repository->findReservationWithAuditTrail($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
             'reservation' => $data !== null ? $data['reservation'] : $reservation,
             'auditLogs' => $data !== null ? $data['audit_logs'] : [],
+            'refunds' => $data !== null ? $data['refunds'] : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
@@ -409,65 +406,29 @@ final class ReservationController
      */
     public function overrideDoorCode(Request $request, array &$session): Response
     {
-        $body = $request->getAllPost();
-        $rawCode = trim((string) ($body['door_code'] ?? ''));
-
-        if (!preg_match('/^[0-9]{4,10}#?$/', $rawCode)) {
-            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Invalid PIN format. Code must be 4 to 10 digits optionally ending with #.</div>', 422);
-        }
-
-        $formattedCode = str_ends_with($rawCode, '#') ? $rawCode : $rawCode . '#';
-        return $this->applyDoorCodeChange($request, $session, 'pin_override', $formattedCode);
-    }
-
-    /**
-     * Regenerates a fresh random door code (PIN) for a confirmed reservation.
-     *
-     * @param array<string, mixed> $session
-     */
-    public function regenerateDoorCode(Request $request, array &$session): Response
-    {
-        return $this->applyDoorCodeChange($request, $session, 'pin_regenerate', DoorCodeGenerator::generateRandom());
-    }
-
-    /**
-     * @param array<string, mixed> $session
-     */
-    private function applyDoorCodeChange(
-        Request $request,
-        array &$session,
-        string $action,
-        string $newCode
-    ): Response {
         $uid = (string) ($request->getAttribute('uid') ?? '');
-        $reservation = $this->repository->findReservationByUid($uid);
-
-        if ($reservation === null) {
-            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
-        }
-
-        if (($reservation['status'] ?? '') !== 'confirmed') {
-            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">PIN modification is strictly restricted to confirmed reservations.</div>', 422);
-        }
-
-        $this->repository->updateDoorCode($uid, $newCode);
+        $body = $request->getAllPost();
+        $rawCode = (string) ($body['door_code'] ?? '');
 
         $currentUser = $this->buildCurrentUser($session);
-        $this->auditLogger->record(
-            action: $action,
-            entityType: 'reservation',
-            entityId: $uid,
-            before: ['door_code' => $reservation['door_code'] ?? null],
-            after: ['door_code' => $newCode],
+        $adminContext = new AdminContext(
             adminUserId: $currentUser['id'],
             ipAddress: $request->getClientIp(),
             userAgent: (string) $request->getHeader('User-Agent', '')
         );
 
+        $result = $this->lifecycleService->overrideDoorCode($uid, $rawCode, $adminContext);
+        if (!$result->success) {
+            $error = $result->error ?? 'An error occurred while updating the PIN.';
+            $statusCode = ($error === 'Reservation not found') ? 404 : 422;
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . '</div>', $statusCode);
+        }
+
         $data = $this->repository->findReservationWithAuditTrail($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $data !== null ? $data['reservation'] : $reservation,
+            'reservation' => $data !== null ? $data['reservation'] : [],
             'auditLogs' => $data !== null ? $data['audit_logs'] : [],
+            'refunds' => $data !== null ? $data['refunds'] : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
@@ -483,24 +444,44 @@ final class ReservationController
     }
 
     /**
-     * @param array<string, mixed> $currentUser
+     * Regenerates a fresh random door code (PIN) for a confirmed reservation.
+     *
+     * @param array<string, mixed> $session
      */
-    private function sendConfirmationEmailSafely(
-        Reservation $reservation,
-        array $currentUser,
-        Request $request
-    ): void {
-        try {
-            $subject = $this->emailRenderer->renderGuestSubject($reservation);
-            $htmlBody = $this->emailRenderer->renderGuestConfirmationHtml($reservation);
-            $sent = $this->emailSender->send($reservation->guestEmail, $subject, $htmlBody);
+    public function regenerateDoorCode(Request $request, array &$session): Response
+    {
+        $uid = (string) ($request->getAttribute('uid') ?? '');
+        $currentUser = $this->buildCurrentUser($session);
+        $adminContext = new AdminContext(
+            adminUserId: $currentUser['id'],
+            ipAddress: $request->getClientIp(),
+            userAgent: (string) $request->getHeader('User-Agent', '')
+        );
 
-            if (!$sent) {
-                $this->logEmailFailure($reservation->reservationUid, 'Email sender returned false', $currentUser, $request);
-            }
-        } catch (Throwable $e) {
-            $this->logEmailFailure($reservation->reservationUid, $e->getMessage(), $currentUser, $request);
+        $result = $this->lifecycleService->regenerateDoorCode($uid, $adminContext);
+        if (!$result->success) {
+            $error = $result->error ?? 'An error occurred while regenerating the PIN.';
+            $statusCode = ($error === 'Reservation not found') ? 404 : 422;
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . '</div>', $statusCode);
         }
+
+        $data = $this->repository->findReservationWithAuditTrail($uid);
+        $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
+            'reservation' => $data !== null ? $data['reservation'] : [],
+            'auditLogs' => $data !== null ? $data['audit_logs'] : [],
+            'refunds' => $data !== null ? $data['refunds'] : [],
+            'csrfToken' => (string) ($session['csrf_token'] ?? ''),
+            'publicSiteUrl' => $this->publicSiteUrl,
+        ]);
+
+        return new Response(
+            statusCode: 200,
+            headers: [
+                'Content-Type' => 'text/html; charset=UTF-8',
+                'HX-Trigger' => 'reservationUpdated',
+            ],
+            body: $drawerHtml
+        );
     }
 
     /**
