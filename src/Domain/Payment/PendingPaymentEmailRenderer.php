@@ -6,6 +6,7 @@ namespace OceanViewFlats\Domain\Payment;
 
 use OceanViewFlats\Domain\Quote\Quote;
 use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Support\PathResolver;
 
 /**
  * Default implementation of PendingPaymentEmailRendererInterface.
@@ -23,12 +24,7 @@ final class PendingPaymentEmailRenderer implements PendingPaymentEmailRendererIn
      */
     public function __construct(?array $translations = null)
     {
-        if ($translations !== null) {
-            $this->translations = $translations;
-        } else {
-            $transFile = dirname(__DIR__, 3) . '/public/api/translations.php';
-            $this->translations = file_exists($transFile) ? (require $transFile) : [];
-        }
+        $this->translations = $translations ?? PathResolver::loadTranslations();
     }
 
     /**

@@ -13,6 +13,7 @@ use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
 use OceanViewFlats\Domain\Quote\RateTier;
+use OceanViewFlats\Domain\Support\PathResolver;
 use Throwable;
 
 /**
@@ -420,7 +421,7 @@ final class RateController
         // Resolve absolute or relative CSV path
         $csvFullPath = str_starts_with($this->csvPath, '/')
             ? $this->csvPath
-            : dirname(__DIR__, 3) . '/' . ltrim($this->csvPath, '/');
+            : (PathResolver::resolveIfExists($this->csvPath) ?? dirname(__DIR__, 3) . '/' . ltrim($this->csvPath, '/'));
 
         try {
             $seededCount = $this->rateRepository->seedFromCsv($csvFullPath, $currentUser['id']);

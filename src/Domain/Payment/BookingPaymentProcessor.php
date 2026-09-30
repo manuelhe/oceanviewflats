@@ -19,6 +19,7 @@ use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
+use OceanViewFlats\Domain\Support\PathResolver;
 use PDO;
 use Throwable;
 
@@ -68,13 +69,7 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
         ?array $translations = null,
         ?PendingPaymentEmailRendererInterface $pendingEmailRenderer = null
     ) {
-        if ($translations !== null) {
-            $this->translations = $translations;
-        } else {
-            $transFile = dirname(__DIR__, 3) . '/public/api/translations.php';
-            $this->translations = file_exists($transFile) ? (require $transFile) : [];
-        }
-
+        $this->translations = $translations ?? PathResolver::loadTranslations();
         $this->pendingEmailRenderer = $pendingEmailRenderer ?? new PendingPaymentEmailRenderer($this->translations);
     }
 

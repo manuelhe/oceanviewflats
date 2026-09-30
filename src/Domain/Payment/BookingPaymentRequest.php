@@ -5,9 +5,17 @@ declare(strict_types=1);
 namespace OceanViewFlats\Domain\Payment;
 
 use JsonSerializable;
+use OceanViewFlats\Domain\Support\PathResolver;
 
 if (!function_exists('clean_input')) {
-    require_once dirname(__DIR__, 3) . '/public/api/utils.php';
+    $utilsFile = PathResolver::resolveIfExists('api/utils.php');
+    if ($utilsFile !== null) {
+        require_once $utilsFile;
+    } else {
+        function clean_input(string $data): string {
+            return htmlspecialchars(trim(stripslashes($data)), ENT_QUOTES, 'UTF-8');
+        }
+    }
 }
 
 /**

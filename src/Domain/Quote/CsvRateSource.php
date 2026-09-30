@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Domain\Quote;
 
+use OceanViewFlats\Domain\Support\PathResolver;
 use RuntimeException;
 
 /**
@@ -34,7 +35,7 @@ final class CsvRateSource implements RateSourceInterface
             return;
         }
 
-        $filePath = $this->csvFilePath ?? dirname(__DIR__, 3) . '/public/data/prices.csv';
+        $filePath = $this->csvFilePath ?? PathResolver::resolveIfExists('data/prices.csv') ?? (dirname(__DIR__, 3) . '/public/data/prices.csv');
         if (!file_exists($filePath)) {
             $this->cache = [];
             return;
