@@ -6,6 +6,7 @@ namespace OceanViewFlats\Domain\Fulfillment;
 
 use DateTimeImmutable;
 use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Support\PathResolver;
 
 /**
  * Renders localized transactional cancellation notices for guests and operational host alerts.
@@ -25,7 +26,7 @@ final class CancellationEmailRenderer implements CancellationEmailRendererInterf
         private readonly string $baseUrl = 'https://www.oceanviewflats.com',
         ?array $translations = null
     ) {
-        $this->translations = $translations ?? (require __DIR__ . '/../../../public/api/translations.php');
+        $this->translations = $translations ?? PathResolver::loadTranslations();
     }
 
     public function renderGuestCancellationHtml(Reservation $reservation, float $refundAmount, float $policyRetention): string

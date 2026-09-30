@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OceanViewFlats\Domain\Reservation;
 
 use DateTimeImmutable;
+use OceanViewFlats\Domain\Support\PathResolver;
 
 /**
  * File cache adapter that ingests ephemeral external OTA blocks (e.g. from cached Airbnb iCal feeds).
@@ -18,7 +19,7 @@ final class FileCacheChannelBlockSource implements ChannelBlockSourceInterface
 
     public static function createDefault(): self
     {
-        return new self(dirname(__DIR__, 3) . '/public/cache');
+        return new self(PathResolver::resolveDirectory('cache'));
     }
 
     public function getBlocks(string $propertyId): array

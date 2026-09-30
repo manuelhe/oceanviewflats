@@ -46,6 +46,7 @@ use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
+use OceanViewFlats\Domain\Support\PathResolver;
 use PDO;
 
 /**
@@ -116,7 +117,7 @@ final class AdminApp
         $publicSiteUrl = (string) ($options['public_site_url'] ?? (getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com'));
         /** @var PropertyRatesConfig $ratesConfig */
         $ratesConfig = $options['rates_config'] ?? PropertyRatesConfig::createDefault();
-        $csvPath = (string) ($options['csv_path'] ?? 'public/data/prices.csv');
+        $csvPath = (string) ($options['csv_path'] ?? (PathResolver::resolveIfExists('data/prices.csv') ?? 'public/data/prices.csv'));
         $csvRateSource = isset($options['csv_path'])
             ? new CsvRateSource((string) $options['csv_path'])
             : new CsvRateSource();

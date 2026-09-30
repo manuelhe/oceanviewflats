@@ -6,6 +6,7 @@ namespace OceanViewFlats\Domain\Fulfillment;
 
 use DateTimeImmutable;
 use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Support\PathResolver;
 
 final class ConfirmationEmailRenderer implements ConfirmationEmailRendererInterface
 {
@@ -18,7 +19,7 @@ final class ConfirmationEmailRenderer implements ConfirmationEmailRendererInterf
         private readonly string $baseUrl = 'https://www.oceanviewflats.com',
         ?array $translations = null
     ) {
-        $this->translations = $translations ?? (require __DIR__ . '/../../../public/api/translations.php');
+        $this->translations = $translations ?? PathResolver::loadTranslations();
     }
 
     public function renderGuestConfirmationHtml(Reservation $reservation): string
