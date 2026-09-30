@@ -18,50 +18,9 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         private readonly PDO $pdo
     ) {}
 
-    /** @var array<string, bool>|null */
-    private ?array $availableColumns = null;
-
-    /**
-     * @return array<string, bool>
-     */
-    private function getTableColumns(): array
-    {
-        if ($this->availableColumns !== null) {
-            return $this->availableColumns;
-        }
-
-        $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $cols = [];
-        try {
-            if ($driver === 'sqlite') {
-                $stmt = $this->pdo->query('PRAGMA table_info(reservations)');
-                if ($stmt !== false) {
-                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                        $cols[(string) $row['name']] = true;
-                    }
-                }
-            } else {
-                $stmt = $this->pdo->query('SHOW COLUMNS FROM `reservations`');
-                if ($stmt !== false) {
-                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-                        $cols[(string) $row['Field']] = true;
-                    }
-                }
-            }
-        } catch (\PDOException) {
-            // Fallback if table does not exist or query fails
-        }
-
-        return $this->availableColumns = $cols;
-    }
-
     public function save(Reservation $reservation): Reservation
     {
         $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $cols = $this->getTableColumns();
-        $hasRefunded = empty($cols) || isset($cols['refunded_amount']);
-        $hasSource = empty($cols) || isset($cols['source']);
-        $hasNotes = empty($cols) || isset($cols['notes']);
 
         $columns = [
             'reservation_uid',
@@ -72,14 +31,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             'check_in',
             'check_out',
             'total_price',
-        ];
-        if ($hasRefunded) {
-            $columns[] = 'refunded_amount';
-        }
-        if ($hasSource) {
-            $columns[] = 'source';
-        }
-        $columns = array_merge($columns, [
+            'refunded_amount',
+            'source',
             'status',
             'payment_method_id',
             'mercadopago_preference_id',
@@ -90,10 +43,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             'registry_completed',
             'registry_completed_at',
             'door_code',
-        ]);
-        if ($hasNotes) {
-            $columns[] = 'notes';
-        }
+            'notes',
+        ];
 
         $colList = '`' . implode('`, `', $columns) . '`';
         $valList = ':' . implode(', :', $columns);
@@ -107,6 +58,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':check_in' => $reservation->checkIn,
             ':check_out' => $reservation->checkOut,
             ':total_price' => $reservation->totalPrice,
+            ':refunded_amount' => $reservation->refundedAmount,
+            ':source' => $reservation->source,
             ':status' => $reservation->status->value,
             ':payment_method_id' => $reservation->paymentMethodId,
             ':mercadopago_preference_id' => $reservation->mercadopagoPreferenceId,
@@ -117,31 +70,16 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':registry_completed' => $reservation->registryCompleted ? 1 : 0,
             ':registry_completed_at' => $reservation->registryCompletedAt?->format('Y-m-d H:i:s'),
             ':door_code' => $reservation->doorCode,
+            ':notes' => $reservation->notes,
         ];
-
-        if ($hasRefunded) {
-            $params[':refunded_amount'] = $reservation->refundedAmount;
-        }
-        if ($hasSource) {
-            $params[':source'] = $reservation->source;
-        }
-        if ($hasNotes) {
-            $params[':notes'] = $reservation->notes;
-        }
 
         $updatableColumns = [
             'guest_name',
             'guest_email',
             'guest_phone',
             'total_price',
-        ];
-        if ($hasRefunded) {
-            $updatableColumns[] = 'refunded_amount';
-        }
-        if ($hasSource) {
-            $updatableColumns[] = 'source';
-        }
-        $updatableColumns = array_merge($updatableColumns, [
+            'refunded_amount',
+            'source',
             'status',
             'payment_method_id',
             'mercadopago_preference_id',
@@ -152,10 +90,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             'registry_completed',
             'registry_completed_at',
             'door_code',
-        ]);
-        if ($hasNotes) {
-            $updatableColumns[] = 'notes';
-        }
+            'notes',
+        ];
 
         if ($driver === 'sqlite') {
             $updateAssignments = [];
@@ -435,6 +371,43 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         ]);
 
         return $this->findByUid($reservationUid);
+    }
+
+    public function recordRefund(array $data): void
+    {
+        $stmt = $this->pdo->prepare('
+            INSERT INTO `reservation_refunds` (
+                reservation_uid,
+                mercadopago_refund_id,
+                mercadopago_payment_id,
+                amount,
+                status,
+                reason,
+                source,
+                admin_user_id,
+                created_at
+            ) VALUES (
+                :reservation_uid,
+                :mercadopago_refund_id,
+                :mercadopago_payment_id,
+                :amount,
+                :status,
+                :reason,
+                :source,
+                :admin_user_id,
+                CURRENT_TIMESTAMP
+            )
+        ');
+        $stmt->execute([
+            ':reservation_uid' => $data['reservation_uid'] ?? '',
+            ':mercadopago_refund_id' => $data['mercadopago_refund_id'] ?? null,
+            ':mercadopago_payment_id' => $data['mercadopago_payment_id'] ?? 'offline',
+            ':amount' => $data['amount'] ?? 0.0,
+            ':status' => $data['status'] ?? 'approved',
+            ':reason' => $data['reason'] ?? '',
+            ':source' => $data['source'] ?? 'admin_pms',
+            ':admin_user_id' => $data['admin_user_id'] ?? null,
+        ]);
     }
 
     /**

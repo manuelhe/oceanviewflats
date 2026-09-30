@@ -167,7 +167,7 @@ final class AdminReservationRepository
 
         // 1. Insert refund record if amount > 0
         if ($refundAmount > 0) {
-            $this->search->recordRefund([
+            $this->repository->recordRefund([
                 'reservation_uid' => $uid,
                 'mercadopago_refund_id' => $mpRefundId,
                 'mercadopago_payment_id' => $mpPaymentId !== null && $mpPaymentId !== '' ? $mpPaymentId : 'offline',

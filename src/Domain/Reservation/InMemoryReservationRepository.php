@@ -14,6 +14,9 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
     /** @var array<string, Reservation> */
     private array $records = [];
 
+    /** @var list<array<string, mixed>> */
+    private array $refunds = [];
+
     private int $nextId = 1;
 
     public function save(Reservation $reservation): Reservation
@@ -187,6 +190,27 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
         $updated = $existing->withDoorCode($doorCode);
         $this->records[$reservationUid] = $updated;
         return $updated;
+    }
+
+    /**
+     * Records a refund ledger entry associated with a reservation UID.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function recordRefund(array $data): void
+    {
+        if (!isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
+        }
+        $this->refunds[] = $data;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getRefunds(): array
+    {
+        return $this->refunds;
     }
 
     /**

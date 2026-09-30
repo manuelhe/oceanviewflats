@@ -605,7 +605,83 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Invalid or expired CSRF token. Please refresh.</div>', 403);
         }
 
-        // 2. Begin database transaction if PDO is provided
+        // 2. Acquire reservation
+        $reservation = $this->repository->findByUid($uid);
+        if ($reservation === null) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
+        }
+
+        if ($reservation->status === ReservationStatus::CANCELLED) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
+        }
+
+        $totalPrice = $reservation->totalPrice;
+        $currentRefunded = $reservation->refundedAmount;
+        $refundableBalance = max(0.0, round($totalPrice - $currentRefunded, 2));
+        $isOnlinePayment = !empty($reservation->mercadopagoPaymentId);
+
+        $reason = trim((string) $request->getPost('reason', ''));
+        $refundType = trim((string) $request->getPost('refund_type', 'none'));
+        $refundAmountInput = (float) $request->getPost('refund_amount', 0.0);
+        $sendCancellationEmailRaw = $request->getPost('send_cancellation_email');
+
+        // Helper for consistent validation/gateway error rendering
+        $failWithCancelError = fn(string $errorMessage): Response => $this->renderCancelError(
+            reservation: $reservation->toArray(),
+            refundableBalance: $refundableBalance,
+            isOnlinePayment: $isOnlinePayment,
+            errorMessage: $errorMessage,
+            oldInput: [
+                'reason' => $reason,
+                'refund_type' => $refundType,
+                'refund_amount' => $refundAmountInput,
+                'send_cancellation_email' => $sendCancellationEmailRaw,
+            ],
+            csrfToken: (string) ($session['csrf_token'] ?? '')
+        );
+
+        // 3. Validate Reason
+        if ($reason === '') {
+            return $failWithCancelError('Cancellation reason is required.');
+        }
+
+        // 4. Determine and validate Refund Amount
+        if ($refundType === 'full') {
+            $refundAmount = $refundableBalance;
+        } elseif ($refundType === 'partial') {
+            if ($refundAmountInput <= 0 || $refundAmountInput > $refundableBalance) {
+                return $failWithCancelError('Partial refund amount must be greater than 0 and cannot exceed the refundable balance ($' . number_format($refundableBalance, 0, '.', ',') . ' COP).');
+            }
+            $refundAmount = round($refundAmountInput, 2);
+        } else {
+            $refundType = 'none';
+            $refundAmount = 0.0;
+        }
+
+        // 5. External Gateway Refund Dispatch (if online payment & refund requested)
+        // Must execute BEFORE opening the database transaction so network latency does not hold locks.
+        $mpPaymentId = $isOnlinePayment ? $reservation->mercadopagoPaymentId : null;
+        $mpRefundId = null;
+        $source = $isOnlinePayment ? 'admin_pms' : 'admin_manual';
+
+        if ($isOnlinePayment && $refundAmount > 0) {
+            if ($this->refundClient === null) {
+                return $failWithCancelError('Refund client service is unavailable. Please contact technical support.');
+            }
+
+            $idempotencyKey = 'ref_' . $uid . '_' . (int) $refundAmount . '_' . time();
+
+            try {
+                $refundResult = $this->refundClient->refundPayment((string) $mpPaymentId, $refundAmount, $idempotencyKey);
+                $mpRefundId = (string) $refundResult['id'];
+            } catch (MercadoPagoRefundException $e) {
+                return $failWithCancelError($e->getUserFriendlyMessage());
+            } catch (Throwable $e) {
+                return $failWithCancelError('Gateway connection failed: ' . $e->getMessage());
+            }
+        }
+
+        // 6. Begin database transaction for local mutations
         $pdo = $this->pdo;
         $inTransaction = false;
         if ($pdo !== null && !$pdo->inTransaction()) {
@@ -614,148 +690,6 @@ final class ReservationController
         }
 
         try {
-            // 3. Acquire reservation
-            $reservation = $this->repository->findByUid($uid);
-            if ($reservation === null) {
-                if ($inTransaction) {
-                    $pdo->rollBack();
-                }
-                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
-            }
-
-            if ($reservation->status === ReservationStatus::CANCELLED) {
-                if ($inTransaction) {
-                    $pdo->rollBack();
-                }
-                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
-            }
-
-            $totalPrice = $reservation->totalPrice;
-            $currentRefunded = $reservation->refundedAmount;
-            $refundableBalance = max(0.0, round($totalPrice - $currentRefunded, 2));
-            $isOnlinePayment = !empty($reservation->mercadopagoPaymentId);
-
-            $reason = trim((string) $request->getPost('reason', ''));
-            $refundType = trim((string) $request->getPost('refund_type', 'none'));
-            $refundAmountInput = (float) $request->getPost('refund_amount', 0.0);
-            $sendCancellationEmailRaw = $request->getPost('send_cancellation_email');
-
-            // 4. Validate Reason
-            if ($reason === '') {
-                if ($inTransaction) {
-                    $pdo->rollBack();
-                }
-                return $this->renderCancelError(
-                    reservation: $reservation->toArray(),
-                    refundableBalance: $refundableBalance,
-                    isOnlinePayment: $isOnlinePayment,
-                    errorMessage: 'Cancellation reason is required.',
-                    oldInput: [
-                        'reason' => $reason,
-                        'refund_type' => $refundType,
-                        'refund_amount' => $refundAmountInput,
-                        'send_cancellation_email' => $sendCancellationEmailRaw,
-                    ],
-                    csrfToken: (string) ($session['csrf_token'] ?? '')
-                );
-            }
-
-            // 5. Determine and validate Refund Amount
-            if ($refundType === 'full') {
-                $refundAmount = $refundableBalance;
-            } elseif ($refundType === 'partial') {
-                if ($refundAmountInput <= 0 || $refundAmountInput > $refundableBalance) {
-                    if ($inTransaction) {
-                        $pdo->rollBack();
-                    }
-                    return $this->renderCancelError(
-                        reservation: $reservation->toArray(),
-                        refundableBalance: $refundableBalance,
-                        isOnlinePayment: $isOnlinePayment,
-                        errorMessage: 'Partial refund amount must be greater than 0 and cannot exceed the refundable balance ($' . number_format($refundableBalance, 0, '.', ',') . ' COP).',
-                        oldInput: [
-                            'reason' => $reason,
-                            'refund_type' => $refundType,
-                            'refund_amount' => $refundAmountInput,
-                            'send_cancellation_email' => $sendCancellationEmailRaw,
-                        ],
-                        csrfToken: (string) ($session['csrf_token'] ?? '')
-                    );
-                }
-                $refundAmount = round($refundAmountInput, 2);
-            } else {
-                $refundType = 'none';
-                $refundAmount = 0.0;
-            }
-
-            // 6. External Gateway Refund Dispatch (if online payment & refund requested)
-            $mpPaymentId = $isOnlinePayment ? $reservation->mercadopagoPaymentId : null;
-            $mpRefundId = null;
-            $source = $isOnlinePayment ? 'admin_pms' : 'admin_manual';
-
-            if ($isOnlinePayment && $refundAmount > 0) {
-                if ($this->refundClient === null) {
-                    if ($inTransaction) {
-                        $pdo->rollBack();
-                    }
-                    return $this->renderCancelError(
-                        reservation: $reservation->toArray(),
-                        refundableBalance: $refundableBalance,
-                        isOnlinePayment: $isOnlinePayment,
-                        errorMessage: 'Refund client service is unavailable. Please contact technical support.',
-                        oldInput: [
-                            'reason' => $reason,
-                            'refund_type' => $refundType,
-                            'refund_amount' => $refundAmountInput,
-                            'send_cancellation_email' => $sendCancellationEmailRaw,
-                        ],
-                        csrfToken: (string) ($session['csrf_token'] ?? '')
-                    );
-                }
-
-                $idempotencyKey = 'ref_' . $uid . '_' . (int) $refundAmount . '_' . time();
-
-                try {
-                    $refundResult = $this->refundClient->refundPayment((string) $mpPaymentId, $refundAmount, $idempotencyKey);
-                    $mpRefundId = (string) $refundResult['id'];
-                } catch (MercadoPagoRefundException $e) {
-                    if ($inTransaction) {
-                        $pdo->rollBack();
-                    }
-                    return $this->renderCancelError(
-                        reservation: $reservation->toArray(),
-                        refundableBalance: $refundableBalance,
-                        isOnlinePayment: $isOnlinePayment,
-                        errorMessage: $e->getUserFriendlyMessage(),
-                        oldInput: [
-                            'reason' => $reason,
-                            'refund_type' => $refundType,
-                            'refund_amount' => $refundAmountInput,
-                            'send_cancellation_email' => $sendCancellationEmailRaw,
-                        ],
-                        csrfToken: (string) ($session['csrf_token'] ?? '')
-                    );
-                } catch (Throwable $e) {
-                    if ($inTransaction) {
-                        $pdo->rollBack();
-                    }
-                    return $this->renderCancelError(
-                        reservation: $reservation->toArray(),
-                        refundableBalance: $refundableBalance,
-                        isOnlinePayment: $isOnlinePayment,
-                        errorMessage: 'Gateway connection failed: ' . $e->getMessage(),
-                        oldInput: [
-                            'reason' => $reason,
-                            'refund_type' => $refundType,
-                            'refund_amount' => $refundAmountInput,
-                            'send_cancellation_email' => $sendCancellationEmailRaw,
-                        ],
-                        csrfToken: (string) ($session['csrf_token'] ?? '')
-                    );
-                }
-            }
-
-            // 7. Mutate reservation domain records
             $currentUser = $this->buildCurrentUser($session);
             $adminUserId = $currentUser['id'];
 
@@ -785,9 +719,9 @@ final class ReservationController
 
             $savedReservation = $this->repository->save($cancelledReservation);
 
-            // Record refund in ledger
+            // Record refund in repository ledger
             if ($refundAmount > 0) {
-                $this->search->recordRefund([
+                $this->repository->recordRefund([
                     'reservation_uid' => $uid,
                     'mercadopago_refund_id' => $mpRefundId,
                     'mercadopago_payment_id' => $mpPaymentId ?? 'offline',
@@ -799,7 +733,7 @@ final class ReservationController
                 ]);
             }
 
-            // 8. Record audit logs
+            // Record audit logs
             $this->auditLogger->record(
                 action: 'reservation_cancelled',
                 entityType: 'reservation',
@@ -838,7 +772,7 @@ final class ReservationController
                 );
             }
 
-            // 9. Commit transaction
+            // Commit transaction
             if ($inTransaction) {
                 $pdo->commit();
             }

@@ -9,6 +9,7 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Controller\CalendarBlockController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
+use OceanViewFlats\Admin\Tests\Support\AdminDatabaseTestHelper;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\InMemoryChannelBlockSource;
@@ -30,43 +31,7 @@ final class CalendarBlockControllerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->pdo = new PDO('sqlite::memory:');
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-
-        $this->pdo->exec('
-            CREATE TABLE admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE
-            );
-
-            CREATE TABLE calendar_blocks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                property_id TEXT NOT NULL,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                created_by INTEGER DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE admin_audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                action TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                payload_before TEXT DEFAULT NULL,
-                payload_after TEXT DEFAULT NULL,
-                admin_user_id INTEGER DEFAULT NULL,
-                ip_address TEXT DEFAULT NULL,
-                user_agent TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            INSERT INTO admin_users (id, name, email) VALUES (1, "Manuel Admin", "admin@oceanviewflats.com");
-        ');
+        $this->pdo = AdminDatabaseTestHelper::createDatabaseWithDefaultAdmin();
 
         $this->blockRepo = new AdminCalendarBlockRepository($this->pdo);
         $this->reservationRepo = new InMemoryReservationRepository();

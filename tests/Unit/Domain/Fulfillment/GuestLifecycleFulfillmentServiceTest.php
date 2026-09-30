@@ -56,6 +56,9 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
                 registry_completed INTEGER DEFAULT 0,
                 registry_completed_at TEXT,
                 door_code TEXT,
+                source TEXT DEFAULT 'web',
+                notes TEXT,
+                refunded_amount REAL DEFAULT 0.0,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );

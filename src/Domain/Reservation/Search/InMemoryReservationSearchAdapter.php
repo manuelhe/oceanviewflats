@@ -94,14 +94,6 @@ final class InMemoryReservationSearchAdapter implements ReservationSearchInterfa
         return $this;
     }
 
-    public function recordRefund(array $data): void
-    {
-        if (!isset($data['created_at'])) {
-            $data['created_at'] = date('Y-m-d H:i:s');
-        }
-        $this->refunds[] = $data;
-    }
-
     public function search(ReservationSearchCriteria $criteria): ReservationSearchResult
     {
         $all = $this->allReservations();
@@ -262,8 +254,13 @@ final class InMemoryReservationSearchAdapter implements ReservationSearchInterfa
 
     public function findRefunds(string $uid): array
     {
+        $allRefunds = $this->refunds;
+        if ($this->repository !== null) {
+            $allRefunds = array_merge($allRefunds, $this->repository->getRefunds());
+        }
+
         $matching = array_values(array_filter(
-            $this->refunds,
+            $allRefunds,
             fn(array $r): bool => ((string) ($r['reservation_uid'] ?? '')) === $uid
         ));
 

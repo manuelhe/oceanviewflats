@@ -19,9 +19,6 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
-use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
-use OceanViewFlats\Admin\Repository\AdminRateRepository;
-use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Views\ViewRenderer;
@@ -181,7 +178,6 @@ final class AdminApp
 
         $rateController = new RateController(
             rateRepository: $rateRepo,
-            rateSource: $rateRepo,
             viewRenderer: $viewRenderer,
             auditLogger: $auditLogger,
             ratesConfig: $ratesConfig,

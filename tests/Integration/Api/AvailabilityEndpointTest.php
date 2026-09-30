@@ -84,6 +84,21 @@ $pdo->exec("CREATE TABLE reservations (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 )");
+$pdo->exec("CREATE TABLE admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE
+)");
+$pdo->exec("CREATE TABLE calendar_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    reason TEXT,
+    created_by INTEGER DEFAULT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)");
 $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, created_at)
     VALUES ('ovf_direct_1', '1606', 'Direct Guest', 'guest@example.com', '2026-11-20', '2026-11-23', 1500000, 'confirmed', datetime('now'))");
 $GLOBALS['TEST_PDO'] = $pdo;

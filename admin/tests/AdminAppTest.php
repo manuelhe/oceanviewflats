@@ -9,6 +9,7 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\InMemoryIpRateLimiter;
 use OceanViewFlats\Admin\Http\Request;
+use OceanViewFlats\Admin\Tests\Support\AdminDatabaseTestHelper;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -19,102 +20,7 @@ final class AdminAppTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->pdo = new PDO('sqlite::memory:', null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-
-        $this->pdo->exec('
-            CREATE TABLE IF NOT EXISTS admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT DEFAULT NULL,
-                role TEXT NOT NULL DEFAULT "admin",
-                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-                locked_until TEXT DEFAULT NULL,
-                active INTEGER NOT NULL DEFAULT 1
-            );
-
-            CREATE TABLE IF NOT EXISTS admin_audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                action TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                payload_before TEXT DEFAULT NULL,
-                payload_after TEXT DEFAULT NULL,
-                admin_user_id INTEGER DEFAULT NULL,
-                ip_address TEXT DEFAULT NULL,
-                user_agent TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS reservations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reservation_uid TEXT NOT NULL UNIQUE,
-                property_id TEXT NOT NULL,
-                guest_name TEXT NOT NULL,
-                guest_email TEXT NOT NULL,
-                guest_phone TEXT NOT NULL,
-                check_in TEXT NOT NULL,
-                check_out TEXT NOT NULL,
-                total_price NUMERIC NOT NULL,
-                refunded_amount NUMERIC NOT NULL DEFAULT 0.00,
-                source TEXT NOT NULL DEFAULT "web",
-                mercadopago_preference_id TEXT DEFAULT NULL,
-                mercadopago_payment_id TEXT DEFAULT NULL,
-                payment_status TEXT DEFAULT NULL,
-                payment_method_id TEXT DEFAULT NULL,
-                payment_detail TEXT DEFAULT NULL,
-                status TEXT NOT NULL DEFAULT "confirmed",
-                lang TEXT NOT NULL DEFAULT "en",
-                registry_completed INTEGER NOT NULL DEFAULT 0,
-                registry_completed_at TEXT DEFAULT NULL,
-                door_code TEXT DEFAULT NULL,
-                notes TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS guest_registries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reservation_uid TEXT NOT NULL UNIQUE,
-                guest_names TEXT DEFAULT NULL,
-                document_ids TEXT DEFAULT NULL,
-                arrival_time TEXT DEFAULT NULL,
-                special_requests TEXT DEFAULT NULL,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS property_rates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                property_id TEXT NOT NULL,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                season_name TEXT NOT NULL,
-                price_per_night REAL NOT NULL,
-                min_stay INTEGER NOT NULL DEFAULT 2,
-                cleaning_fee REAL NOT NULL DEFAULT 0.0,
-                resort_fee REAL NOT NULL DEFAULT 0.0,
-                created_by INTEGER DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS calendar_blocks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                property_id TEXT NOT NULL,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                channel_source TEXT NOT NULL DEFAULT "direct",
-                external_block_id TEXT DEFAULT NULL,
-                created_by INTEGER DEFAULT NULL,
-                notes TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            INSERT INTO admin_users (id, name, email) VALUES (1, "Manuel Admin", "admin@oceanviewflats.com");
-        ');
+        $this->pdo = AdminDatabaseTestHelper::createDatabaseWithDefaultAdmin();
     }
 
     public function testVersionReturnsSemanticVersion(): void

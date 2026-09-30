@@ -24,36 +24,18 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
      */
     public function getBlocks(string $propertyId): array
     {
-        try {
-            $stmt = $this->pdo->prepare('
-                SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
-                       u.name AS created_by_name
-                FROM calendar_blocks cb
-                LEFT JOIN admin_users u ON cb.created_by = u.id
-                WHERE cb.property_id = :property_id
-                ORDER BY cb.start_date ASC
-            ');
-            $stmt->execute(['property_id' => $propertyId]);
+        $stmt = $this->pdo->prepare('
+            SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
+                   u.name AS created_by_name
+            FROM calendar_blocks cb
+            LEFT JOIN admin_users u ON cb.created_by = u.id
+            WHERE cb.property_id = :property_id
+            ORDER BY cb.start_date ASC
+        ');
+        $stmt->execute(['property_id' => $propertyId]);
 
-            /** @var list<array<string, mixed>> $rows */
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            if (str_contains($e->getMessage(), 'no such table: admin_users') || str_contains($e->getMessage(), "admin_users' doesn't exist")) {
-                $stmt = $this->pdo->prepare('
-                    SELECT id, property_id, start_date, end_date, reason, created_by, created_at
-                    FROM calendar_blocks
-                    WHERE property_id = :property_id
-                    ORDER BY start_date ASC
-                ');
-                $stmt->execute(['property_id' => $propertyId]);
-                /** @var list<array<string, mixed>> $rows */
-                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } elseif (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
-                return [];
-            } else {
-                throw $e;
-            }
-        }
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $blocks = [];
         foreach ($rows as $row) {
@@ -82,33 +64,16 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
 
     public function findById(int $id): ?MaintenanceBlock
     {
-        try {
-            $stmt = $this->pdo->prepare('
-                SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
-                       u.name AS created_by_name
-                FROM calendar_blocks cb
-                LEFT JOIN admin_users u ON cb.created_by = u.id
-                WHERE cb.id = :id
-                LIMIT 1
-            ');
-            $stmt->execute(['id' => $id]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            if (str_contains($e->getMessage(), 'no such table: admin_users') || str_contains($e->getMessage(), "admin_users' doesn't exist")) {
-                $stmt = $this->pdo->prepare('
-                    SELECT id, property_id, start_date, end_date, reason, created_by, created_at
-                    FROM calendar_blocks
-                    WHERE id = :id
-                    LIMIT 1
-                ');
-                $stmt->execute(['id' => $id]);
-                $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            } elseif (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
-                return null;
-            } else {
-                throw $e;
-            }
-        }
+        $stmt = $this->pdo->prepare('
+            SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
+                   u.name AS created_by_name
+            FROM calendar_blocks cb
+            LEFT JOIN admin_users u ON cb.created_by = u.id
+            WHERE cb.id = :id
+            LIMIT 1
+        ');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row === false) {
             return null;
@@ -252,27 +217,12 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
             $baseSql .= ' ORDER BY cb.start_date DESC';
         }
 
-        try {
-            $sql = 'SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at, u.name AS created_by_name ' . $baseSql;
-            $stmt = $this->pdo->prepare($sql);
-            $stmt->execute($params);
+        $sql = 'SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at, u.name AS created_by_name ' . $baseSql;
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
 
-            /** @var list<array<string, mixed>> $rows */
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            if (str_contains($e->getMessage(), 'no such table: admin_users') || str_contains($e->getMessage(), "admin_users' doesn't exist")) {
-                $noJoinSql = str_replace('LEFT JOIN admin_users u ON cb.created_by = u.id', '', $baseSql);
-                $sql = 'SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at ' . $noJoinSql;
-                $stmt = $this->pdo->prepare($sql);
-                $stmt->execute($params);
-                /** @var list<array<string, mixed>> $rows */
-                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            } elseif (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
-                return [];
-            } else {
-                throw $e;
-            }
-        }
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $blocks = [];
         foreach ($rows as $row) {

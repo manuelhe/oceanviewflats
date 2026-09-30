@@ -63,6 +63,9 @@ final class ReservationRepositoryTest extends TestCase
             registry_completed INTEGER DEFAULT 0,
             registry_completed_at TEXT,
             door_code TEXT,
+            source TEXT DEFAULT 'web',
+            notes TEXT,
+            refunded_amount REAL DEFAULT 0.0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )");
@@ -190,6 +193,58 @@ final class ReservationRepositoryTest extends TestCase
 
         $notFound = $repo->updateDoorCode('ovf_nonexistent', '0111222#');
         $this->assertNull($notFound);
+    }
+
+    public function testInMemoryRepositoryRecordRefund(): void
+    {
+        $repo = new InMemoryReservationRepository();
+        $repo->recordRefund([
+            'reservation_uid' => 'ovf_refund_1',
+            'amount' => 50000.0,
+            'reason' => 'Guest cancelled early',
+        ]);
+
+        $refunds = $repo->getRefunds();
+        $this->assertCount(1, $refunds);
+        $this->assertSame('ovf_refund_1', $refunds[0]['reservation_uid']);
+        $this->assertSame(50000.0, $refunds[0]['amount']);
+        $this->assertSame('Guest cancelled early', $refunds[0]['reason']);
+    }
+
+    public function testPdoRepositoryRecordRefund(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $pdo->exec("CREATE TABLE reservation_refunds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reservation_uid TEXT NOT NULL,
+            mercadopago_refund_id TEXT,
+            mercadopago_payment_id TEXT NOT NULL DEFAULT 'offline',
+            amount REAL NOT NULL DEFAULT 0.0,
+            status TEXT NOT NULL DEFAULT 'approved',
+            reason TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'admin_pms',
+            admin_user_id INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )");
+
+        $repo = new PdoReservationRepository($pdo);
+        $repo->recordRefund([
+            'reservation_uid' => 'ovf_refund_pdo',
+            'mercadopago_refund_id' => 'mp_ref_123',
+            'mercadopago_payment_id' => 'mp_pay_456',
+            'amount' => 120000.0,
+            'status' => 'approved',
+            'reason' => 'Duplicate booking',
+            'source' => 'admin_pms',
+            'admin_user_id' => 1,
+        ]);
+
+        $stmt = $pdo->query("SELECT * FROM reservation_refunds WHERE reservation_uid = 'ovf_refund_pdo'");
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $this->assertCount(1, $rows);
+        $this->assertSame('120000', (string) (int) $rows[0]['amount']);
+        $this->assertSame('mp_ref_123', $rows[0]['mercadopago_refund_id']);
+        $this->assertSame('Duplicate booking', $rows[0]['reason']);
     }
 }
 

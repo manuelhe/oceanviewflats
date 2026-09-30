@@ -21,17 +21,13 @@ use Throwable;
  */
 final class RateController
 {
-    private readonly RateRepositoryInterface $rateRepository;
-
     public function __construct(
-        RateRepositoryInterface $rateRepository,
+        private readonly RateRepositoryInterface $rateRepository,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger,
         private readonly PropertyRatesConfig $ratesConfig,
-        private readonly string $csvPath = 'public/data/prices.csv',
-        ?RateRepositoryInterface $rateSource = null
+        private readonly string $csvPath = 'public/data/prices.csv'
     ) {
-        $this->rateRepository = $rateSource ?? $rateRepository;
     }
 
     /**
