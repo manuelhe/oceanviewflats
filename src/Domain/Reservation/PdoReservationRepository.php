@@ -18,121 +18,87 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
         private readonly PDO $pdo
     ) {}
 
+    /** @var array<string, bool>|null */
+    private ?array $availableColumns = null;
+
+    /**
+     * @return array<string, bool>
+     */
+    private function getTableColumns(): array
+    {
+        if ($this->availableColumns !== null) {
+            return $this->availableColumns;
+        }
+
+        $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $cols = [];
+        try {
+            if ($driver === 'sqlite') {
+                $stmt = $this->pdo->query('PRAGMA table_info(reservations)');
+                if ($stmt !== false) {
+                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                        $cols[(string) $row['name']] = true;
+                    }
+                }
+            } else {
+                $stmt = $this->pdo->query('SHOW COLUMNS FROM `reservations`');
+                if ($stmt !== false) {
+                    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                        $cols[(string) $row['Field']] = true;
+                    }
+                }
+            }
+        } catch (\PDOException) {
+            // Fallback if table does not exist or query fails
+        }
+
+        return $this->availableColumns = $cols;
+    }
+
     public function save(Reservation $reservation): Reservation
     {
         $driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
-            $sql = "INSERT INTO `reservations` (
-                `reservation_uid`,
-                `property_id`,
-                `guest_name`,
-                `guest_email`,
-                `guest_phone`,
-                `check_in`,
-                `check_out`,
-                `total_price`,
-                `status`,
-                `payment_method_id`,
-                `mercadopago_preference_id`,
-                `mercadopago_payment_id`,
-                `payment_status`,
-                `payment_detail`,
-                `lang`,
-                `registry_completed`,
-                `registry_completed_at`,
-                `door_code`
-            ) VALUES (
-                :reservation_uid,
-                :property_id,
-                :guest_name,
-                :guest_email,
-                :guest_phone,
-                :check_in,
-                :check_out,
-                :total_price,
-                :status,
-                :payment_method_id,
-                :mercadopago_preference_id,
-                :mercadopago_payment_id,
-                :payment_status,
-                :payment_detail,
-                :lang,
-                :registry_completed,
-                :registry_completed_at,
-                :door_code
-            ) ON CONFLICT(`reservation_uid`) DO UPDATE SET
-                `guest_name` = excluded.`guest_name`,
-                `guest_email` = excluded.`guest_email`,
-                `guest_phone` = excluded.`guest_phone`,
-                `total_price` = excluded.`total_price`,
-                `status` = excluded.`status`,
-                `payment_method_id` = excluded.`payment_method_id`,
-                `mercadopago_preference_id` = excluded.`mercadopago_preference_id`,
-                `mercadopago_payment_id` = excluded.`mercadopago_payment_id`,
-                `payment_status` = excluded.`payment_status`,
-                `payment_detail` = excluded.`payment_detail`,
-                `lang` = excluded.`lang`,
-                `registry_completed` = excluded.`registry_completed`,
-                `registry_completed_at` = excluded.`registry_completed_at`,
-                `door_code` = excluded.`door_code`";
-        } else {
-            $sql = "INSERT INTO `reservations` (
-                `reservation_uid`,
-                `property_id`,
-                `guest_name`,
-                `guest_email`,
-                `guest_phone`,
-                `check_in`,
-                `check_out`,
-                `total_price`,
-                `status`,
-                `payment_method_id`,
-                `mercadopago_preference_id`,
-                `mercadopago_payment_id`,
-                `payment_status`,
-                `payment_detail`,
-                `lang`,
-                `registry_completed`,
-                `registry_completed_at`,
-                `door_code`
-            ) VALUES (
-                :reservation_uid,
-                :property_id,
-                :guest_name,
-                :guest_email,
-                :guest_phone,
-                :check_in,
-                :check_out,
-                :total_price,
-                :status,
-                :payment_method_id,
-                :mercadopago_preference_id,
-                :mercadopago_payment_id,
-                :payment_status,
-                :payment_detail,
-                :lang,
-                :registry_completed,
-                :registry_completed_at,
-                :door_code
-            ) ON DUPLICATE KEY UPDATE
-                `guest_name` = VALUES(`guest_name`),
-                `guest_email` = VALUES(`guest_email`),
-                `guest_phone` = VALUES(`guest_phone`),
-                `total_price` = VALUES(`total_price`),
-                `status` = VALUES(`status`),
-                `payment_method_id` = VALUES(`payment_method_id`),
-                `mercadopago_preference_id` = VALUES(`mercadopago_preference_id`),
-                `mercadopago_payment_id` = VALUES(`mercadopago_payment_id`),
-                `payment_status` = VALUES(`payment_status`),
-                `payment_detail` = VALUES(`payment_detail`),
-                `lang` = VALUES(`lang`),
-                `registry_completed` = VALUES(`registry_completed`),
-                `registry_completed_at` = VALUES(`registry_completed_at`),
-                `door_code` = VALUES(`door_code`)";
+        $cols = $this->getTableColumns();
+        $hasRefunded = empty($cols) || isset($cols['refunded_amount']);
+        $hasSource = empty($cols) || isset($cols['source']);
+        $hasNotes = empty($cols) || isset($cols['notes']);
+
+        $columns = [
+            'reservation_uid',
+            'property_id',
+            'guest_name',
+            'guest_email',
+            'guest_phone',
+            'check_in',
+            'check_out',
+            'total_price',
+        ];
+        if ($hasRefunded) {
+            $columns[] = 'refunded_amount';
+        }
+        if ($hasSource) {
+            $columns[] = 'source';
+        }
+        $columns = array_merge($columns, [
+            'status',
+            'payment_method_id',
+            'mercadopago_preference_id',
+            'mercadopago_payment_id',
+            'payment_status',
+            'payment_detail',
+            'lang',
+            'registry_completed',
+            'registry_completed_at',
+            'door_code',
+        ]);
+        if ($hasNotes) {
+            $columns[] = 'notes';
         }
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([
+        $colList = '`' . implode('`, `', $columns) . '`';
+        $valList = ':' . implode(', :', $columns);
+
+        $params = [
             ':reservation_uid' => $reservation->reservationUid,
             ':property_id' => $reservation->propertyId,
             ':guest_name' => $reservation->guestName,
@@ -151,7 +117,64 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':registry_completed' => $reservation->registryCompleted ? 1 : 0,
             ':registry_completed_at' => $reservation->registryCompletedAt?->format('Y-m-d H:i:s'),
             ':door_code' => $reservation->doorCode,
+        ];
+
+        if ($hasRefunded) {
+            $params[':refunded_amount'] = $reservation->refundedAmount;
+        }
+        if ($hasSource) {
+            $params[':source'] = $reservation->source;
+        }
+        if ($hasNotes) {
+            $params[':notes'] = $reservation->notes;
+        }
+
+        $updatableColumns = [
+            'guest_name',
+            'guest_email',
+            'guest_phone',
+            'total_price',
+        ];
+        if ($hasRefunded) {
+            $updatableColumns[] = 'refunded_amount';
+        }
+        if ($hasSource) {
+            $updatableColumns[] = 'source';
+        }
+        $updatableColumns = array_merge($updatableColumns, [
+            'status',
+            'payment_method_id',
+            'mercadopago_preference_id',
+            'mercadopago_payment_id',
+            'payment_status',
+            'payment_detail',
+            'lang',
+            'registry_completed',
+            'registry_completed_at',
+            'door_code',
         ]);
+        if ($hasNotes) {
+            $updatableColumns[] = 'notes';
+        }
+
+        if ($driver === 'sqlite') {
+            $updateAssignments = [];
+            foreach ($updatableColumns as $col) {
+                $updateAssignments[] = "`{$col}` = excluded.`{$col}`";
+            }
+            $sql = "INSERT INTO `reservations` ({$colList}) VALUES ({$valList})
+                ON CONFLICT(`reservation_uid`) DO UPDATE SET " . implode(', ', $updateAssignments);
+        } else {
+            $updateAssignments = [];
+            foreach ($updatableColumns as $col) {
+                $updateAssignments[] = "`{$col}` = VALUES(`{$col}`)";
+            }
+            $sql = "INSERT INTO `reservations` ({$colList}) VALUES ({$valList})
+                ON DUPLICATE KEY UPDATE " . implode(', ', $updateAssignments);
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
 
         return $this->findByUid($reservation->reservationUid) ?? $reservation;
     }
@@ -440,7 +463,10 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             updatedAt: isset($row['updated_at']) ? new DateTimeImmutable((string) $row['updated_at']) : null,
             registryCompleted: !empty($row['registry_completed']),
             registryCompletedAt: !empty($row['registry_completed_at']) ? new DateTimeImmutable((string) $row['registry_completed_at']) : null,
-            doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null
+            doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null,
+            source: isset($row['source']) && $row['source'] !== '' ? (string) $row['source'] : 'web',
+            notes: isset($row['notes']) ? (string) $row['notes'] : null,
+            refundedAmount: isset($row['refunded_amount']) ? (float) $row['refunded_amount'] : 0.0
         );
     }
 }
