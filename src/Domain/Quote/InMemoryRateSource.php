@@ -7,10 +7,10 @@ namespace OceanViewFlats\Domain\Quote;
 /**
  * In-memory rate source for fast, isolated unit tests.
  */
-final class InMemoryRateSource implements RateSourceInterface
+class InMemoryRateSource implements RateSourceInterface
 {
     /** @var array<string, array<int, RateTier>> */
-    private array $tiers = [];
+    protected array $tiers = [];
 
     /**
      * @param array<int, RateTier> $initialTiers
