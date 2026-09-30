@@ -19,6 +19,12 @@ final class PdoMaintenanceBlockSourceTest extends TestCase
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
         $this->pdo->exec('
+            CREATE TABLE admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE
+            );
+
             CREATE TABLE calendar_blocks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 property_id TEXT NOT NULL,
@@ -28,7 +34,7 @@ final class PdoMaintenanceBlockSourceTest extends TestCase
                 created_by INTEGER DEFAULT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
+            );
         ');
 
         $this->source = new PdoMaintenanceBlockSource($this->pdo);

@@ -19,9 +19,6 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
-use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
-use OceanViewFlats\Admin\Repository\AdminRateRepository;
-use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Views\ViewRenderer;
@@ -34,13 +31,21 @@ use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\CsvRateSource;
+use OceanViewFlats\Domain\Quote\PdoRateRepository;
 use OceanViewFlats\Domain\Quote\PdoRateSource;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
+use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
 use OceanViewFlats\Domain\Quote\RateSourceInterface;
+use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
+use OceanViewFlats\Domain\Reservation\PdoMaintenanceBlockRepository;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use PDO;
 
 /**
@@ -128,37 +133,51 @@ final class AdminApp
         $mpAccessToken = (string) ($options['mp_access_token'] ?? ($_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: ''));
         /** @var MercadoPagoRefundClientInterface $refundClient */
         $refundClient = $options['refund_client'] ?? new MercadoPagoRefundClient($mpAccessToken);
+        /** @var MaintenanceBlockRepositoryInterface $calendarBlockRepo */
+        $calendarBlockRepo = $options['maintenance_block_repository'] ?? new PdoMaintenanceBlockRepository($pdo);
+        /** @var ReservationRepositoryInterface $reservationRepository */
+        $reservationRepository = $options['reservation_repository'] ?? new PdoReservationRepository($pdo);
+        /** @var ReservationSearchInterface $reservationSearch */
+        $reservationSearch = $options['reservation_search'] ?? new PdoReservationSearchAdapter($pdo);
         /** @var ReservationLedgerInterface $ledger */
-        $ledger = $options['ledger'] ?? ReservationLedger::createDefault($pdo);
-        $reservationRepo = new AdminReservationRepository($pdo);
+        $ledger = $options['ledger'] ?? ReservationLedger::createDefault(
+            pdo: $pdo,
+            maintenanceBlockSource: $calendarBlockRepo,
+            repository: $reservationRepository
+        );
 
         /** @var GuestLifecycleFulfillmentServiceInterface $lifecycleService */
         $lifecycleService = $options['lifecycle_service'] ?? GuestLifecycleFulfillmentService::createDefault($pdo, [
             'email_sender' => $emailSender,
             'confirmation_email_renderer' => $emailRenderer,
             'public_site_url' => $publicSiteUrl,
+            'reservation_repository' => $reservationRepository,
         ]);
 
         $reservationController = new ReservationController(
-            repository: $reservationRepo,
+            repository: $reservationRepository,
+            search: $reservationSearch,
             viewRenderer: $viewRenderer,
             auditLogger: $auditLogger,
             ledger: $ledger,
             quoteEngine: $quoteEngine,
             emailSender: $emailSender,
-            refundClient: $refundClient,
             lifecycleService: $lifecycleService,
             publicSiteUrl: $publicSiteUrl,
-            cancellationEmailRenderer: $cancellationEmailRenderer
+            refundClient: $refundClient,
+            cancellationEmailRenderer: $cancellationEmailRenderer,
+            pdo: $pdo
         );
 
         // 6. Rates Repository & Controller
-        $rateRepo = new AdminRateRepository($pdo, $ratesConfig);
-        $pdoRateSource = $rateSource instanceof PdoRateSource ? $rateSource : new PdoRateSource($pdo, $rateSource);
+        /** @var RateRepositoryInterface $rateRepo */
+        $rateRepo = $options['rate_repository']
+            ?? ($rateSource instanceof RateRepositoryInterface
+                ? $rateSource
+                : new PdoRateRepository($pdo, $ratesConfig, $rateSource));
 
         $rateController = new RateController(
             rateRepository: $rateRepo,
-            rateSource: $pdoRateSource,
             viewRenderer: $viewRenderer,
             auditLogger: $auditLogger,
             ratesConfig: $ratesConfig,
@@ -166,7 +185,6 @@ final class AdminApp
         );
 
         // 7. Calendar Blocks Repository & Controller
-        $calendarBlockRepo = new AdminCalendarBlockRepository($pdo);
         $calendarBlockController = new CalendarBlockController(
             blockRepository: $calendarBlockRepo,
             ledger: $ledger,

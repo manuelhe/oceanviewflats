@@ -27,24 +27,28 @@ final class ReservationLedger implements ReservationLedgerInterface
         $this->maintenanceBlockSource = $maintenanceBlockSource ?? new InMemoryMaintenanceBlockSource();
     }
 
-    public static function createDefault(?PDO $pdo = null, ?string $cacheDir = null): self
-    {
-        $repository = $pdo !== null
+    public static function createDefault(
+        ?PDO $pdo = null,
+        ?string $cacheDir = null,
+        ?MaintenanceBlockSourceInterface $maintenanceBlockSource = null,
+        ?ReservationRepositoryInterface $repository = null
+    ): self {
+        $repo = $repository ?? ($pdo !== null
             ? new PdoReservationRepository($pdo)
-            : new InMemoryReservationRepository();
+            : new InMemoryReservationRepository());
 
         $channelBlockSource = $cacheDir !== null
             ? new FileCacheChannelBlockSource($cacheDir)
             : FileCacheChannelBlockSource::createDefault();
 
-        $maintenanceBlockSource = $pdo !== null
-            ? new PdoMaintenanceBlockSource($pdo)
-            : new InMemoryMaintenanceBlockSource();
+        $blockSource = $maintenanceBlockSource ?? ($pdo !== null
+            ? new PdoMaintenanceBlockRepository($pdo)
+            : new InMemoryMaintenanceBlockRepository());
 
         return new self(
-            repository: $repository,
+            repository: $repo,
             channelBlockSource: $channelBlockSource,
-            maintenanceBlockSource: $maintenanceBlockSource
+            maintenanceBlockSource: $blockSource
         );
     }
 

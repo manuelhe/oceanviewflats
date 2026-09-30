@@ -8,8 +8,8 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Controller\RateController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Repository\AdminRateRepository;
+use OceanViewFlats\Admin\Tests\Support\AdminDatabaseTestHelper;
 use OceanViewFlats\Admin\Views\ViewRenderer;
-use OceanViewFlats\Domain\Quote\PdoRateSource;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -18,7 +18,6 @@ final class RateControllerTest extends TestCase
 {
     private PDO $pdo;
     private AdminRateRepository $rateRepository;
-    private PdoRateSource $rateSource;
     private ViewRenderer $viewRenderer;
     private AuditLogger $auditLogger;
     private PropertyRatesConfig $ratesConfig;
@@ -32,52 +31,10 @@ final class RateControllerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->pdo = new PDO('sqlite::memory:', null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-
-        $this->pdo->exec('
-            CREATE TABLE admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE
-            );
-
-            CREATE TABLE property_rates (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                property_id TEXT NOT NULL,
-                start_date TEXT NOT NULL,
-                end_date TEXT NOT NULL,
-                season_name TEXT NOT NULL,
-                price_per_night REAL NOT NULL,
-                min_stay INTEGER NOT NULL DEFAULT 2,
-                cleaning_fee REAL NOT NULL DEFAULT 0.0,
-                resort_fee REAL NOT NULL DEFAULT 0.0,
-                created_by INTEGER DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE admin_audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                action TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                payload_before TEXT DEFAULT NULL,
-                payload_after TEXT DEFAULT NULL,
-                admin_user_id INTEGER DEFAULT NULL,
-                ip_address TEXT DEFAULT NULL,
-                user_agent TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            INSERT INTO admin_users (id, name, email) VALUES (1, "Manuel Admin", "admin@oceanviewflats.com");
-        ');
+        $this->pdo = AdminDatabaseTestHelper::createDatabaseWithDefaultAdmin();
 
         $this->ratesConfig = PropertyRatesConfig::createDefault();
         $this->rateRepository = new AdminRateRepository($this->pdo, $this->ratesConfig);
-        $this->rateSource = new PdoRateSource($this->pdo);
         $this->viewRenderer = new ViewRenderer(dirname(__DIR__, 2) . '/src/Views');
         $this->auditLogger = new AuditLogger($this->pdo);
 
@@ -91,7 +48,6 @@ final class RateControllerTest extends TestCase
 
         $this->controller = new RateController(
             rateRepository: $this->rateRepository,
-            rateSource: $this->rateSource,
             viewRenderer: $this->viewRenderer,
             auditLogger: $this->auditLogger,
             ratesConfig: $this->ratesConfig,

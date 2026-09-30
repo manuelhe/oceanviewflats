@@ -89,4 +89,11 @@ interface ReservationRepositoryInterface
      * Updates the door code (PIN) for a reservation.
      */
     public function updateDoorCode(string $reservationUid, string $doorCode): ?Reservation;
+
+    /**
+     * Records a refund ledger entry associated with a reservation UID.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function recordRefund(array $data): void;
 }

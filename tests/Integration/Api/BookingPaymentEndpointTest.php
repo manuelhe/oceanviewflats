@@ -64,6 +64,7 @@ final class BookingPaymentEndpointTest extends TestCase
                 payment_status TEXT,
                 payment_detail TEXT,
                 notes TEXT,
+                source TEXT DEFAULT 'web',
                 lang TEXT,
                 registry_completed INTEGER DEFAULT 0,
                 registry_completed_at TEXT,
@@ -76,6 +77,12 @@ final class BookingPaymentEndpointTest extends TestCase
                 idempotency_key TEXT PRIMARY KEY,
                 payment_id TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE
             );
 
             CREATE TABLE admin_audit_logs (
