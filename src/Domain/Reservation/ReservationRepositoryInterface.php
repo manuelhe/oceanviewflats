@@ -84,4 +84,9 @@ interface ReservationRepositoryInterface
         string $checkIn,
         string $checkOut
     ): ?Reservation;
+
+    /**
+     * Updates the door code (PIN) for a reservation.
+     */
+    public function updateDoorCode(string $reservationUid, string $doorCode): ?Reservation;
 }

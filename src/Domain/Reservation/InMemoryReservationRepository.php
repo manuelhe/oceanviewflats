@@ -41,7 +41,8 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
             createdAt: $createdAt,
             updatedAt: $reservation->updatedAt,
             registryCompleted: $reservation->registryCompleted,
-            registryCompletedAt: $reservation->registryCompletedAt
+            registryCompletedAt: $reservation->registryCompletedAt,
+            doorCode: $reservation->doorCode
         );
 
         $this->records[$saved->reservationUid] = $saved;
@@ -171,6 +172,18 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
         }
 
         return null;
+    }
+
+    public function updateDoorCode(string $reservationUid, string $doorCode): ?Reservation
+    {
+        $existing = $this->findByUid($reservationUid);
+        if ($existing === null) {
+            return null;
+        }
+
+        $updated = $existing->withDoorCode($doorCode);
+        $this->records[$reservationUid] = $updated;
+        return $updated;
     }
 
     /**
