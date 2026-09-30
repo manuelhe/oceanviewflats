@@ -75,7 +75,6 @@ final class HostRegistryEmailRenderer implements HostRegistryEmailRendererInterf
         $emailBody .= "--------------------------------------------------\n";
         $emailBody .= "Submission IP:  " . ($submission->ipAddress ?: 'Unknown') . "\n";
         $emailBody .= "Timestamp:      " . $timestamp . "\n";
-        $emailBody .= "Local Backup:   Logged successfully.\n";
         $emailBody .= "Google Sheet:   " . $sheetStatus . "\n";
         $emailBody .= "==================================================\n";
 
@@ -203,7 +202,6 @@ HTML;
         <div class="card-title">System Logs</div>
         <div class="row"><span>Submission IP</span><strong>{$safeIp}</strong></div>
         <div class="row"><span>Timestamp</span><strong>{$safeTimestamp}</strong></div>
-        <div class="row"><span>Local Backup</span><strong>Logged successfully.</strong></div>
         <div class="row"><span>Google Sheet</span><strong>{$safeSheetStatus}</strong></div>
       </div>
     </div>

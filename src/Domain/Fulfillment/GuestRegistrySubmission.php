@@ -50,6 +50,22 @@ final class GuestRegistrySubmission
         return count($this->occupants);
     }
 
+    public function hasValidDates(): bool
+    {
+        if ($this->checkIn === '' || $this->checkOut === '') {
+            return false;
+        }
+
+        $d1 = \DateTimeImmutable::createFromFormat('Y-m-d', $this->checkIn);
+        $d2 = \DateTimeImmutable::createFromFormat('Y-m-d', $this->checkOut);
+
+        if (!$d1 || !$d2 || $d1->format('Y-m-d') !== $this->checkIn || $d2->format('Y-m-d') !== $this->checkOut) {
+            return false;
+        }
+
+        return $this->checkIn < $this->checkOut;
+    }
+
     /**
      * @return array<string, mixed>
      */

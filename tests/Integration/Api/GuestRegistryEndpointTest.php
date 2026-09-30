@@ -221,7 +221,7 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertSame(200, $resWithHp['statusCode']);
         $this->assertIsArray($resWithHp['json']);
         $this->assertTrue($resWithHp['json']['success']);
-        $this->assertSame('Registration successfully processed.', $resWithHp['json']['message']);
+        $this->assertSame('Guest registration completed successfully.', $resWithHp['json']['message']);
 
         // Database must remain unaffected
         $regCount = (int) $this->pdo->query('SELECT COUNT(*) FROM guest_registries')->fetchColumn();
@@ -235,7 +235,7 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertSame(200, $resWithUrl['statusCode']);
         $this->assertIsArray($resWithUrl['json']);
         $this->assertTrue($resWithUrl['json']['success']);
-        $this->assertSame('Registration successfully processed.', $resWithUrl['json']['message']);
+        $this->assertSame('Guest registration completed successfully.', $resWithUrl['json']['message']);
 
         $regCountAfter = (int) $this->pdo->query('SELECT COUNT(*) FROM guest_registries')->fetchColumn();
         $this->assertSame(0, $regCountAfter);
@@ -284,7 +284,7 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertSame(200, $res['statusCode']);
         $this->assertIsArray($res['json']);
         $this->assertTrue($res['json']['success']);
-        $this->assertSame('Registration successfully processed.', $res['json']['message']);
+        $this->assertSame('Guest registration completed successfully.', $res['json']['message']);
 
         // Validate Door PIN format per ADR 0001
         $doorCode = $res['json']['door_code'] ?? null;
@@ -455,6 +455,33 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertIsArray($res['json']);
         $this->assertFalse($res['json']['success']);
         $this->assertNotEmpty($res['json']['errors']);
+    }
+
+    public function testInvalidOccupantDocumentRejectionReturns400(): void
+    {
+        $payload = $this->createValidRegistryData([
+            'occupants' => [
+                [
+                    'index' => 1,
+                    'name' => 'Maria Gomez',
+                    'age' => 30,
+                    'doc_type' => 'AlienID',
+                    'doc_num' => '12345',
+                ],
+            ],
+        ]);
+        unset(
+            $payload['guest_name_1'], $payload['guest_age_1'], $payload['guest_doc_type_1'], $payload['guest_doc_num_1'],
+            $payload['guest_name_2'], $payload['guest_age_2'], $payload['guest_doc_type_2'], $payload['guest_doc_num_2']
+        );
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertStringContainsString('Invalid document type', (string) $res['json']['error']);
     }
 
     public function testUnmatchedReservationReturns400Error(): void

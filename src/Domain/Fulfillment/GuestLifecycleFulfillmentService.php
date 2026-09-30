@@ -6,7 +6,6 @@ namespace OceanViewFlats\Domain\Fulfillment;
 
 use DateTimeImmutable;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
-use OceanViewFlats\Domain\Reservation\InMemoryReservationRepository;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
@@ -18,7 +17,7 @@ use Throwable;
  * ADR 0001 access credential generation and disclosure, administrative manual registry,
  * PIN overrides, PIN regeneration, and post-settlement booking fulfillment.
  */
-final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmentServiceInterface, BookingFulfillmentInterface
+final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmentServiceInterface
 {
     public function __construct(
         private readonly PDO $pdo,
@@ -82,7 +81,16 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
      */
     public function submitRegistry(GuestRegistrySubmission $submission): RegistryFulfillmentResult
     {
-        // 1. Validate guest count: at least 1, max 6
+        // 1. Validate stay dates if provided
+        if ($submission->checkIn !== '' || $submission->checkOut !== '') {
+            if (!$submission->hasValidDates()) {
+                return RegistryFulfillmentResult::validationFailure([
+                    'Check-in and check-out dates are invalid or improperly ordered.',
+                ]);
+            }
+        }
+
+        // 2. Validate guest count: at least 1, max 6
         $guestCount = $submission->getGuestCount();
         if ($guestCount < 1 || $guestCount > 6) {
             return RegistryFulfillmentResult::validationFailure([
@@ -90,7 +98,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             ]);
         }
 
-        // 2. Validate occupant details: valid name, age (0-120), valid docNum
+        // 3. Validate occupant details defensively
         $validationErrors = [];
         foreach ($submission->occupants as $occupant) {
             $trimmedName = trim($occupant->name);
@@ -143,52 +151,22 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         // 6. Atomic PDO transaction
         $this->pdo->beginTransaction();
         try {
-            $stmtRes = $this->pdo->prepare("
-                UPDATE `reservations`
-                SET `registry_completed` = 1,
-                    `registry_completed_at` = CURRENT_TIMESTAMP,
-                    `door_code` = :door_code,
-                    `updated_at` = CURRENT_TIMESTAMP
-                WHERE `reservation_uid` = :uid
-            ");
-            $stmtRes->execute([
-                ':door_code' => $doorCode,
-                ':uid' => $reservation->reservationUid,
-            ]);
+            $this->reservationRepository->markRegistryCompleted(
+                $reservation->reservationUid,
+                new DateTimeImmutable(),
+                $doorCode
+            );
 
-            if ($this->reservationRepository instanceof InMemoryReservationRepository) {
-                $this->reservationRepository->markRegistryCompleted(
-                    $reservation->reservationUid,
-                    new DateTimeImmutable(),
-                    $doorCode
-                );
-            }
-
-            $stmtReg = $this->pdo->prepare("
-                INSERT INTO `guest_registries` (
-                    `reservation_uid`, `property_id`, `check_in`, `check_out`,
-                    `guest_count`, `guests_payload`, `car_plates`, `car_model`,
-                    `ip_address`, `created_at`
-                ) VALUES (
-                    :reservation_uid, :property_id, :check_in, :check_out,
-                    :guest_count, :guests_payload, :car_plates, :car_model,
-                    :ip_address, CURRENT_TIMESTAMP
-                )
-            ");
-            $stmtReg->execute([
-                ':reservation_uid' => $reservation->reservationUid,
-                ':property_id' => $reservation->propertyId,
-                ':check_in' => $reservation->checkIn,
-                ':check_out' => $reservation->checkOut,
-                ':guest_count' => $guestCount,
-                ':guests_payload' => json_encode(
-                    array_map(fn (OccupantDetails $o): array => $o->toArray(), $submission->occupants),
-                    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-                ),
-                ':car_plates' => $submission->carPlates,
-                ':car_model' => $submission->carModel,
-                ':ip_address' => $submission->ipAddress,
-            ]);
+            $this->insertGuestRegistry(
+                reservationUid: $reservation->reservationUid,
+                propertyId: $reservation->propertyId,
+                checkIn: $reservation->checkIn,
+                checkOut: $reservation->checkOut,
+                occupants: $submission->occupants,
+                carPlates: $submission->carPlates,
+                carModel: $submission->carModel,
+                ipAddress: $submission->ipAddress
+            );
 
             $stmtAudit = $this->pdo->prepare("
                 INSERT INTO `admin_audit_logs` (
@@ -238,12 +216,6 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
                 $spreadsheetSynced,
                 $spreadsheetError
             );
-            $this->hostRegistryRenderer->renderPlainText(
-                $submission,
-                $doorCode,
-                $spreadsheetSynced,
-                $spreadsheetError
-            );
             $hostReportSent = $this->emailSender->send($this->hostNotificationEmail, $subject, $html);
         } catch (Throwable) {
             $hostReportSent = false;
@@ -288,53 +260,23 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
 
         $this->pdo->beginTransaction();
         try {
-            $stmt = $this->pdo->prepare("
-                UPDATE `reservations`
-                SET `registry_completed` = 1,
-                    `registry_completed_at` = CURRENT_TIMESTAMP,
-                    `door_code` = :door_code,
-                    `updated_at` = CURRENT_TIMESTAMP
-                WHERE `reservation_uid` = :uid
-            ");
-            $stmt->execute([
-                ':door_code' => $doorCode,
-                ':uid' => $reservationUid,
-            ]);
-
-            if ($this->reservationRepository instanceof InMemoryReservationRepository) {
-                $this->reservationRepository->markRegistryCompleted(
-                    $reservationUid,
-                    new DateTimeImmutable(),
-                    $doorCode
-                );
-            }
+            $this->reservationRepository->markRegistryCompleted(
+                $reservationUid,
+                new DateTimeImmutable(),
+                $doorCode
+            );
 
             if ($submission !== null) {
-                $stmtReg = $this->pdo->prepare("
-                    INSERT INTO `guest_registries` (
-                        `reservation_uid`, `property_id`, `check_in`, `check_out`,
-                        `guest_count`, `guests_payload`, `car_plates`, `car_model`,
-                        `ip_address`, `created_at`
-                    ) VALUES (
-                        :reservation_uid, :property_id, :check_in, :check_out,
-                        :guest_count, :guests_payload, :car_plates, :car_model,
-                        :ip_address, CURRENT_TIMESTAMP
-                    )
-                ");
-                $stmtReg->execute([
-                    ':reservation_uid' => $reservationUid,
-                    ':property_id' => $submission->propertyId !== '' ? $submission->propertyId : $reservation->propertyId,
-                    ':check_in' => $submission->checkIn !== '' ? $submission->checkIn : $reservation->checkIn,
-                    ':check_out' => $submission->checkOut !== '' ? $submission->checkOut : $reservation->checkOut,
-                    ':guest_count' => $submission->getGuestCount(),
-                    ':guests_payload' => json_encode(
-                        array_map(fn (OccupantDetails $o): array => $o->toArray(), $submission->occupants),
-                        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-                    ),
-                    ':car_plates' => $submission->carPlates,
-                    ':car_model' => $submission->carModel,
-                    ':ip_address' => $submission->ipAddress ?? $admin?->ipAddress,
-                ]);
+                $this->insertGuestRegistry(
+                    reservationUid: $reservationUid,
+                    propertyId: $submission->propertyId !== '' ? $submission->propertyId : $reservation->propertyId,
+                    checkIn: $submission->checkIn !== '' ? $submission->checkIn : $reservation->checkIn,
+                    checkOut: $submission->checkOut !== '' ? $submission->checkOut : $reservation->checkOut,
+                    occupants: $submission->occupants,
+                    carPlates: $submission->carPlates,
+                    carModel: $submission->carModel,
+                    ipAddress: $submission->ipAddress ?? $admin?->ipAddress
+                );
             }
 
             $stmtAudit = $this->pdo->prepare("
@@ -545,12 +487,44 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
     }
 
     /**
-     * Backward-compatibility alias implementing BookingFulfillmentInterface.
+     * Helper to persist guest registry occupant records uniformly.
      *
-     * @param array<string, mixed> $extra
+     * @param array<int, OccupantDetails> $occupants
      */
-    public function fulfillConfirmation(Reservation $reservation, array $extra = []): FulfillmentResult
-    {
-        return $this->fulfillBookingConfirmation($reservation, $extra);
+    private function insertGuestRegistry(
+        string $reservationUid,
+        string $propertyId,
+        string $checkIn,
+        string $checkOut,
+        array $occupants,
+        ?string $carPlates,
+        ?string $carModel,
+        ?string $ipAddress
+    ): void {
+        $stmtReg = $this->pdo->prepare("
+            INSERT INTO `guest_registries` (
+                `reservation_uid`, `property_id`, `check_in`, `check_out`,
+                `guest_count`, `guests_payload`, `car_plates`, `car_model`,
+                `ip_address`, `created_at`
+            ) VALUES (
+                :reservation_uid, :property_id, :check_in, :check_out,
+                :guest_count, :guests_payload, :car_plates, :car_model,
+                :ip_address, CURRENT_TIMESTAMP
+            )
+        ");
+        $stmtReg->execute([
+            ':reservation_uid' => $reservationUid,
+            ':property_id' => $propertyId,
+            ':check_in' => $checkIn,
+            ':check_out' => $checkOut,
+            ':guest_count' => count($occupants),
+            ':guests_payload' => json_encode(
+                array_map(fn (OccupantDetails $o): array => $o->toArray(), $occupants),
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+            ),
+            ':car_plates' => $carPlates,
+            ':car_model' => $carModel,
+            ':ip_address' => $ipAddress,
+        ]);
     }
 }

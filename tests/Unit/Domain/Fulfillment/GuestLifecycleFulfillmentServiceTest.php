@@ -645,15 +645,27 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('mp_12345', $sync['extra']['payment_id']);
     }
 
-    public function testFulfillConfirmationAliasDelegatesToFulfillBookingConfirmation(): void
+    public function testSubmitRegistryRejectsInvalidDates(): void
     {
-        $reservation = $this->createSampleReservation('ovf_confirm_alias');
+        $occupant = new OccupantDetails(
+            index: 1,
+            name: 'Jane Doe',
+            age: 30,
+            docType: 'Passport',
+            docNum: 'US123456'
+        );
 
-        $result = $this->service->fulfillConfirmation($reservation, ['source' => 'webhook']);
+        $submission = new GuestRegistrySubmission(
+            reservationCode: 'ovf_sample_dates',
+            propertyId: '1606',
+            checkIn: '2026-11-20',
+            checkOut: '2026-11-10', // checkOut before checkIn
+            occupants: [$occupant]
+        );
 
-        $this->assertTrue($result->isSuccess());
-        $this->assertSame(2, $this->emailSender->count());
-        $this->assertSame(1, $this->spreadsheetSync->count());
+        $result = $this->service->submitRegistry($submission);
+        $this->assertFalse($result->success);
+        $this->assertContains('Check-in and check-out dates are invalid or improperly ordered.', $result->errors);
     }
 
     // ==========================================

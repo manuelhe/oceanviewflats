@@ -145,7 +145,6 @@ final class AdminApp
             auditLogger: $auditLogger,
             ledger: $ledger,
             quoteEngine: $quoteEngine,
-            emailRenderer: $emailRenderer,
             emailSender: $emailSender,
             refundClient: $refundClient,
             lifecycleService: $lifecycleService,

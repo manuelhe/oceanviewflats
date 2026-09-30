@@ -122,7 +122,6 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('SYSTEM LOGS', $text);
         $this->assertStringContainsString('Submission IP:  190.24.15.2', $text);
         $this->assertStringContainsString('Timestamp:      2026-10-01 14:30:00', $text);
-        $this->assertStringContainsString('Local Backup:   Logged successfully.', $text);
         $this->assertStringContainsString('Google Sheet:   Recorded successfully.', $text);
     }
 

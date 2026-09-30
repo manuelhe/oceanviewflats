@@ -74,11 +74,7 @@ final class OccupantDetails
         $name = trim((string)($data['name'] ?? ''));
         $age = (int)($data['age'] ?? 0);
 
-        $docType = trim((string)($data['doc_type'] ?? $data['docType'] ?? 'Other ID'));
-        if (!in_array($docType, self::VALID_DOC_TYPES, true)) {
-            $docType = 'Other ID';
-        }
-
+        $docType = trim((string)($data['doc_type'] ?? $data['docType'] ?? ''));
         $docNum = trim((string)($data['doc_num'] ?? $data['docNum'] ?? ''));
 
         return new self(

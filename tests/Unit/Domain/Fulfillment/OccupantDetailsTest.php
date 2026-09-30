@@ -160,8 +160,11 @@ final class OccupantDetailsTest extends TestCase
         $this->assertSame($expected, $occupant->toArray());
     }
 
-    public function testFromArrayNormalizesDocTypeAndFallsBackToOtherId(): void
+    public function testFromArrayThrowsOnInvalidDocType(): void
     {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid document type: Alien Registration Card.');
+
         $data = [
             'name' => 'Unknown Traveler',
             'age' => '45',
@@ -169,13 +172,7 @@ final class OccupantDetailsTest extends TestCase
             'doc_num' => 'ARC-998811',
         ];
 
-        $occupant = OccupantDetails::fromArray($data, index: 3);
-
-        $this->assertSame(3, $occupant->index);
-        $this->assertSame('Unknown Traveler', $occupant->name);
-        $this->assertSame(45, $occupant->age);
-        $this->assertSame('Other ID', $occupant->docType);
-        $this->assertSame('ARC-998811', $occupant->docNum);
+        OccupantDetails::fromArray($data, index: 3);
     }
 
     public function testFromArrayAcceptsValidDocTypes(): void

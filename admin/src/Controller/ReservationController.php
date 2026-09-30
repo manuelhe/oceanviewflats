@@ -15,7 +15,6 @@ use OceanViewFlats\Domain\Access\DoorCodeGenerator;
 use OceanViewFlats\Domain\Fulfillment\AdminContext;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
-use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
@@ -33,14 +32,12 @@ final class ReservationController
 {
     private readonly CancellationEmailRendererInterface $cancellationEmailRenderer;
 
-    // @phpstan-ignore constructor.unusedParameter (retained for backward compatibility; confirmation email fulfillment is delegated to lifecycleService)
     public function __construct(
         private readonly AdminReservationRepository $repository,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger,
         private readonly ReservationLedgerInterface $ledger,
         private readonly QuoteEngineInterface $quoteEngine,
-        ?ConfirmationEmailRendererInterface $emailRenderer,
         private readonly EmailSenderInterface $emailSender,
         private readonly GuestLifecycleFulfillmentServiceInterface $lifecycleService,
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
@@ -380,23 +377,7 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</div>', 400);
         }
 
-        $data = $this->repository->findReservationWithAuditTrail($uid);
-        $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $data !== null ? $data['reservation'] : $reservation,
-            'auditLogs' => $data !== null ? $data['audit_logs'] : [],
-            'refunds' => $data !== null ? $data['refunds'] : [],
-            'csrfToken' => (string) ($session['csrf_token'] ?? ''),
-            'publicSiteUrl' => $this->publicSiteUrl,
-        ]);
-
-        return new Response(
-            statusCode: 200,
-            headers: [
-                'Content-Type' => 'text/html; charset=UTF-8',
-                'HX-Trigger' => 'reservationUpdated',
-            ],
-            body: $drawerHtml
-        );
+        return $this->renderDetailDrawerResponse($uid, $session, $reservation);
     }
 
     /**
@@ -424,23 +405,7 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . '</div>', $statusCode);
         }
 
-        $data = $this->repository->findReservationWithAuditTrail($uid);
-        $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $data !== null ? $data['reservation'] : [],
-            'auditLogs' => $data !== null ? $data['audit_logs'] : [],
-            'refunds' => $data !== null ? $data['refunds'] : [],
-            'csrfToken' => (string) ($session['csrf_token'] ?? ''),
-            'publicSiteUrl' => $this->publicSiteUrl,
-        ]);
-
-        return new Response(
-            statusCode: 200,
-            headers: [
-                'Content-Type' => 'text/html; charset=UTF-8',
-                'HX-Trigger' => 'reservationUpdated',
-            ],
-            body: $drawerHtml
-        );
+        return $this->renderDetailDrawerResponse($uid, $session);
     }
 
     /**
@@ -465,9 +430,20 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($error, ENT_QUOTES, 'UTF-8') . '</div>', $statusCode);
         }
 
+        return $this->renderDetailDrawerResponse($uid, $session);
+    }
+
+    /**
+     * Helper to render detail drawer HTMX response.
+     *
+     * @param array<string, mixed> $session
+     * @param array<string, mixed> $fallbackReservation
+     */
+    private function renderDetailDrawerResponse(string $uid, array &$session, array $fallbackReservation = []): Response
+    {
         $data = $this->repository->findReservationWithAuditTrail($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $data !== null ? $data['reservation'] : [],
+            'reservation' => $data !== null ? $data['reservation'] : $fallbackReservation,
             'auditLogs' => $data !== null ? $data['audit_logs'] : [],
             'refunds' => $data !== null ? $data['refunds'] : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),

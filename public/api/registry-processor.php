@@ -41,14 +41,33 @@ if (empty($data['ip_address']) && isset($_SERVER['REMOTE_ADDR'])) {
     $data['ip_address'] = $_SERVER['REMOTE_ADDR'];
 }
 
+// Sanitize input array
+$sanitizedData = [];
+foreach ($data as $key => $val) {
+    if (is_string($val)) {
+        $sanitizedData[$key] = clean_input($val);
+    } elseif (is_array($val)) {
+        $sanitizedData[$key] = array_map(function ($item) {
+            if (is_array($item)) {
+                return array_map(fn ($v) => is_string($v) ? clean_input($v) : $v, $item);
+            }
+            return is_string($item) ? clean_input($item) : $item;
+        }, $val);
+    } else {
+        $sanitizedData[$key] = $val;
+    }
+}
+$data = $sanitizedData;
+
 // Validate language and load translations
 $lang = get_validated_lang((string) ($data['lang'] ?? ''));
 $allTranslations = require __DIR__ . '/translations.php';
 $t = $allTranslations[$lang]['registry'] ?? $allTranslations['en']['registry'];
+$successMessage = $t['msg_success'] ?? 'Registration successfully processed.';
 
 // Honeypot check (Abuse prevention)
 if (!empty($data['website_hp']) || !empty($data['website_url'])) {
-    send_json_response(true, 'Registration successfully processed.');
+    send_json_response(true, $successMessage);
 }
 
 // Rate Limiting (Abuse prevention)
@@ -71,34 +90,6 @@ $captchaCheck = verify_captcha_challenge(
 );
 if ($captchaCheck !== true) {
     send_json_response(false, $captchaCheck);
-}
-
-// Validate stay dates format and range if provided
-$checkIn = clean_input((string) ($data['check_in'] ?? $data['checkIn'] ?? ''));
-$checkOut = clean_input((string) ($data['check_out'] ?? $data['checkOut'] ?? ''));
-
-$dateErrors = [];
-if ($checkIn !== '') {
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $checkIn) || strtotime($checkIn) === false) {
-        $dateErrors[] = $allTranslations[$lang]['contact']['err_dates_format'] ?? 'Invalid check-in date format.';
-    }
-}
-if ($checkOut !== '') {
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $checkOut) || strtotime($checkOut) === false) {
-        $dateErrors[] = $allTranslations[$lang]['contact']['err_dates_format'] ?? 'Invalid check-out date format.';
-    }
-}
-if ($checkIn !== '' && $checkOut !== '' && empty($dateErrors)) {
-    if (strtotime($checkIn) >= strtotime($checkOut)) {
-        $dateErrors[] = $allTranslations[$lang]['contact']['err_dates_invalid'] ?? 'Check-out date must be after check-in date.';
-    }
-}
-
-if (!empty($dateErrors)) {
-    http_response_code(400);
-    send_json_response(false, $dateErrors[0], [
-        'errors' => $dateErrors,
-    ]);
 }
 
 // Database & Service Resolution
@@ -133,7 +124,7 @@ if (!$result->success) {
 }
 
 http_response_code(200);
-send_json_response(true, 'Registration successfully processed.', [
+send_json_response(true, $successMessage, [
     'door_code' => $result->doorCode,
     'guide_url' => $result->guideUrl,
     'reservation_code' => $result->reservation->reservationUid ?? $submission->reservationCode,
