@@ -39,6 +39,8 @@ use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Quote\RateSourceInterface;
+use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
+use OceanViewFlats\Domain\Reservation\PdoMaintenanceBlockRepository;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 use PDO;
@@ -128,8 +130,13 @@ final class AdminApp
         $mpAccessToken = (string) ($options['mp_access_token'] ?? ($_ENV['MERCADOPAGO_ACCESS_TOKEN'] ?? $_SERVER['MERCADOPAGO_ACCESS_TOKEN'] ?? getenv('MERCADOPAGO_ACCESS_TOKEN') ?: ''));
         /** @var MercadoPagoRefundClientInterface $refundClient */
         $refundClient = $options['refund_client'] ?? new MercadoPagoRefundClient($mpAccessToken);
+        /** @var MaintenanceBlockRepositoryInterface $calendarBlockRepo */
+        $calendarBlockRepo = $options['maintenance_block_repository'] ?? new PdoMaintenanceBlockRepository($pdo);
         /** @var ReservationLedgerInterface $ledger */
-        $ledger = $options['ledger'] ?? ReservationLedger::createDefault($pdo);
+        $ledger = $options['ledger'] ?? ReservationLedger::createDefault(
+            pdo: $pdo,
+            maintenanceBlockSource: $calendarBlockRepo
+        );
         $reservationRepo = new AdminReservationRepository($pdo);
 
         /** @var GuestLifecycleFulfillmentServiceInterface $lifecycleService */
@@ -166,7 +173,6 @@ final class AdminApp
         );
 
         // 7. Calendar Blocks Repository & Controller
-        $calendarBlockRepo = new AdminCalendarBlockRepository($pdo);
         $calendarBlockController = new CalendarBlockController(
             blockRepository: $calendarBlockRepo,
             ledger: $ledger,

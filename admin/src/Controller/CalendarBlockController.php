@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Controller;
 
-use DateTimeImmutable;
 use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
-use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Reservation\MaintenanceBlock;
+use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 
 /**
@@ -20,7 +20,7 @@ use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 final class CalendarBlockController
 {
     public function __construct(
-        private readonly AdminCalendarBlockRepository $blockRepository,
+        private readonly MaintenanceBlockRepositoryInterface $blockRepository,
         private readonly ReservationLedgerInterface $ledger,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger
@@ -37,7 +37,7 @@ final class CalendarBlockController
         $propertyId = $this->resolvePropertyId((string) $request->getQuery('property_id', 'all'));
         $filter = $this->resolveFilter((string) $request->getQuery('filter', 'upcoming'));
 
-        $blocks = $this->blockRepository->getBlocks($propertyId, $filter);
+        $blocks = $this->blockRepository->listFiltered($propertyId, $filter);
         $csrfToken = (string) ($session['csrf_token'] ?? '');
 
         if ($request->isHtmx()) {
@@ -177,15 +177,16 @@ final class CalendarBlockController
 
         // 5. Persist Maintenance Block
         $adminUserId = isset($session['admin_user_id']) ? (int) $session['admin_user_id'] : null;
-        $adminEmail = (string) ($session['admin_email'] ?? 'admin@oceanviewflats.com');
 
-        $blockId = $this->blockRepository->createBlock(
+        $block = new MaintenanceBlock(
             propertyId: $propertyId,
             startDate: $startDate,
             endDate: $endDate,
             reason: $reason,
             createdBy: $adminUserId
         );
+        $savedBlock = $this->blockRepository->save($block);
+        $blockId = $savedBlock->id;
 
         // 6. Audit Trail Logging
         $this->auditLogger->record(
@@ -205,7 +206,7 @@ final class CalendarBlockController
         );
 
         // 7. Response: close modal and re-render blocks container
-        $blocks = $this->blockRepository->getBlocks($propertyId, $filter);
+        $blocks = $this->blockRepository->listFiltered($propertyId, $filter);
         $tableHtml = $this->viewRenderer->renderPartial('calendar_blocks/_table.php', [
             'blocks' => $blocks,
             'propertyId' => $propertyId,
@@ -256,13 +257,12 @@ final class CalendarBlockController
         }
 
         // 3. Immutability Invariant: Concluded historical blocks cannot be deleted (ADR 0006)
-        $today = date('Y-m-d');
-        if ((string) $block['end_date'] <= $today) {
+        if ($block->isConcluded()) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Concluded historical maintenance blocks cannot be deleted.</div>', 422);
         }
 
         // 4. Delete block
-        $this->blockRepository->deleteBlock($id);
+        $this->blockRepository->delete($id);
 
         // 5. Audit Trail Logging
         $adminUserId = isset($session['admin_user_id']) ? (int) $session['admin_user_id'] : null;
@@ -271,7 +271,7 @@ final class CalendarBlockController
             action: 'calendar_block_deleted',
             entityType: 'calendar_block',
             entityId: (string) $id,
-            before: $block,
+            before: $block->toArray(),
             after: null,
             adminUserId: $adminUserId,
             ipAddress: $request->getClientIp(),
@@ -279,7 +279,7 @@ final class CalendarBlockController
         );
 
         // 6. Response
-        $blocks = $this->blockRepository->getBlocks($propertyId, $filter);
+        $blocks = $this->blockRepository->listFiltered($propertyId, $filter);
         $tableHtml = $this->viewRenderer->renderPartial('calendar_blocks/_table.php', [
             'blocks' => $blocks,
             'propertyId' => $propertyId,
@@ -294,30 +294,28 @@ final class CalendarBlockController
         return Response::redirect('/calendar-blocks?property_id=' . urlencode($propertyId) . '&filter=' . urlencode($filter));
     }
 
-    private function resolvePropertyId(string $input): string
+    private function resolvePropertyId(string $raw): string
     {
-        return in_array($input, ['1606', '1707'], true) ? $input : 'all';
+        $cleaned = trim($raw);
+        return in_array($cleaned, ['1606', '1707'], true) ? $cleaned : 'all';
     }
 
-    private function resolveFilter(string $input): string
+    private function resolveFilter(string $raw): string
     {
-        return in_array($input, ['upcoming', 'past', 'all'], true) ? $input : 'upcoming';
+        $cleaned = trim($raw);
+        return in_array($cleaned, ['upcoming', 'past', 'all'], true) ? $cleaned : 'upcoming';
     }
 
     /**
      * @param array<string, mixed> $session
-     * @return array<string, mixed>|null
+     * @return array<string, mixed>
      */
-    private function buildCurrentUser(array $session): ?array
+    private function buildCurrentUser(array $session): array
     {
-        if (empty($session['admin_user_id'])) {
-            return null;
-        }
-
         return [
-            'id' => $session['admin_user_id'],
-            'name' => $session['admin_user_name'] ?? 'Admin User',
-            'email' => $session['admin_email'] ?? '',
+            'id' => $session['admin_user_id'] ?? null,
+            'name' => $session['admin_user_name'] ?? 'Admin',
+            'email' => $session['admin_email'] ?? 'admin@oceanviewflats.com',
             'role' => $session['admin_role'] ?? 'admin',
         ];
     }

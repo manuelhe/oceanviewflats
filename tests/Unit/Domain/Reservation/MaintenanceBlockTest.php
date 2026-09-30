@@ -136,4 +136,73 @@ final class MaintenanceBlockTest extends TestCase
         $nowFuture = new DateTimeImmutable('2026-10-15');
         $this->assertTrue($block->isConcluded($nowFuture));
     }
+
+    public function testContainsDate(): void
+    {
+        $block = new MaintenanceBlock(
+            propertyId: '1606',
+            startDate: '2026-10-10',
+            endDate: '2026-10-15',
+            reason: 'Painting'
+        );
+
+        $this->assertFalse($block->containsDate('2026-10-09'));
+        $this->assertTrue($block->containsDate('2026-10-10'));
+        $this->assertTrue($block->containsDate('2026-10-12'));
+        $this->assertTrue($block->containsDate('2026-10-14'));
+        $this->assertFalse($block->containsDate('2026-10-15')); // Checkout day
+        $this->assertFalse($block->containsDate('2026-10-16'));
+    }
+
+    public function testArrayAccessAndToArray(): void
+    {
+        $createdAt = new DateTimeImmutable('2026-10-01 14:30:00');
+        $block = new MaintenanceBlock(
+            propertyId: '1606',
+            startDate: '2026-10-10',
+            endDate: '2026-10-15',
+            reason: 'HVAC repair',
+            id: 7,
+            createdBy: 2,
+            createdByName: 'Manuel Admin',
+            createdAt: $createdAt
+        );
+
+        // Object properties
+        $this->assertSame(7, $block->id);
+        $this->assertSame('Manuel Admin', $block->createdByName);
+        $this->assertSame('2026-10-01 14:30:00', $block->getCreatedAtString());
+
+        // ArrayAccess
+        $this->assertTrue(isset($block['id']));
+        $this->assertSame(7, $block['id']);
+        $this->assertSame('1606', $block['property_id']);
+        $this->assertSame('2026-10-10', $block['start_date']);
+        $this->assertSame('2026-10-15', $block['end_date']);
+        $this->assertSame('HVAC repair', $block['reason']);
+        $this->assertSame(2, $block['created_by']);
+        $this->assertSame('Manuel Admin', $block['created_by_name']);
+        $this->assertSame('2026-10-01 14:30:00', $block['created_at']);
+
+        // toArray
+        $array = $block->toArray();
+        $this->assertSame(7, $array['id']);
+        $this->assertSame('1606', $array['property_id']);
+        $this->assertSame('HVAC repair', $array['reason']);
+        $this->assertSame('Manuel Admin', $array['created_by_name']);
+        $this->assertSame('2026-10-01 14:30:00', $array['created_at']);
+    }
+
+    public function testArrayAccessMutationThrows(): void
+    {
+        $block = new MaintenanceBlock(
+            propertyId: '1606',
+            startDate: '2026-10-10',
+            endDate: '2026-10-15',
+            reason: 'Testing'
+        );
+
+        $this->expectException(\BadMethodCallException::class);
+        $block['reason'] = 'Modified';
+    }
 }

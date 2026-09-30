@@ -7,10 +7,10 @@ namespace OceanViewFlats\Domain\Reservation;
 /**
  * In-memory adapter for testing authoritative administrative maintenance blocks per ADR 0006.
  */
-final class InMemoryMaintenanceBlockSource implements MaintenanceBlockSourceInterface
+class InMemoryMaintenanceBlockSource implements MaintenanceBlockSourceInterface
 {
     /** @var array<string, list<MaintenanceBlock>> */
-    private array $blocks = [];
+    protected array $blocks = [];
 
     /**
      * @param list<MaintenanceBlock> $initialBlocks
