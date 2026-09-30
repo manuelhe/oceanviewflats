@@ -9,10 +9,10 @@ use InvalidArgumentException;
 use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
-use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Views\ViewRenderer;
-use OceanViewFlats\Domain\Quote\PdoRateSource;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
+use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
+use OceanViewFlats\Domain\Quote\RateTier;
 use Throwable;
 
 /**
@@ -21,14 +21,17 @@ use Throwable;
  */
 final class RateController
 {
+    private readonly RateRepositoryInterface $rateRepository;
+
     public function __construct(
-        private readonly AdminRateRepository $rateRepository,
-        private readonly PdoRateSource $rateSource,
+        RateRepositoryInterface $rateRepository,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger,
         private readonly PropertyRatesConfig $ratesConfig,
-        private readonly string $csvPath = 'public/data/prices.csv'
+        private readonly string $csvPath = 'public/data/prices.csv',
+        ?RateRepositoryInterface $rateSource = null
     ) {
+        $this->rateRepository = $rateSource ?? $rateRepository;
     }
 
     /**
@@ -131,7 +134,7 @@ final class RateController
 
         // 2. Validate Interval Collision
         try {
-            if ($this->rateSource->hasOverlap($propertyId, $startDate, $endDate)) {
+            if ($this->rateRepository->hasOverlap($propertyId, $startDate, $endDate)) {
                 return $this->renderModalError(
                     isEdit: false,
                     rate: $rateData,
@@ -156,7 +159,17 @@ final class RateController
 
         // 3. Persist New Seasonal Tier
         $currentUser = $this->buildCurrentUser($session);
-        $tierId = $this->rateRepository->createRate($rateData, adminUserId: $currentUser['id']);
+        $newTier = new RateTier(
+            propertyId: $propertyId,
+            startDate: $startDate,
+            endDate: $endDate,
+            nightlyRateCop: $pricePerNight,
+            minimumStay: $minStay,
+            seasonName: $seasonName,
+            createdBy: $currentUser['id']
+        );
+        $savedTier = $this->rateRepository->save($newTier, adminUserId: $currentUser['id']);
+        $tierId = (int) $savedTier->id;
 
         // 4. Audit Trail Recording
         $this->auditLogger->record(
@@ -199,12 +212,13 @@ final class RateController
     public function edit(Request $request, array &$session): Response
     {
         $id = (int) $request->getAttribute('id');
-        $rate = $this->rateRepository->findRateById($id);
+        $rateTier = $this->rateRepository->findById($id);
 
-        if ($rate === null) {
+        if ($rateTier === null) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Seasonal rate tier not found.</div>', 404);
         }
 
+        $rate = $rateTier->toArray();
         $propertyId = (string) $rate['property_id'];
         $year = $this->resolveYear((string) substr((string) $rate['start_date'], 0, 4));
 
@@ -229,12 +243,13 @@ final class RateController
     public function update(Request $request, array &$session): Response
     {
         $id = (int) $request->getAttribute('id');
-        $existing = $this->rateRepository->findRateById($id);
+        $existingTier = $this->rateRepository->findById($id);
 
-        if ($existing === null) {
+        if ($existingTier === null) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Seasonal rate tier not found.</div>', 404);
         }
 
+        $existing = $existingTier->toArray();
         $propertyId = (string) $existing['property_id'];
         $year = $this->resolveYear((string) $request->getPost('year', (string) substr((string) $existing['start_date'], 0, 4)));
         $seasonName = trim((string) $request->getPost('season_name', ''));
@@ -269,7 +284,7 @@ final class RateController
 
         // 2. Validate Overlap Collision excluding self ($id)
         try {
-            if ($this->rateSource->hasOverlap($propertyId, $startDate, $endDate, excludeId: $id)) {
+            if ($this->rateRepository->hasOverlap($propertyId, $startDate, $endDate, excludeId: $id)) {
                 return $this->renderModalError(
                     isEdit: true,
                     rate: $rateData,
@@ -293,13 +308,19 @@ final class RateController
         }
 
         // 3. Persist Updates
-        $this->rateRepository->updateRate($id, [
-            'season_name' => $seasonName,
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-            'price_per_night' => $pricePerNight,
-            'min_stay' => $minStay,
-        ]);
+        $updatedTier = new RateTier(
+            propertyId: $propertyId,
+            startDate: $startDate,
+            endDate: $endDate,
+            nightlyRateCop: $pricePerNight,
+            minimumStay: $minStay,
+            id: $id,
+            seasonName: $seasonName,
+            cleaningFeeCop: (float) ($existing['cleaning_fee'] ?? 0.0),
+            resortFeeCop: (float) ($existing['resort_fee'] ?? 0.0),
+            createdBy: isset($existing['created_by']) ? (int) $existing['created_by'] : null
+        );
+        $this->rateRepository->save($updatedTier);
 
         // 4. Audit Trail Recording
         $currentUser = $this->buildCurrentUser($session);
@@ -343,12 +364,13 @@ final class RateController
     public function delete(Request $request, array &$session): Response
     {
         $id = (int) $request->getAttribute('id');
-        $existing = $this->rateRepository->findRateById($id);
+        $existingTier = $this->rateRepository->findById($id);
 
-        if ($existing === null) {
+        if ($existingTier === null) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Seasonal rate tier not found.</div>', 404);
         }
 
+        $existing = $existingTier->toArray();
         $propertyId = (string) ($request->getQuery('property_id') ?? $existing['property_id']);
         $year = $this->resolveYear((string) ($request->getQuery('year') ?? substr((string) $existing['start_date'], 0, 4)));
 
@@ -366,7 +388,7 @@ final class RateController
         );
 
         // 2. Delete Record
-        $this->rateRepository->deleteRate($id);
+        $this->rateRepository->delete($id);
 
         // 3. Re-render Content
         $contentHtml = $this->renderContentHtml(
@@ -405,7 +427,7 @@ final class RateController
             : dirname(__DIR__, 3) . '/' . ltrim($this->csvPath, '/');
 
         try {
-            $seededCount = $this->rateSource->seedFromCsv($csvFullPath, $currentUser['id']);
+            $seededCount = $this->rateRepository->seedFromCsv($csvFullPath, $currentUser['id']);
 
             $this->auditLogger->record(
                 action: 'rate_tiers_seeded',

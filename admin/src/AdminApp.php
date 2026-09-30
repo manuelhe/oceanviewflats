@@ -34,10 +34,12 @@ use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\CsvRateSource;
+use OceanViewFlats\Domain\Quote\PdoRateRepository;
 use OceanViewFlats\Domain\Quote\PdoRateSource;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
+use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
 use OceanViewFlats\Domain\Quote\RateSourceInterface;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\PdoMaintenanceBlockRepository;
@@ -160,12 +162,15 @@ final class AdminApp
         );
 
         // 6. Rates Repository & Controller
-        $rateRepo = new AdminRateRepository($pdo, $ratesConfig);
-        $pdoRateSource = $rateSource instanceof PdoRateSource ? $rateSource : new PdoRateSource($pdo, $rateSource);
+        /** @var RateRepositoryInterface $rateRepo */
+        $rateRepo = $options['rate_repository']
+            ?? ($rateSource instanceof RateRepositoryInterface
+                ? $rateSource
+                : new PdoRateRepository($pdo, $ratesConfig, $rateSource));
 
         $rateController = new RateController(
             rateRepository: $rateRepo,
-            rateSource: $pdoRateSource,
+            rateSource: $rateRepo,
             viewRenderer: $viewRenderer,
             auditLogger: $auditLogger,
             ratesConfig: $ratesConfig,

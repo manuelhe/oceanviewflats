@@ -4,78 +4,73 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Repository;
 
-use DateTimeImmutable;
-use InvalidArgumentException;
+use OceanViewFlats\Domain\Quote\PdoRateRepository;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
+use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
+use OceanViewFlats\Domain\Quote\RateTier;
 use PDO;
 
 /**
- * Administrative repository for querying, mutating, and analyzing seasonal rate tiers
- * in property_rates with author joins and timeline gap detection.
+ * Administrative repository for querying, mutating, and analyzing seasonal rate tiers.
+ * Implements RateRepositoryInterface and forwards operations to PdoRateRepository,
+ * maintaining backward compatibility with existing admin controllers and test suites.
  */
-final class AdminRateRepository
+class AdminRateRepository implements RateRepositoryInterface
 {
+    private readonly RateRepositoryInterface $inner;
     private readonly PropertyRatesConfig $ratesConfig;
 
     public function __construct(
         private readonly PDO $pdo,
-        ?PropertyRatesConfig $ratesConfig = null
+        ?PropertyRatesConfig $ratesConfig = null,
+        ?RateRepositoryInterface $inner = null
     ) {
         $this->ratesConfig = $ratesConfig ?? PropertyRatesConfig::createDefault();
+        $this->inner = $inner ?? new PdoRateRepository($pdo, $this->ratesConfig);
     }
 
     /**
-     * Retrieves all seasonal rate tiers for a property, optionally filtered by intersecting a given calendar year.
-     *
-     * @return list<array<string, mixed>>
+     * @return array<int, RateTier>
      */
-    public function getRatesForProperty(string $propertyId, ?int $year = null): array
+    public function getTiersForProperty(string $propertyId): array
     {
-        $sql = '
-            SELECT pr.*, u.name AS created_by_name
-            FROM property_rates pr
-            LEFT JOIN admin_users u ON pr.created_by = u.id
-            WHERE pr.property_id = :property_id
-        ';
-        $params = ['property_id' => $propertyId];
+        return $this->inner->getTiersForProperty($propertyId);
+    }
 
-        if ($year !== null) {
-            $sql .= ' AND pr.start_date <= :year_end AND pr.end_date >= :year_start';
-            $params['year_start'] = sprintf('%04d-01-01', $year);
-            $params['year_end'] = sprintf('%04d-12-31', $year);
-        }
-
-        $sql .= ' ORDER BY pr.start_date ASC';
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-
-        /** @var list<array<string, mixed>> $rows */
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        return $rows;
+    public function findById(int $id): ?RateTier
+    {
+        return $this->inner->findById($id);
     }
 
     /**
-     * Finds a single seasonal rate tier by ID with author details.
+     * Finds a single seasonal rate tier by ID with author details as an array.
+     * Backward-compatibility helper.
      *
      * @return array<string, mixed>|null
      */
     public function findRateById(int $id): ?array
     {
-        $stmt = $this->pdo->prepare('
-            SELECT pr.*, u.name AS created_by_name
-            FROM property_rates pr
-            LEFT JOIN admin_users u ON pr.created_by = u.id
-            WHERE pr.id = :id
-        ');
-        $stmt->execute(['id' => $id]);
+        $tier = $this->inner->findById($id);
+        return $tier !== null ? $tier->toArray() : null;
+    }
 
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row !== false ? $row : null;
+    public function hasOverlap(
+        string $propertyId,
+        string $startDate,
+        string $endDate,
+        ?int $excludeId = null
+    ): bool {
+        return $this->inner->hasOverlap($propertyId, $startDate, $endDate, $excludeId);
+    }
+
+    public function save(RateTier $tier, ?int $adminUserId = null): RateTier
+    {
+        return $this->inner->save($tier, $adminUserId);
     }
 
     /**
      * Persists a new seasonal rate tier.
+     * Backward-compatibility helper.
      *
      * @param array{
      *     property_id: string,
@@ -83,77 +78,90 @@ final class AdminRateRepository
      *     end_date: string,
      *     season_name: string,
      *     price_per_night: float,
-     *     min_stay: int,
+     *     min_stay?: int,
      *     cleaning_fee?: float,
      *     resort_fee?: float
      * } $data
      */
     public function createRate(array $data, ?int $adminUserId = null): int
     {
-        $stmt = $this->pdo->prepare('
-            INSERT INTO property_rates (
-                property_id, start_date, end_date, season_name, price_per_night, min_stay, cleaning_fee, resort_fee, created_by
-            ) VALUES (
-                :property_id, :start_date, :end_date, :season_name, :price_per_night, :min_stay, :cleaning_fee, :resort_fee, :created_by
-            )
-        ');
+        $tier = new RateTier(
+            propertyId: $data['property_id'],
+            startDate: $data['start_date'],
+            endDate: $data['end_date'],
+            nightlyRateCop: (float) $data['price_per_night'],
+            minimumStay: (int) ($data['min_stay'] ?? 1),
+            seasonName: $data['season_name'],
+            cleaningFeeCop: (float) ($data['cleaning_fee'] ?? 0.0),
+            resortFeeCop: (float) ($data['resort_fee'] ?? 0.0),
+            createdBy: $adminUserId
+        );
 
-        $stmt->execute([
-            'property_id' => $data['property_id'],
-            'start_date' => $data['start_date'],
-            'end_date' => $data['end_date'],
-            'season_name' => $data['season_name'],
-            'price_per_night' => $data['price_per_night'],
-            'min_stay' => $data['min_stay'],
-            'cleaning_fee' => $data['cleaning_fee'] ?? 0.0,
-            'resort_fee' => $data['resort_fee'] ?? 0.0,
-            'created_by' => $adminUserId,
-        ]);
-
-        return (int) $this->pdo->lastInsertId();
+        $saved = $this->inner->save($tier, $adminUserId);
+        return (int) $saved->id;
     }
 
     /**
      * Updates an existing seasonal rate tier.
+     * Backward-compatibility helper.
      *
      * @param array{
      *     season_name: string,
      *     start_date: string,
      *     end_date: string,
      *     price_per_night: float,
-     *     min_stay: int
+     *     min_stay?: int,
+     *     property_id?: string,
+     *     cleaning_fee?: float,
+     *     resort_fee?: float
      * } $data
      */
     public function updateRate(int $id, array $data): bool
     {
-        $stmt = $this->pdo->prepare('
-            UPDATE property_rates
-            SET season_name = :season_name,
-                start_date = :start_date,
-                end_date = :end_date,
-                price_per_night = :price_per_night,
-                min_stay = :min_stay,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-        ');
+        $existing = $this->inner->findById($id);
+        $propertyId = (string) ($data['property_id'] ?? ($existing !== null ? $existing->propertyId : '1606'));
+        $cleaningFee = (float) ($data['cleaning_fee'] ?? ($existing !== null ? $existing->cleaningFeeCop : 0.0));
+        $resortFee = (float) ($data['resort_fee'] ?? ($existing !== null ? $existing->resortFeeCop : 0.0));
 
-        return $stmt->execute([
-            'id' => $id,
-            'season_name' => $data['season_name'],
-            'start_date' => $data['start_date'],
-            'end_date' => $data['end_date'],
-            'price_per_night' => $data['price_per_night'],
-            'min_stay' => $data['min_stay'],
-        ]);
+        $tier = new RateTier(
+            propertyId: $propertyId,
+            startDate: (string) $data['start_date'],
+            endDate: (string) $data['end_date'],
+            nightlyRateCop: (float) $data['price_per_night'],
+            minimumStay: (int) ($data['min_stay'] ?? 1),
+            id: $id,
+            seasonName: (string) $data['season_name'],
+            cleaningFeeCop: $cleaningFee,
+            resortFeeCop: $resortFee,
+            createdBy: $existing?->createdBy
+        );
+
+        $this->inner->save($tier);
+        return true;
+    }
+
+    public function delete(int $id): bool
+    {
+        return $this->inner->delete($id);
     }
 
     /**
      * Deletes a seasonal rate tier by ID.
+     * Backward-compatibility helper.
      */
     public function deleteRate(int $id): bool
     {
-        $stmt = $this->pdo->prepare('DELETE FROM property_rates WHERE id = :id');
-        return $stmt->execute(['id' => $id]);
+        return $this->inner->delete($id);
+    }
+
+    /**
+     * Retrieves all seasonal rate tiers for a property, optionally filtered by calendar year.
+     *
+     * @return list<RateTier>
+     */
+    public function getRatesForProperty(string $propertyId, ?int $year = null): array
+    {
+        return $this->inner->getRatesForProperty($propertyId, $year);
     }
 
     /**
@@ -169,62 +177,11 @@ final class AdminRateRepository
      */
     public function detectGaps(string $propertyId, int $year): array
     {
-        $defaultRate = $this->ratesConfig->isValidProperty($propertyId)
-            ? $this->ratesConfig->getDefaultNightlyRate($propertyId)
-            : 350000.0;
+        return $this->inner->detectGaps($propertyId, $year);
+    }
 
-        $yearStartStr = sprintf('%04d-01-01', $year);
-        $yearEndStr = sprintf('%04d-12-31', $year);
-
-        $tiers = $this->getRatesForProperty($propertyId, $year);
-
-        $gaps = [];
-        $cursorDate = new DateTimeImmutable($yearStartStr);
-        $yearEnd = new DateTimeImmutable($yearEndStr);
-
-        foreach ($tiers as $tier) {
-            $tierStart = new DateTimeImmutable((string) $tier['start_date']);
-            $tierEnd = new DateTimeImmutable((string) $tier['end_date']);
-
-            // Clamp tier start to year boundaries for analysis
-            $effectiveStart = $tierStart < $cursorDate ? $cursorDate : $tierStart;
-
-            if ($effectiveStart > $cursorDate) {
-                // There is an unpriced gap between cursorDate and day before effectiveStart
-                $gapEnd = $effectiveStart->modify('-1 day');
-                if ($gapEnd >= $cursorDate) {
-                    $nights = (int) $cursorDate->diff($effectiveStart)->days;
-                    $gaps[] = [
-                        'start_date' => $cursorDate->format('Y-m-d'),
-                        'end_date' => $gapEnd->format('Y-m-d'),
-                        'nights' => $nights,
-                        'fallback_rate' => $defaultRate,
-                    ];
-                }
-            }
-
-            // Move cursor past tier end date (next day)
-            $nextDay = $tierEnd->modify('+1 day');
-            if ($nextDay > $cursorDate) {
-                $cursorDate = $nextDay;
-            }
-
-            if ($cursorDate > $yearEnd) {
-                break;
-            }
-        }
-
-        // Check if there is remaining unpriced space until the end of the year
-        if ($cursorDate <= $yearEnd) {
-            $nights = (int) $cursorDate->diff($yearEnd->modify('+1 day'))->days;
-            $gaps[] = [
-                'start_date' => $cursorDate->format('Y-m-d'),
-                'end_date' => $yearEnd->format('Y-m-d'),
-                'nights' => $nights,
-                'fallback_rate' => $defaultRate,
-            ];
-        }
-
-        return $gaps;
+    public function seedFromCsv(string $csvFilePath, ?int $createdBy = null): int
+    {
+        return $this->inner->seedFromCsv($csvFilePath, $createdBy);
     }
 }
