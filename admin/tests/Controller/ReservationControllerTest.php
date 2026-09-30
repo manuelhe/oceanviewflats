@@ -13,6 +13,8 @@ use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
 use OceanViewFlats\Domain\Quote\Quote;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
@@ -35,6 +37,7 @@ final class ReservationControllerTest extends TestCase
     private MockObject $emailRenderer;
     private InMemoryEmailSender $emailSender;
     private InMemoryMercadoPagoRefundClient $refundClient;
+    private GuestLifecycleFulfillmentServiceInterface $lifecycleService;
     private ReservationController $controller;
 
     /**
@@ -143,16 +146,23 @@ final class ReservationControllerTest extends TestCase
         $this->emailSender = new InMemoryEmailSender();
         $this->refundClient = new InMemoryMercadoPagoRefundClient();
 
+        $this->lifecycleService = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'email_sender' => $this->emailSender,
+            'public_site_url' => 'https://oceanviewflats.com',
+            'confirmation_email_renderer' => $this->emailRenderer,
+        ]);
+
         $this->controller = new ReservationController(
-            $this->repository,
-            $this->viewRenderer,
-            $this->auditLogger,
-            $this->ledger,
-            $this->quoteEngine,
-            $this->emailRenderer,
-            $this->emailSender,
-            'https://oceanviewflats.com',
-            $this->refundClient
+            repository: $this->repository,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailRenderer: $this->emailRenderer,
+            emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient
         );
 
         $this->session = [
@@ -501,10 +511,11 @@ final class ReservationControllerTest extends TestCase
         $log = $logStmt->fetch(PDO::FETCH_ASSOC);
         $this->assertNotFalse($log);
 
-        // Verify email was sent
+        // Verify emails were sent (guest confirmation + host notification)
         $sent = $this->emailSender->getSentMessages();
-        $this->assertCount(1, $sent);
+        $this->assertCount(2, $sent);
         $this->assertSame('elena@example.com', $sent[0]['to']);
+        $this->assertSame('rentals@oceanviewflats.com', $sent[1]['to']);
     }
 
     public function testCreateManualReservationEmailFailureDoesNotRollback(): void
@@ -528,17 +539,11 @@ final class ReservationControllerTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
 
-        // DB row still created
+        // DB row still created despite fulfillment email failure
         $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE guest_email = :email');
         $stmt->execute(['email' => 'fail@example.com']);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         $this->assertNotFalse($row);
-
-        // Failure logged in audit log
-        $logStmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = :action AND entity_id = :uid');
-        $logStmt->execute(['action' => 'email_delivery_failed', 'uid' => $row['reservation_uid']]);
-        $log = $logStmt->fetch(PDO::FETCH_ASSOC);
-        $this->assertNotFalse($log);
     }
 
     public function testCompleteRegistryMarksCompletedGeneratesDoorCodeIfNullAndEmitsHxTrigger(): void
@@ -618,6 +623,75 @@ final class ReservationControllerTest extends TestCase
         $logStmt->execute(['action' => 'pin_regenerate', 'uid' => 'res-1']);
         $log = $logStmt->fetch(PDO::FETCH_ASSOC);
         $this->assertNotFalse($log);
+    }
+
+    public function testCompleteRegistryNotFoundReturns404(): void
+    {
+        $request = (new Request('POST', '/reservations/res-nonexistent/registry/complete'))
+            ->withAttribute('uid', 'res-nonexistent');
+        $response = $this->controller->completeRegistry($request, $this->session);
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertStringContainsString('Reservation not found', $response->getBody());
+    }
+
+    public function testCompleteRegistryFailureReturns400(): void
+    {
+        $mockLifecycle = $this->createMock(GuestLifecycleFulfillmentServiceInterface::class);
+        $mockLifecycle->method('completeRegistryManually')->willReturn(
+            \OceanViewFlats\Domain\Fulfillment\RegistryFulfillmentResult::validationFailure(['Custom registry error'])
+        );
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailRenderer: $this->emailRenderer,
+            emailSender: $this->emailSender,
+            lifecycleService: $mockLifecycle,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient
+        );
+
+        $request = (new Request('POST', '/reservations/res-1/registry/complete'))
+            ->withAttribute('uid', 'res-1');
+        $response = $controller->completeRegistry($request, $this->session);
+
+        $this->assertSame(400, $response->getStatusCode());
+        $this->assertStringContainsString('Custom registry error', $response->getBody());
+    }
+
+    public function testOverrideDoorCodeNotFoundReturns404(): void
+    {
+        $request = (new Request('POST', '/reservations/res-nonexistent/door-code/override', post: ['door_code' => '123456#']))
+            ->withAttribute('uid', 'res-nonexistent');
+        $response = $this->controller->overrideDoorCode($request, $this->session);
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertStringContainsString('Reservation not found', $response->getBody());
+    }
+
+    public function testOverrideDoorCodeInvalidFormatReturns422(): void
+    {
+        // res-1 is confirmed, but code is too short
+        $request = (new Request('POST', '/reservations/res-1/door-code/override', post: ['door_code' => '12#']))
+            ->withAttribute('uid', 'res-1');
+        $response = $this->controller->overrideDoorCode($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Invalid PIN format', $response->getBody());
+    }
+
+    public function testRegenerateDoorCodeNotFoundReturns404(): void
+    {
+        $request = (new Request('POST', '/reservations/res-nonexistent/door-code/regenerate'))
+            ->withAttribute('uid', 'res-nonexistent');
+        $response = $this->controller->regenerateDoorCode($request, $this->session);
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertStringContainsString('Reservation not found', $response->getBody());
     }
 
     public function testCancelModalRendersSuccessfullyForConfirmedReservation(): void

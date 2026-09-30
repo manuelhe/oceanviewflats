@@ -30,6 +30,8 @@ use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\CsvRateSource;
 use OceanViewFlats\Domain\Quote\PdoRateSource;
@@ -130,6 +132,13 @@ final class AdminApp
         $ledger = $options['ledger'] ?? ReservationLedger::createDefault($pdo);
         $reservationRepo = new AdminReservationRepository($pdo);
 
+        /** @var GuestLifecycleFulfillmentServiceInterface $lifecycleService */
+        $lifecycleService = $options['lifecycle_service'] ?? GuestLifecycleFulfillmentService::createDefault($pdo, [
+            'email_sender' => $emailSender,
+            'confirmation_email_renderer' => $emailRenderer,
+            'public_site_url' => $publicSiteUrl,
+        ]);
+
         $reservationController = new ReservationController(
             repository: $reservationRepo,
             viewRenderer: $viewRenderer,
@@ -138,8 +147,9 @@ final class AdminApp
             quoteEngine: $quoteEngine,
             emailRenderer: $emailRenderer,
             emailSender: $emailSender,
-            publicSiteUrl: $publicSiteUrl,
             refundClient: $refundClient,
+            lifecycleService: $lifecycleService,
+            publicSiteUrl: $publicSiteUrl,
             cancellationEmailRenderer: $cancellationEmailRenderer
         );
 
