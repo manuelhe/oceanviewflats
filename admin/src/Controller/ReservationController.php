@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Controller;
 
+use DateTimeImmutable;
 use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
-use OceanViewFlats\Admin\Repository\AdminReservationRepository;
-use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
+use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
 use OceanViewFlats\Domain\Fulfillment\AdminContext;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
@@ -20,7 +20,12 @@ use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchCriteria;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchResult;
+use PDO;
 use Throwable;
 
 /**
@@ -33,7 +38,8 @@ final class ReservationController
     private readonly CancellationEmailRendererInterface $cancellationEmailRenderer;
 
     public function __construct(
-        private readonly AdminReservationRepository $repository,
+        private readonly ReservationRepositoryInterface $repository,
+        private readonly ReservationSearchInterface $search,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger,
         private readonly ReservationLedgerInterface $ledger,
@@ -42,7 +48,8 @@ final class ReservationController
         private readonly GuestLifecycleFulfillmentServiceInterface $lifecycleService,
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         private readonly ?MercadoPagoRefundClientInterface $refundClient = null,
-        ?CancellationEmailRendererInterface $cancellationEmailRenderer = null
+        ?CancellationEmailRendererInterface $cancellationEmailRenderer = null,
+        private readonly ?PDO $pdo = null
     ) {
         $this->cancellationEmailRenderer = $cancellationEmailRenderer ?? new CancellationEmailRenderer($this->publicSiteUrl);
     }
@@ -55,21 +62,22 @@ final class ReservationController
     public function list(Request $request, array &$session): Response
     {
         $filters = $request->getAllQuery();
+        $criteria = ReservationSearchCriteria::fromArray($filters);
+        $searchResult = $this->search->search($criteria);
 
         if ($request->isHtmx()) {
-            $searchResult = $this->repository->searchReservations($filters);
             $tableHtml = $this->viewRenderer->renderPartial('reservations/_table.php', [
-                'items' => $searchResult['items'],
-                'total' => $searchResult['total'],
-                'page' => $searchResult['page'],
-                'per_page' => $searchResult['per_page'],
-                'total_pages' => $searchResult['total_pages'],
+                'items' => $searchResult->items,
+                'total' => $searchResult->totalCount,
+                'page' => $searchResult->page,
+                'per_page' => $searchResult->limit,
+                'total_pages' => $searchResult->totalPages,
                 'filters' => $filters,
             ]);
             return Response::html($tableHtml);
         }
 
-        return Response::html($this->renderFullDashboard($session, $filters));
+        return Response::html($this->renderFullDashboard($session, $filters, $searchResult));
     }
 
     /**
@@ -80,9 +88,9 @@ final class ReservationController
     public function show(Request $request, array &$session): Response
     {
         $uid = (string) ($request->getAttribute('uid') ?? '');
-        $data = $this->repository->findReservationWithAuditTrail($uid);
+        $dossier = $this->search->findWithAuditTrail($uid);
 
-        if ($data === null) {
+        if ($dossier === null) {
             if ($request->isHtmx()) {
                 $errorBanner = '
                     <div class="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-xs flex items-center justify-center p-4">
@@ -100,9 +108,9 @@ final class ReservationController
         }
 
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $data['reservation'],
-            'auditLogs' => $data['audit_logs'],
-            'refunds' => $data['refunds'],
+            'reservation' => $dossier->reservation,
+            'auditLogs' => $dossier->auditLogs,
+            'refunds' => $dossier->refunds,
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
@@ -127,9 +135,9 @@ final class ReservationController
     public function showRegistry(Request $request, array &$session): Response
     {
         $uid = (string) ($request->getAttribute('uid') ?? '');
-        $resData = $this->repository->findReservationWithAuditTrail($uid);
+        $reservation = $this->repository->findByUid($uid);
 
-        if ($resData === null) {
+        if ($reservation === null) {
             $errorModal = '
                 <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-xs p-4">
                     <div class="bg-white p-6 rounded-xl shadow-xl max-w-sm text-center border border-gray-200">
@@ -142,10 +150,10 @@ final class ReservationController
             return Response::html($errorModal, 404);
         }
 
-        $registry = $this->repository->findGuestRegistryByReservationUid($uid);
+        $registry = $this->search->findGuestRegistry($uid);
 
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_registry_modal.php', [
-            'reservation' => $resData['reservation'],
+            'reservation' => $reservation->toArray(),
             'registry' => $registry,
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
@@ -236,6 +244,9 @@ final class ReservationController
         $checkIn = trim((string) ($body['check_in'] ?? ''));
         $checkOut = trim((string) ($body['check_out'] ?? ''));
         $source = trim((string) ($body['source'] ?? 'manual_override'));
+        if ($source === '') {
+            $source = 'manual';
+        }
         $totalPriceRaw = $body['total_price'] ?? null;
         $guestName = trim((string) ($body['guest_name'] ?? ''));
         $guestEmail = trim((string) ($body['guest_email'] ?? ''));
@@ -281,28 +292,31 @@ final class ReservationController
         $doorCode = DoorCodeGenerator::generateRandom();
 
         $currentUser = $this->buildCurrentUser($session);
-        $registryCompletedAt = $preMarkRegistry ? gmdate('Y-m-d H:i:s') : null;
+        $registryCompletedAt = $preMarkRegistry ? new DateTimeImmutable() : null;
 
-        $reservationData = [
-            'reservation_uid' => $uid,
-            'property_id' => $propertyId,
-            'guest_name' => $guestName,
-            'guest_email' => $guestEmail,
-            'guest_phone' => $guestPhone,
-            'check_in' => $checkIn,
-            'check_out' => $checkOut,
-            'total_price' => $totalPrice,
-            'source' => $source,
-            'notes' => $notes !== '' ? $notes : null,
-            'door_code' => $doorCode,
-            'registry_completed' => $preMarkRegistry ? 1 : 0,
-            'registry_completed_at' => $registryCompletedAt,
-            'status' => 'confirmed',
-            'payment_status' => 'approved',
-            'lang' => 'es',
-        ];
+        $reservationEntity = new Reservation(
+            reservationUid: $uid,
+            propertyId: $propertyId,
+            guestName: $guestName,
+            guestEmail: $guestEmail,
+            guestPhone: $guestPhone,
+            checkIn: $checkIn,
+            checkOut: $checkOut,
+            totalPrice: $totalPrice,
+            status: ReservationStatus::CONFIRMED,
+            paymentMethodId: 'manual',
+            paymentStatus: 'approved',
+            lang: 'es',
+            createdAt: new DateTimeImmutable(),
+            updatedAt: new DateTimeImmutable(),
+            registryCompleted: $preMarkRegistry,
+            registryCompletedAt: $registryCompletedAt,
+            doorCode: $doorCode,
+            source: $source,
+            notes: $notes !== '' ? $notes : null
+        );
 
-        $this->repository->createManualReservation($reservationData);
+        $savedReservation = $this->repository->save($reservationEntity);
 
         // Record audit trail
         $this->auditLogger->record(
@@ -310,7 +324,7 @@ final class ReservationController
             entityType: 'reservation',
             entityId: $uid,
             before: null,
-            after: $reservationData,
+            after: $savedReservation->toArray(),
             adminUserId: $currentUser['id'],
             ipAddress: $request->getClientIp(),
             userAgent: (string) $request->getHeader('User-Agent', '')
@@ -318,22 +332,7 @@ final class ReservationController
 
         // Best-effort post-commit confirmation email delivery
         if ($sendConfirmationEmail) {
-            $reservationEntity = new Reservation(
-                reservationUid: $uid,
-                propertyId: $propertyId,
-                guestName: $guestName,
-                guestEmail: $guestEmail,
-                guestPhone: $guestPhone,
-                checkIn: $checkIn,
-                checkOut: $checkOut,
-                totalPrice: $totalPrice,
-                status: ReservationStatus::CONFIRMED,
-                paymentMethodId: 'manual',
-                paymentStatus: 'approved',
-                lang: 'es'
-            );
-
-            $this->lifecycleService->fulfillBookingConfirmation($reservationEntity);
+            $this->lifecycleService->fulfillBookingConfirmation($savedReservation);
         }
 
         if ($request->isHtmx()) {
@@ -358,7 +357,7 @@ final class ReservationController
     public function completeRegistry(Request $request, array &$session): Response
     {
         $uid = (string) ($request->getAttribute('uid') ?? '');
-        $reservation = $this->repository->findReservationByUid($uid);
+        $reservation = $this->repository->findByUid($uid);
 
         if ($reservation === null) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
@@ -377,7 +376,7 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($errorMessage, ENT_QUOTES, 'UTF-8') . '</div>', 400);
         }
 
-        return $this->renderDetailDrawerResponse($uid, $session, $reservation);
+        return $this->renderDetailDrawerResponse($uid, $session, $reservation->toArray());
     }
 
     /**
@@ -441,11 +440,11 @@ final class ReservationController
      */
     private function renderDetailDrawerResponse(string $uid, array &$session, array $fallbackReservation = []): Response
     {
-        $data = $this->repository->findReservationWithAuditTrail($uid);
+        $dossier = $this->search->findWithAuditTrail($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $data !== null ? $data['reservation'] : $fallbackReservation,
-            'auditLogs' => $data !== null ? $data['audit_logs'] : [],
-            'refunds' => $data !== null ? $data['refunds'] : [],
+            'reservation' => $dossier !== null ? $dossier->reservation : $fallbackReservation,
+            'auditLogs' => $dossier !== null ? $dossier->auditLogs : [],
+            'refunds' => $dossier !== null ? $dossier->refunds : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
@@ -526,17 +525,18 @@ final class ReservationController
     private function renderFullDashboard(
         array $session,
         array $filters = [],
+        ?ReservationSearchResult $searchResult = null,
         ?string $drawerHtml = null,
         ?string $modalHtml = null,
         string $title = 'Reservations - Ocean View Flats Admin'
     ): string {
-        $searchResult = $this->repository->searchReservations($filters);
+        $result = $searchResult ?? $this->search->search(ReservationSearchCriteria::fromArray($filters));
         $tableHtml = $this->viewRenderer->renderPartial('reservations/_table.php', [
-            'items' => $searchResult['items'],
-            'total' => $searchResult['total'],
-            'page' => $searchResult['page'],
-            'per_page' => $searchResult['per_page'],
-            'total_pages' => $searchResult['total_pages'],
+            'items' => $result->items,
+            'total' => $result->totalCount,
+            'page' => $result->page,
+            'per_page' => $result->limit,
+            'total_pages' => $result->totalPages,
             'filters' => $filters,
         ]);
 
@@ -563,23 +563,23 @@ final class ReservationController
     public function cancelModal(Request $request, array &$session): Response
     {
         $uid = (string) ($request->getAttribute('uid') ?? '');
-        $reservation = $this->repository->findReservationByUid($uid);
+        $reservation = $this->repository->findByUid($uid);
 
         if ($reservation === null) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
         }
 
-        if ((string) ($reservation['status'] ?? '') === 'cancelled') {
+        if ($reservation->status === ReservationStatus::CANCELLED) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
         }
 
-        $totalPrice = (float) ($reservation['total_price'] ?? 0.0);
-        $refundedAmount = (float) ($reservation['refunded_amount'] ?? 0.0);
+        $totalPrice = $reservation->totalPrice;
+        $refundedAmount = $reservation->refundedAmount;
         $refundableBalance = max(0.0, round($totalPrice - $refundedAmount, 2));
-        $isOnlinePayment = !empty($reservation['mercadopago_payment_id']);
+        $isOnlinePayment = !empty($reservation->mercadopagoPaymentId);
 
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_cancel_modal.php', [
-            'reservation' => $reservation,
+            'reservation' => $reservation->toArray(),
             'refundableBalance' => $refundableBalance,
             'isOnlinePayment' => $isOnlinePayment,
             'errorMessage' => null,
@@ -605,26 +605,35 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Invalid or expired CSRF token. Please refresh.</div>', 403);
         }
 
-        // 2. Begin database transaction
-        $this->repository->beginTransaction();
+        // 2. Begin database transaction if PDO is provided
+        $pdo = $this->pdo;
+        $inTransaction = false;
+        if ($pdo !== null && !$pdo->inTransaction()) {
+            $pdo->beginTransaction();
+            $inTransaction = true;
+        }
 
         try {
-            // 3. Acquire row-level lock
-            $reservation = $this->repository->findReservationForUpdate($uid);
+            // 3. Acquire reservation
+            $reservation = $this->repository->findByUid($uid);
             if ($reservation === null) {
-                $this->repository->rollBack();
+                if ($inTransaction) {
+                    $pdo->rollBack();
+                }
                 return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
             }
 
-            if ((string) ($reservation['status'] ?? '') === 'cancelled') {
-                $this->repository->rollBack();
+            if ($reservation->status === ReservationStatus::CANCELLED) {
+                if ($inTransaction) {
+                    $pdo->rollBack();
+                }
                 return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
             }
 
-            $totalPrice = (float) ($reservation['total_price'] ?? 0.0);
-            $currentRefunded = (float) ($reservation['refunded_amount'] ?? 0.0);
+            $totalPrice = $reservation->totalPrice;
+            $currentRefunded = $reservation->refundedAmount;
             $refundableBalance = max(0.0, round($totalPrice - $currentRefunded, 2));
-            $isOnlinePayment = !empty($reservation['mercadopago_payment_id']);
+            $isOnlinePayment = !empty($reservation->mercadopagoPaymentId);
 
             $reason = trim((string) $request->getPost('reason', ''));
             $refundType = trim((string) $request->getPost('refund_type', 'none'));
@@ -633,9 +642,11 @@ final class ReservationController
 
             // 4. Validate Reason
             if ($reason === '') {
-                $this->repository->rollBack();
+                if ($inTransaction) {
+                    $pdo->rollBack();
+                }
                 return $this->renderCancelError(
-                    reservation: $reservation,
+                    reservation: $reservation->toArray(),
                     refundableBalance: $refundableBalance,
                     isOnlinePayment: $isOnlinePayment,
                     errorMessage: 'Cancellation reason is required.',
@@ -654,9 +665,11 @@ final class ReservationController
                 $refundAmount = $refundableBalance;
             } elseif ($refundType === 'partial') {
                 if ($refundAmountInput <= 0 || $refundAmountInput > $refundableBalance) {
-                    $this->repository->rollBack();
+                    if ($inTransaction) {
+                        $pdo->rollBack();
+                    }
                     return $this->renderCancelError(
-                        reservation: $reservation,
+                        reservation: $reservation->toArray(),
                         refundableBalance: $refundableBalance,
                         isOnlinePayment: $isOnlinePayment,
                         errorMessage: 'Partial refund amount must be greater than 0 and cannot exceed the refundable balance ($' . number_format($refundableBalance, 0, '.', ',') . ' COP).',
@@ -676,15 +689,17 @@ final class ReservationController
             }
 
             // 6. External Gateway Refund Dispatch (if online payment & refund requested)
-            $mpPaymentId = $isOnlinePayment ? (string) $reservation['mercadopago_payment_id'] : null;
+            $mpPaymentId = $isOnlinePayment ? $reservation->mercadopagoPaymentId : null;
             $mpRefundId = null;
             $source = $isOnlinePayment ? 'admin_pms' : 'admin_manual';
 
             if ($isOnlinePayment && $refundAmount > 0) {
                 if ($this->refundClient === null) {
-                    $this->repository->rollBack();
+                    if ($inTransaction) {
+                        $pdo->rollBack();
+                    }
                     return $this->renderCancelError(
-                        reservation: $reservation,
+                        reservation: $reservation->toArray(),
                         refundableBalance: $refundableBalance,
                         isOnlinePayment: $isOnlinePayment,
                         errorMessage: 'Refund client service is unavailable. Please contact technical support.',
@@ -704,9 +719,11 @@ final class ReservationController
                     $refundResult = $this->refundClient->refundPayment((string) $mpPaymentId, $refundAmount, $idempotencyKey);
                     $mpRefundId = (string) $refundResult['id'];
                 } catch (MercadoPagoRefundException $e) {
-                    $this->repository->rollBack();
+                    if ($inTransaction) {
+                        $pdo->rollBack();
+                    }
                     return $this->renderCancelError(
-                        reservation: $reservation,
+                        reservation: $reservation->toArray(),
                         refundableBalance: $refundableBalance,
                         isOnlinePayment: $isOnlinePayment,
                         errorMessage: $e->getUserFriendlyMessage(),
@@ -719,9 +736,11 @@ final class ReservationController
                         csrfToken: (string) ($session['csrf_token'] ?? '')
                     );
                 } catch (Throwable $e) {
-                    $this->repository->rollBack();
+                    if ($inTransaction) {
+                        $pdo->rollBack();
+                    }
                     return $this->renderCancelError(
-                        reservation: $reservation,
+                        reservation: $reservation->toArray(),
                         refundableBalance: $refundableBalance,
                         isOnlinePayment: $isOnlinePayment,
                         errorMessage: 'Gateway connection failed: ' . $e->getMessage(),
@@ -736,20 +755,49 @@ final class ReservationController
                 }
             }
 
-            // 7. Mutate database records atomically
+            // 7. Mutate reservation domain records
             $currentUser = $this->buildCurrentUser($session);
             $adminUserId = $currentUser['id'];
 
-            $this->repository->cancelReservationWithRefund(
-                uid: $uid,
-                reason: $reason,
-                refundType: $refundType,
-                refundAmount: $refundAmount,
-                mpRefundId: $mpRefundId,
-                mpPaymentId: $mpPaymentId,
-                adminUserId: $adminUserId,
-                source: $source
+            $cancelNote = '[Cancelled ' . date('Y-m-d H:i') . '] ' . $reason;
+            if ($refundAmount > 0) {
+                $cancelNote .= ' (Refund: COP ' . number_format($refundAmount, 2) . ', type: ' . $refundType . ')';
+            } else {
+                $cancelNote .= ' (Policy retention: No refund)';
+            }
+            $existingNotes = $reservation->notes !== null ? trim($reservation->notes) : '';
+            $updatedNotes = $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote;
+
+            $newRefundedAmount = round($currentRefunded + $refundAmount, 2);
+            $newPaymentStatus = $reservation->paymentStatus ?? 'pending_payment';
+            if ($newRefundedAmount >= $totalPrice && $totalPrice > 0) {
+                $newPaymentStatus = 'refunded';
+            } elseif ($newRefundedAmount > 0) {
+                $newPaymentStatus = 'partially_refunded';
+            }
+
+            $cancelledReservation = $reservation->withRefund(
+                additionalRefundAmount: $refundAmount,
+                notes: $updatedNotes,
+                status: ReservationStatus::CANCELLED,
+                paymentStatus: $newPaymentStatus
             );
+
+            $savedReservation = $this->repository->save($cancelledReservation);
+
+            // Record refund in ledger
+            if ($refundAmount > 0) {
+                $this->search->recordRefund([
+                    'reservation_uid' => $uid,
+                    'mercadopago_refund_id' => $mpRefundId,
+                    'mercadopago_payment_id' => $mpPaymentId ?? 'offline',
+                    'amount' => $refundAmount,
+                    'status' => 'approved',
+                    'reason' => $reason,
+                    'source' => $source,
+                    'admin_user_id' => $adminUserId,
+                ]);
+            }
 
             // 8. Record audit logs
             $this->auditLogger->record(
@@ -757,8 +805,8 @@ final class ReservationController
                 entityType: 'reservation',
                 entityId: $uid,
                 before: [
-                    'status' => $reservation['status'],
-                    'payment_status' => $reservation['payment_status'] ?? null,
+                    'status' => $reservation->status->value,
+                    'payment_status' => $reservation->paymentStatus,
                 ],
                 after: [
                     'status' => 'cancelled',
@@ -791,35 +839,21 @@ final class ReservationController
             }
 
             // 9. Commit transaction
-            $this->repository->commit();
+            if ($inTransaction) {
+                $pdo->commit();
+            }
         } catch (Throwable $e) {
-            $this->repository->rollBack();
+            if ($inTransaction) {
+                $pdo->rollBack();
+            }
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Cancellation failed unexpectedly: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 500);
         }
 
         // 10. Resilient Post-Commit Guest Cancellation Email Dispatch
         $sendCancellationEmail = !empty($sendCancellationEmailRaw);
         if ($sendCancellationEmail) {
-            $reservationEntity = new Reservation(
-                reservationUid: $uid,
-                propertyId: (string) $reservation['property_id'],
-                guestName: (string) $reservation['guest_name'],
-                guestEmail: (string) $reservation['guest_email'],
-                guestPhone: (string) $reservation['guest_phone'],
-                checkIn: (string) $reservation['check_in'],
-                checkOut: (string) $reservation['check_out'],
-                totalPrice: $totalPrice,
-                status: ReservationStatus::CANCELLED,
-                paymentMethodId: $reservation['payment_method_id'] ?? null,
-                id: isset($reservation['id']) ? (int) $reservation['id'] : null,
-                mercadopagoPreferenceId: $reservation['mercadopago_preference_id'] ?? null,
-                mercadopagoPaymentId: $reservation['mercadopago_payment_id'] ?? null,
-                paymentStatus: $refundType === 'full' ? 'refunded' : ($refundType === 'partial' ? 'partially_refunded' : ($reservation['payment_status'] ?? null)),
-                lang: (string) ($reservation['lang'] ?? 'en')
-            );
-
             $this->sendCancellationEmailSafely(
-                reservation: $reservationEntity,
+                reservation: $savedReservation,
                 refundAmount: $refundAmount,
                 policyRetention: max(0.0, round($totalPrice - ($currentRefunded + $refundAmount), 2)),
                 currentUser: $currentUser,
@@ -828,11 +862,11 @@ final class ReservationController
         }
 
         // 11. Render response
-        $updatedData = $this->repository->findReservationWithAuditTrail($uid);
+        $updatedDossier = $this->search->findWithAuditTrail($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
-            'reservation' => $updatedData !== null ? $updatedData['reservation'] : $reservation,
-            'auditLogs' => $updatedData !== null ? $updatedData['audit_logs'] : [],
-            'refunds' => $updatedData !== null ? $updatedData['refunds'] : [],
+            'reservation' => $updatedDossier !== null ? $updatedDossier->reservation : $savedReservation->toArray(),
+            'auditLogs' => $updatedDossier !== null ? $updatedDossier->auditLogs : [],
+            'refunds' => $updatedDossier !== null ? $updatedDossier->refunds : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);

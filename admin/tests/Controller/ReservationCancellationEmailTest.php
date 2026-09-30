@@ -8,7 +8,6 @@ use Exception;
 use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Controller\ReservationController;
 use OceanViewFlats\Admin\Http\Request;
-use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
@@ -18,7 +17,11 @@ use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use PDO;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -26,7 +29,8 @@ use PHPUnit\Framework\TestCase;
 final class ReservationCancellationEmailTest extends TestCase
 {
     private PDO $pdo;
-    private AdminReservationRepository $repository;
+    private ReservationRepositoryInterface $repository;
+    private ReservationSearchInterface $search;
     private ViewRenderer $viewRenderer;
     private AuditLogger $auditLogger;
     /** @var MockObject&ReservationLedgerInterface */
@@ -138,7 +142,8 @@ final class ReservationCancellationEmailTest extends TestCase
 
         $this->seedDatabase();
 
-        $this->repository = new AdminReservationRepository($this->pdo);
+        $this->repository = new PdoReservationRepository($this->pdo);
+        $this->search = new PdoReservationSearchAdapter($this->pdo);
         $this->viewRenderer = new ViewRenderer(dirname(__DIR__, 2) . '/src/Views');
         $this->auditLogger = new AuditLogger($this->pdo);
         $this->ledger = $this->createMock(ReservationLedgerInterface::class);
@@ -152,10 +157,12 @@ final class ReservationCancellationEmailTest extends TestCase
             'email_sender' => $this->emailSender,
             'public_site_url' => 'https://oceanviewflats.com',
             'confirmation_email_renderer' => $this->confirmationEmailRenderer,
+            'reservation_repository' => $this->repository,
         ]);
 
         $this->controller = new ReservationController(
             repository: $this->repository,
+            search: $this->search,
             viewRenderer: $this->viewRenderer,
             auditLogger: $this->auditLogger,
             ledger: $this->ledger,
@@ -164,7 +171,8 @@ final class ReservationCancellationEmailTest extends TestCase
             lifecycleService: $this->lifecycleService,
             publicSiteUrl: 'https://oceanviewflats.com',
             refundClient: $this->refundClient,
-            cancellationEmailRenderer: $this->cancellationEmailRenderer
+            cancellationEmailRenderer: $this->cancellationEmailRenderer,
+            pdo: $this->pdo
         );
 
         $this->session = [
@@ -312,10 +320,10 @@ final class ReservationCancellationEmailTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
 
         // Database reservation must be cancelled
-        $res = $this->repository->findReservationByUid('res-online-es');
+        $res = $this->repository->findByUid('res-online-es');
         $this->assertNotNull($res);
-        $this->assertSame('cancelled', $res['status']);
-        $this->assertSame('refunded', $res['payment_status']);
+        $this->assertSame('cancelled', $res->status->value);
+        $this->assertSame('refunded', $res->paymentStatus);
 
         // Audit log should capture email_delivery_failed
         $stmt = $this->pdo->prepare('SELECT action, payload_after FROM admin_audit_logs WHERE entity_id = :uid ORDER BY id ASC');
@@ -346,6 +354,7 @@ final class ReservationCancellationEmailTest extends TestCase
 
         $controller = new ReservationController(
             repository: $this->repository,
+            search: $this->search,
             viewRenderer: $this->viewRenderer,
             auditLogger: $this->auditLogger,
             ledger: $this->ledger,
@@ -354,7 +363,8 @@ final class ReservationCancellationEmailTest extends TestCase
             lifecycleService: $this->lifecycleService,
             publicSiteUrl: 'https://oceanviewflats.com',
             refundClient: $this->refundClient,
-            cancellationEmailRenderer: $mockRenderer
+            cancellationEmailRenderer: $mockRenderer,
+            pdo: $this->pdo
         );
 
         $post = [
@@ -371,9 +381,9 @@ final class ReservationCancellationEmailTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
 
         // Reservation still cancelled
-        $res = $this->repository->findReservationByUid('res-online-es');
+        $res = $this->repository->findByUid('res-online-es');
         $this->assertNotNull($res);
-        $this->assertSame('cancelled', $res['status']);
+        $this->assertSame('cancelled', $res->status->value);
 
         // Audit log recorded error
         $stmt = $this->pdo->prepare('SELECT action, payload_after FROM admin_audit_logs WHERE entity_id = :uid AND action = "email_delivery_failed"');

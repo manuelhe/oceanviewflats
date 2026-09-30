@@ -16,6 +16,8 @@ use PDO;
  *
  * Implements MaintenanceBlockRepositoryInterface and delegates to PdoMaintenanceBlockRepository
  * while preserving backwards compatibility for legacy methods.
+ *
+ * @deprecated Use \OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface instead.
  */
 class AdminCalendarBlockRepository implements MaintenanceBlockRepositoryInterface
 {

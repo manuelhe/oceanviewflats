@@ -94,6 +94,14 @@ final class InMemoryReservationSearchAdapter implements ReservationSearchInterfa
         return $this;
     }
 
+    public function recordRefund(array $data): void
+    {
+        if (!isset($data['created_at'])) {
+            $data['created_at'] = date('Y-m-d H:i:s');
+        }
+        $this->refunds[] = $data;
+    }
+
     public function search(ReservationSearchCriteria $criteria): ReservationSearchResult
     {
         $all = $this->allReservations();

@@ -34,4 +34,11 @@ interface ReservationSearchInterface
      * @return list<array<string, mixed>>
      */
     public function findRefunds(string $uid): array;
+
+    /**
+     * Records a refund ledger entry associated with a reservation UID.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function recordRefund(array $data): void;
 }

@@ -8,7 +8,6 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Controller\ReservationController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
-use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
 use OceanViewFlats\Admin\Views\ViewRenderer;
@@ -18,7 +17,11 @@ use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\InMemoryEmailSender;
 use OceanViewFlats\Domain\Quote\Quote;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use PDO;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -26,7 +29,8 @@ use PHPUnit\Framework\TestCase;
 final class ReservationControllerTest extends TestCase
 {
     private PDO $pdo;
-    private AdminReservationRepository $repository;
+    private ReservationRepositoryInterface $repository;
+    private ReservationSearchInterface $search;
     private ViewRenderer $viewRenderer;
     private AuditLogger $auditLogger;
     /** @var MockObject&ReservationLedgerInterface */
@@ -137,7 +141,8 @@ final class ReservationControllerTest extends TestCase
 
         $this->seedDatabase();
 
-        $this->repository = new AdminReservationRepository($this->pdo);
+        $this->repository = new PdoReservationRepository($this->pdo);
+        $this->search = new PdoReservationSearchAdapter($this->pdo);
         $this->viewRenderer = new ViewRenderer(dirname(__DIR__, 2) . '/src/Views');
         $this->auditLogger = new AuditLogger($this->pdo);
         $this->ledger = $this->createMock(ReservationLedgerInterface::class);
@@ -150,10 +155,12 @@ final class ReservationControllerTest extends TestCase
             'email_sender' => $this->emailSender,
             'public_site_url' => 'https://oceanviewflats.com',
             'confirmation_email_renderer' => $this->emailRenderer,
+            'reservation_repository' => $this->repository,
         ]);
 
         $this->controller = new ReservationController(
             repository: $this->repository,
+            search: $this->search,
             viewRenderer: $this->viewRenderer,
             auditLogger: $this->auditLogger,
             ledger: $this->ledger,
@@ -161,7 +168,8 @@ final class ReservationControllerTest extends TestCase
             emailSender: $this->emailSender,
             lifecycleService: $this->lifecycleService,
             publicSiteUrl: 'https://oceanviewflats.com',
-            refundClient: $this->refundClient
+            refundClient: $this->refundClient,
+            pdo: $this->pdo
         );
 
         $this->session = [
@@ -556,11 +564,11 @@ final class ReservationControllerTest extends TestCase
         $this->assertSame('reservationUpdated', $response->getHeaders()['HX-Trigger'] ?? null);
 
         // Check updated DB
-        $res = $this->repository->findReservationByUid('res-2');
+        $res = $this->repository->findByUid('res-2');
         $this->assertNotNull($res);
-        $this->assertSame(1, (int) $res['registry_completed']);
-        $this->assertNotNull($res['registry_completed_at']);
-        $this->assertMatchesRegularExpression('/^0[0-9]{6}#$/', $res['door_code']);
+        $this->assertTrue($res->registryCompleted);
+        $this->assertNotNull($res->registryCompletedAt);
+        $this->assertMatchesRegularExpression('/^0[0-9]{6}#$/', (string) $res->doorCode);
 
         // Check audit log
         $logStmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = :action AND entity_id = :uid');
@@ -590,9 +598,9 @@ final class ReservationControllerTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('reservationUpdated', $response->getHeaders()['HX-Trigger'] ?? null);
 
-        $res = $this->repository->findReservationByUid('res-1');
+        $res = $this->repository->findByUid('res-1');
         $this->assertNotNull($res);
-        $this->assertSame('0887766#', $res['door_code']);
+        $this->assertSame('0887766#', $res->doorCode);
 
         // Check audit log
         $logStmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = :action AND entity_id = :uid ORDER BY id DESC LIMIT 1');
@@ -612,10 +620,10 @@ final class ReservationControllerTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('reservationUpdated', $response->getHeaders()['HX-Trigger'] ?? null);
 
-        $res = $this->repository->findReservationByUid('res-1');
+        $res = $this->repository->findByUid('res-1');
         $this->assertNotNull($res);
-        $this->assertNotSame('1234#', $res['door_code']);
-        $this->assertMatchesRegularExpression('/^0[0-9]{6}#$/', $res['door_code']);
+        $this->assertNotSame('1234#', $res->doorCode);
+        $this->assertMatchesRegularExpression('/^0[0-9]{6}#$/', (string) $res->doorCode);
 
         // Check audit log
         $logStmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = :action AND entity_id = :uid ORDER BY id DESC LIMIT 1');
@@ -643,6 +651,7 @@ final class ReservationControllerTest extends TestCase
 
         $controller = new ReservationController(
             repository: $this->repository,
+            search: $this->search,
             viewRenderer: $this->viewRenderer,
             auditLogger: $this->auditLogger,
             ledger: $this->ledger,
@@ -650,7 +659,8 @@ final class ReservationControllerTest extends TestCase
             emailSender: $this->emailSender,
             lifecycleService: $mockLifecycle,
             publicSiteUrl: 'https://oceanviewflats.com',
-            refundClient: $this->refundClient
+            refundClient: $this->refundClient,
+            pdo: $this->pdo
         );
 
         $request = (new Request('POST', '/reservations/res-1/registry/complete'))
@@ -826,14 +836,14 @@ final class ReservationControllerTest extends TestCase
         $this->assertSame(1200000.0, $dispatches[0]['amount']);
 
         // Assert database updates
-        $res = $this->repository->findReservationByUid('res-1');
+        $res = $this->repository->findByUid('res-1');
         $this->assertNotNull($res);
-        $this->assertSame('cancelled', $res['status']);
-        $this->assertSame('refunded', $res['payment_status']);
-        $this->assertEquals(1200000.0, (float) $res['refunded_amount']);
+        $this->assertSame('cancelled', $res->status->value);
+        $this->assertSame('refunded', $res->paymentStatus);
+        $this->assertEquals(1200000.0, $res->refundedAmount);
 
         // Assert refund recorded in reservation_refunds
-        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $refunds = $this->search->findRefunds('res-1');
         $this->assertCount(1, $refunds);
         $this->assertSame('ref-mp-999', $refunds[0]['mercadopago_refund_id']);
         $this->assertSame('admin_pms', $refunds[0]['source']);
@@ -870,12 +880,12 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Insufficient merchant balance', $response->getBody());
 
         // Verify reservation remained confirmed and no refund records were committed
-        $res = $this->repository->findReservationByUid('res-1');
+        $res = $this->repository->findByUid('res-1');
         $this->assertNotNull($res);
-        $this->assertSame('confirmed', $res['status']);
-        $this->assertEquals(0.0, (float) $res['refunded_amount']);
+        $this->assertSame('confirmed', $res->status->value);
+        $this->assertEquals(0.0, $res->refundedAmount);
 
-        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $refunds = $this->search->findRefunds('res-1');
         $this->assertCount(0, $refunds);
     }
 
@@ -898,12 +908,12 @@ final class ReservationControllerTest extends TestCase
         $this->assertCount(0, $this->refundClient->getDispatchedRefunds());
 
         // Database updated
-        $res = $this->repository->findReservationByUid('res-3');
+        $res = $this->repository->findByUid('res-3');
         $this->assertNotNull($res);
-        $this->assertSame('cancelled', $res['status']);
-        $this->assertEquals(400000.0, (float) $res['refunded_amount']);
+        $this->assertSame('cancelled', $res->status->value);
+        $this->assertEquals(400000.0, $res->refundedAmount);
 
-        $refunds = $this->repository->findRefundsByReservationUid('res-3');
+        $refunds = $this->search->findRefunds('res-3');
         $this->assertCount(1, $refunds);
         $this->assertSame('admin_manual', $refunds[0]['source']);
         $this->assertNull($refunds[0]['mercadopago_refund_id']);
@@ -925,13 +935,13 @@ final class ReservationControllerTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertCount(0, $this->refundClient->getDispatchedRefunds());
 
-        $res = $this->repository->findReservationByUid('res-1');
+        $res = $this->repository->findByUid('res-1');
         $this->assertNotNull($res);
-        $this->assertSame('cancelled', $res['status']);
-        $this->assertEquals(0.0, (float) $res['refunded_amount']);
+        $this->assertSame('cancelled', $res->status->value);
+        $this->assertEquals(0.0, $res->refundedAmount);
 
         // No refund record
-        $refunds = $this->repository->findRefundsByReservationUid('res-1');
+        $refunds = $this->search->findRefunds('res-1');
         $this->assertCount(0, $refunds);
 
         // Audit log has cancellation, but no refund_issued
