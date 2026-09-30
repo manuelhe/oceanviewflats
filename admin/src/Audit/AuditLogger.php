@@ -13,7 +13,7 @@ final class AuditLogger
 {
     private static ?PDO $defaultPdo = null;
 
-    public function __construct(private readonly PDO $pdo)
+    public function __construct(private readonly ?PDO $pdo = null)
     {
     }
 
@@ -38,6 +38,10 @@ final class AuditLogger
         string $ipAddress = '',
         ?string $userAgent = null
     ): int {
+        if ($this->pdo === null && self::$defaultPdo === null) {
+            return 0;
+        }
+
         return self::log(
             action: $action,
             entityType: $entityType,

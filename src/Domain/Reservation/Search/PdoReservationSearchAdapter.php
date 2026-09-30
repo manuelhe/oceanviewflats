@@ -210,4 +210,41 @@ final class PdoReservationSearchAdapter implements ReservationSearchInterface
             return [];
         }
     }
+
+    public function recordRefund(array $data): void
+    {
+        $stmt = $this->pdo->prepare('
+            INSERT INTO `reservation_refunds` (
+                reservation_uid,
+                mercadopago_refund_id,
+                mercadopago_payment_id,
+                amount,
+                status,
+                reason,
+                source,
+                admin_user_id,
+                created_at
+            ) VALUES (
+                :reservation_uid,
+                :mercadopago_refund_id,
+                :mercadopago_payment_id,
+                :amount,
+                :status,
+                :reason,
+                :source,
+                :admin_user_id,
+                CURRENT_TIMESTAMP
+            )
+        ');
+        $stmt->execute([
+            ':reservation_uid' => $data['reservation_uid'] ?? '',
+            ':mercadopago_refund_id' => $data['mercadopago_refund_id'] ?? null,
+            ':mercadopago_payment_id' => $data['mercadopago_payment_id'] ?? 'offline',
+            ':amount' => $data['amount'] ?? 0.0,
+            ':status' => $data['status'] ?? 'approved',
+            ':reason' => $data['reason'] ?? '',
+            ':source' => $data['source'] ?? 'admin_pms',
+            ':admin_user_id' => $data['admin_user_id'] ?? null,
+        ]);
+    }
 }

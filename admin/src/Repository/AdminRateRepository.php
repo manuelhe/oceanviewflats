@@ -14,6 +14,8 @@ use PDO;
  * Administrative repository for querying, mutating, and analyzing seasonal rate tiers.
  * Implements RateRepositoryInterface and forwards operations to PdoRateRepository,
  * maintaining backward compatibility with existing admin controllers and test suites.
+ *
+ * @deprecated Use \OceanViewFlats\Domain\Quote\RateRepositoryInterface instead.
  */
 class AdminRateRepository implements RateRepositoryInterface
 {
