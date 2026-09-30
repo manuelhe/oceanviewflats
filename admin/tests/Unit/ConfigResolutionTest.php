@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace OceanViewFlats\Admin\Tests\Unit;
 
 use OceanViewFlats\Admin\Config\ConfigPathResolver;
-use OceanViewFlats\Admin\Config\ConfigResolver;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
@@ -74,13 +73,6 @@ final class ConfigResolutionTest extends TestCase
         $resolved = ConfigPathResolver::resolveConfigPath($root);
         $this->assertSame($configFile, $resolved);
         $this->assertTrue(file_exists($resolved));
-
-        // Test aliases
-        $this->assertSame($configFile, ConfigPathResolver::resolve($root));
-        $this->assertSame($configFile, ConfigPathResolver::resolvePath($root));
-        $this->assertSame($configFile, ConfigResolver::resolveConfigPath($root));
-        $this->assertSame($configFile, ConfigResolver::resolve($root));
-        $this->assertSame($configFile, ConfigResolver::resolvePath($root));
     }
 
     public function testResolvesCpanelProductionConfigPathWhenLocalIsMissing(): void
@@ -94,10 +86,6 @@ final class ConfigResolutionTest extends TestCase
         $resolved = ConfigPathResolver::resolveConfigPath($root);
         $this->assertSame($configFile, $resolved);
         $this->assertTrue(file_exists($resolved));
-
-        // Test aliases
-        $this->assertSame($configFile, ConfigPathResolver::resolve($root));
-        $this->assertSame($configFile, ConfigResolver::resolveConfigPath($root));
     }
 
     public function testPrioritizesLocalDevPathWhenBothExist(): void
@@ -158,10 +146,6 @@ final class ConfigResolutionTest extends TestCase
         $this->assertArrayHasKey('db', $config);
         $this->assertSame('10.0.0.1', $config['db']['host'] ?? null);
         $this->assertSame('cpanel_prod', $config['db']['dbname'] ?? null);
-
-        // Also test ConfigResolver::loadConfig
-        $configFromResolver = ConfigResolver::loadConfig($root);
-        $this->assertSame('10.0.0.1', $configFromResolver['db']['host'] ?? null);
     }
 
     public function testResolvesRealProjectLocalConfiguration(): void

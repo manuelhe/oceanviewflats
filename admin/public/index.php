@@ -16,7 +16,6 @@ use OceanViewFlats\Admin\Db\DatabaseFactory;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
-use Throwable;
 
 try {
     // 1. Initialize Subdomain-Isolated Native Session

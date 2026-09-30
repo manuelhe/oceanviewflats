@@ -6,6 +6,7 @@ namespace OceanViewFlats\Admin\Cli;
 
 use InvalidArgumentException;
 use OceanViewFlats\Admin\Auth\AuthService;
+use OceanViewFlats\Admin\Config\ConfigPathResolver;
 use OceanViewFlats\Admin\Db\DatabaseFactory;
 use PDO;
 use RuntimeException;
@@ -189,43 +190,100 @@ final class AdminUserProvisioner
     }
 
     /**
-     * Resolves a PDO connection using an injected instance, global test instance,
-     * or dual-path configuration discovery (public/api/config.php or public_html/api/config.php).
+     * Resolves a PDO connection using an injected instance or configuration discovery
+     * via ConfigPathResolver (public/api/config.php or public_html/api/config.php).
+     *
+     * @param ?PDO $injectedPdo
+     * @param ?string $baseDir
+     * @return PDO
+     * @throws RuntimeException If configuration is missing or invalid
+     * @throws Throwable If database connection fails
      */
-    public static function resolvePdo(?PDO $injectedPdo = null, ?string $baseDir = null): ?PDO
+    public static function resolvePdo(?PDO $injectedPdo = null, ?string $baseDir = null): PDO
     {
         if ($injectedPdo instanceof PDO) {
             return $injectedPdo;
         }
 
-        if (isset($GLOBALS['TEST_PDO']) && $GLOBALS['TEST_PDO'] instanceof PDO) {
-            return $GLOBALS['TEST_PDO'];
-        }
+        $root = $baseDir ?? (getenv('OVF_CONFIG_ROOT') ?: dirname(__DIR__, 3));
+        $configPath = ConfigPathResolver::resolveConfigPath($root);
 
-        $root = $baseDir ?? dirname(__DIR__, 3);
-        $possibleConfigs = [
-            $root . '/public/api/config.php',
-            $root . '/public_html/api/config.php',
-        ];
-
-        $config = null;
-        foreach ($possibleConfigs as $path) {
-            if (file_exists($path)) {
-                $config = require $path;
-                break;
-            }
-        }
+        /** @var mixed $config */
+        $config = require $configPath;
 
         if (!is_array($config) || empty($config['db']) || !is_array($config['db'])) {
-            return null;
+            throw new RuntimeException("Database configuration ('db') missing in '{$configPath}'.");
         }
 
         /** @var array{host?: string, dbname?: string, user?: string, pass?: string} $dbConfig */
         $dbConfig = $config['db'];
+
+        return DatabaseFactory::createConnection($dbConfig);
+    }
+
+    /**
+     * Runs the CLI provisioning workflow with argument parsing, validation, and error reporting.
+     *
+     * @param array<int, string> $argvInput
+     * @param ?PDO $pdo Injected PDO instance (if null, resolved via resolvePdo)
+     * @param mixed $stdout Output stream resource (defaults to STDOUT)
+     * @param mixed $stderr Error stream resource (defaults to STDERR)
+     * @return int Exit code (0 on success, 1 on error)
+     */
+    public static function run(
+        array $argvInput,
+        ?PDO $pdo = null,
+        mixed $stdout = null,
+        mixed $stderr = null
+    ): int {
+        /** @var resource $out */
+        $out = is_resource($stdout) ? $stdout : (defined('STDOUT') ? STDOUT : fopen('php://stdout', 'w'));
+        /** @var resource $err */
+        $err = is_resource($stderr) ? $stderr : (defined('STDERR') ? STDERR : fopen('php://stderr', 'w'));
+
         try {
-            return DatabaseFactory::createConnection($dbConfig);
-        } catch (Throwable) {
-            return null;
+            $activePdo = self::resolvePdo($pdo);
+        } catch (Throwable $e) {
+            fwrite($err, "Error: " . $e->getMessage() . "\n");
+            return 1;
+        }
+
+        $cliArgs = self::parseArguments($argvInput);
+
+        $email = $cliArgs['email'];
+        $name = $cliArgs['name'];
+        $password = $cliArgs['password'];
+        $role = $cliArgs['role'];
+
+        if ($email === null || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            fwrite($err, "Error: Invalid or missing email address. Please provide a valid email via --email.\n");
+            return 1;
+        }
+
+        if ($name === null || trim($name) === '') {
+            fwrite($err, "Error: Name is required and cannot be empty. Please provide a name via --name.\n");
+            return 1;
+        }
+
+        if ($password === null || strlen($password) < 8) {
+            fwrite($err, "Error: Password must be at least 8 characters long. Please provide a valid password via --password.\n");
+            return 1;
+        }
+
+        try {
+            $provisioner = new self($activePdo);
+            $result = $provisioner->provision($email, $name, $password, $role);
+
+            if ($result['status'] === 'created') {
+                fwrite($out, "Admin user successfully created: " . $result['email'] . " (Role: " . $result['role'] . ")\n");
+            } else {
+                fwrite($out, "Admin user successfully updated: " . $result['email'] . " (Role: " . $result['role'] . ")\n");
+            }
+
+            return 0;
+        } catch (Throwable $e) {
+            fwrite($err, "Error: " . $e->getMessage() . "\n");
+            return 1;
         }
     }
 }

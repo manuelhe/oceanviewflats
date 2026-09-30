@@ -40,29 +40,6 @@ final class ConfigPathResolver
         );
     }
 
-    /**
-     * Alias for resolveConfigPath.
-     *
-     * @param string $rootDir
-     * @return string
-     * @throws RuntimeException
-     */
-    public static function resolvePath(string $rootDir): string
-    {
-        return self::resolveConfigPath($rootDir);
-    }
-
-    /**
-     * Alias for resolveConfigPath.
-     *
-     * @param string $rootDir
-     * @return string
-     * @throws RuntimeException
-     */
-    public static function resolve(string $rootDir): string
-    {
-        return self::resolveConfigPath($rootDir);
-    }
 
     /**
      * Resolves the path and loads the configuration array.
