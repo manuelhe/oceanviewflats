@@ -143,4 +143,97 @@ final class SessionMiddlewareTest extends TestCase
         $this->assertTrue($params['httponly']);
         $this->assertSame('Strict', $params['samesite']);
     }
+
+    public function testResolveCookieParamsForLocalhostReturnsEmptyDomain(): void
+    {
+        $params = SessionMiddleware::resolveCookieParams('localhost', false);
+
+        $this->assertSame('', $params['domain'], 'Localhost must use empty domain (Host-Only cookie) per RFC 6265');
+        $this->assertFalse($params['secure']);
+    }
+
+    public function testResolveCookieParamsForIpAddressReturnsEmptyDomain(): void
+    {
+        $paramsIpv4 = SessionMiddleware::resolveCookieParams('127.0.0.1', false);
+        $this->assertSame('', $paramsIpv4['domain'], 'IPv4 address must use empty domain per RFC 6265');
+
+        $paramsLan = SessionMiddleware::resolveCookieParams('192.168.1.100', false);
+        $this->assertSame('', $paramsLan['domain'], 'LAN IP address must use empty domain per RFC 6265');
+    }
+
+    public function testResolveCookieParamsDetectsHttpsFromForwardedProto(): void
+    {
+        $backupServer = $_SERVER;
+        try {
+            $_SERVER['HTTPS'] = 'off';
+            $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
+            $_SERVER['HTTP_HOST'] = 'admin.oceanviewflats.com';
+
+            $params = SessionMiddleware::resolveCookieParams();
+
+            $this->assertTrue($params['secure'], 'Should detect HTTPS from HTTP_X_FORWARDED_PROTO');
+            $this->assertSame('', $params['domain'], 'Origin-scoped environment should yield empty domain (Host-Only cookie)');
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
+
+    public function testResolveCookieParamsDetectsHttpsFromPort443(): void
+    {
+        $backupServer = $_SERVER;
+        try {
+            unset($_SERVER['HTTPS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+            $_SERVER['SERVER_PORT'] = '443';
+            $_SERVER['SERVER_NAME'] = 'localhost';
+
+            $params = SessionMiddleware::resolveCookieParams();
+
+            $this->assertTrue($params['secure'], 'Should detect HTTPS from SERVER_PORT 443');
+            $this->assertSame('', $params['domain'], 'Localhost should still have empty domain even over HTTPS');
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
+
+    public function testResolveCookieParamsDetectsHttpsFromForwardedPort(): void
+    {
+        $backupServer = $_SERVER;
+        try {
+            $_SERVER['HTTPS'] = 'off';
+            $_SERVER['HTTP_X_FORWARDED_PORT'] = '443';
+            $_SERVER['SERVER_NAME'] = 'admin.oceanviewflats.com';
+
+            $params = SessionMiddleware::resolveCookieParams();
+
+            $this->assertTrue($params['secure'], 'Should detect HTTPS from HTTP_X_FORWARDED_PORT 443');
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
+
+    public function testResolveCookieParamsForIpv6ReturnsEmptyDomain(): void
+    {
+        $paramsIpv6 = SessionMiddleware::resolveCookieParams('[::1]:8080', false);
+        $this->assertSame('', $paramsIpv6['domain'], 'IPv6 address with port must use empty domain per RFC 6265');
+
+        $paramsRawIpv6 = SessionMiddleware::resolveCookieParams('::1', false);
+        $this->assertSame('', $paramsRawIpv6['domain'], 'Raw IPv6 address must use empty domain per RFC 6265');
+    }
+
+    public function testResolveCookieParamsDefaultsToHostOnlyCookieWhenServerNameNotProvided(): void
+    {
+        $backupServer = $_SERVER;
+        try {
+            $_SERVER['HTTP_HOST'] = 'admin.oceanviewflats.com';
+            $_SERVER['SERVER_NAME'] = 'admin.oceanviewflats.com';
+            $_SERVER['HTTPS'] = 'on';
+
+            $params = SessionMiddleware::resolveCookieParams(null, true);
+
+            $this->assertSame('', $params['domain'], 'Default server environment should yield Host-Only cookie (empty domain)');
+            $this->assertTrue($params['secure']);
+        } finally {
+            $_SERVER = $backupServer;
+        }
+    }
 }
