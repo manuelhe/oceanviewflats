@@ -29,6 +29,10 @@ final class AvailabilityEndpointTest extends TestCase
         if ($this->originalCacheContent !== null) {
             file_put_contents($this->cacheFile1606, $this->originalCacheContent);
         }
+        $statusFile = $this->cacheDir . '/channel_sync_status.json';
+        if (file_exists($statusFile)) {
+            @unlink($statusFile);
+        }
     }
 
     public function testAvailabilityEndpointRejectsInvalidProperty(): void
@@ -117,6 +121,36 @@ PHP;
         $this->assertContains('2026-11-22', $res['json']);
         // Exclusive checkout date is NOT blocked
         $this->assertNotContains('2026-11-23', $res['json']);
+    }
+
+    public function testAvailabilityEndpointReturns502WhenFetchFailsAndNoCacheExists(): void
+    {
+        if (file_exists($this->cacheFile1606)) {
+            unlink($this->cacheFile1606);
+        }
+
+        $autoloadPath = var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true);
+        $cachePath = var_export($this->cacheDir, true);
+        $prependCode = <<<PHP
+require_once {$autoloadPath};
+\$mockTransport = new class implements \\OceanViewFlats\\Domain\\Reservation\\HttpTransportInterface {
+    public function get(string \$url, array \$options = []): array {
+        return ['statusCode' => 502, 'body' => 'Bad Gateway', 'error' => null];
+    }
+};
+\$GLOBALS['TEST_CHANNEL_SYNC_SERVICE'] = new \\OceanViewFlats\\Domain\\Reservation\\InboundChannelSyncService(
+    ['1606' => 'https://example.com/1606.ics'],
+    {$cachePath},
+    \$mockTransport
+);
+PHP;
+
+        $res = $this->callEndpoint(['property' => '1606'], $prependCode);
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertArrayHasKey('error', $res['json']);
+        $this->assertStringContainsString('Failed to retrieve calendar feed', $res['json']['error']);
+        $this->assertSame(502, $res['json']['status_code']);
     }
 
     /**
