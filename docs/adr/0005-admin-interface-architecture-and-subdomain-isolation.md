@@ -52,16 +52,19 @@ Deployments are strictly segregated across two independent GitHub Actions workfl
    - Stages a clean payload containing `admin/`, `src/Domain/`, `vendor/`, and `scripts/` (omitting test files and dev configurations).
    - Transfers the payload to `/home/<user>/` via SFTP on port 2223.
 
-### 3. Shared Runtime Autoloading & Path Resilience
+### 3. Shared Runtime Autoloading, Path Resilience, and Environment Discovery
 * **Single Source of Truth**: The production Composer autoloader at `/home/<user>/vendor/autoload.php` serves both the admin application (`admin/public/index.php`) and public APIs (`public_html/api/*.php`).
 * **Resilient Discovery (`ConfigPathResolver`)**: The admin kernel and database migration scripts resolve database configuration dynamically by sequentially checking `/public/api/config.php` (local dev) and `/public_html/api/config.php` (production cPanel), eliminating environment-specific file hacks.
+* **Resilient Environment Loader (`EnvLoader`)**: Resolves credentials directly from `.htaccess` and `.env` files for non-web environments (such as CLI terminals and cron jobs) where Apache `SetEnv` variables are not inherited.
 
-### 4. Administrative Security & Session Perimeter
+### 4. Administrative Security, Setup Gating, and Session Perimeter
 * **Authentication**: Password hashes are generated via `PASSWORD_ARGON2ID` with hardened memory and iteration parameters.
 * **Session Cookies**: Native PHP sessions are hardened via `SessionMiddleware` (`Secure`, `HttpOnly`, `SameSite=Lax`, name: `ovf_admin_session`) and restricted to the `admin.oceanviewflats.com` subdomain.
 * **Brute-Force Defense**: Automated lockout after 5 consecutive failed login attempts tracked in `admin_users.failed_login_attempts` and `admin_users.locked_until`.
 * **Immutable Audit Logging**: All mutations (reservation edits, cancellations, calendar holds, door code overrides) are recorded in `admin_audit_logs`.
-* **CLI-Only User Management**: Provisioning and password rotation are restricted to the CLI runner `scripts/create-admin-user.php`, completely prohibiting web-based privilege escalation.
+* **Dual-Method Initial Bootstrap with Permanent Lockout**:
+  - **CLI / Cron Provisioner**: `scripts/create-admin-user.php` and `scripts/migrate.php` allow zero-web execution.
+  - **Secure Web Setup Utility**: `admin/public/setup.php` allows zero-SSH bootstrapping for restricted cPanel environments, protected by pre-shared token authorization (`OVF_SETUP_TOKEN`, `OVF_ADMIN_SESSION_SECRET`, or `DB_PASS`) and permanent auto-lockout (returns HTTP 403 once an administrator user exists).
 
 ## Consequences
 
@@ -70,8 +73,9 @@ Deployments are strictly segregated across two independent GitHub Actions workfl
 - **Fast, Independent Releases**: Content updates to marketing pages deploy in seconds without PHP dependency checks; admin and domain model updates deploy without static site compilation.
 - **Zero Business Logic Divergence**: Public booking endpoints and admin PMS tools execute identical domain models (`QuoteEngine`, `ReservationLedger`).
 - **Auditability**: Complete operational traceability across all administrative state changes.
+- **Hosting Portability**: Works reliably across cPanel shared hosting with or without SSH/terminal access.
 
 ### Neutral / Operational Trade-offs
 - cPanel subdomain creation requires explicit configuration to avoid defaulting to `public_html/admin`.
 - Deployments require setting both `FTP_REMOTE_PATH` and optionally `FTP_ADMIN_REMOTE_PATH` in GitHub repository secrets.
-- Database migrations require an intentional execution step via cPanel Terminal or SSH (`php scripts/migrate.php`).
+- Database migrations and initial admin setup require an intentional execution step via CLI, cron job, or the one-time `setup.php` web tool.

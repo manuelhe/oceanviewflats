@@ -11,6 +11,15 @@ if (count(get_included_files()) === 1) {
     exit("Direct access forbidden.");
 }
 
+$autoloader = dirname(__DIR__, 2) . '/vendor/autoload.php';
+if (!class_exists(\OceanViewFlats\Domain\Support\EnvLoader::class) && file_exists($autoloader)) {
+    require_once $autoloader;
+}
+
+if (class_exists(\OceanViewFlats\Domain\Support\EnvLoader::class)) {
+    \OceanViewFlats\Domain\Support\EnvLoader::load();
+}
+
 return [
     'db' => [
         'host' => $_ENV['DB_HOST'] ?? $_SERVER['DB_HOST'] ?? getenv('DB_HOST') ?: '127.0.0.1',
