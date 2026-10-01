@@ -21,6 +21,10 @@ if (php_sapi_name() !== 'cli') {
 require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 use OceanViewFlats\Admin\Cli\AdminUserProvisioner;
+use OceanViewFlats\Domain\Support\EnvLoader;
+
+$root = dirname(__DIR__);
+EnvLoader::load($root);
 
 $exitCode = AdminUserProvisioner::run($argv);
 exit($exitCode);
