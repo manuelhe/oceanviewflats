@@ -47,6 +47,9 @@ final class DashboardControllerTest extends TestCase
         $this->assertStringContainsString('Reservations & Calendar', $body);
         $this->assertStringContainsString('+ Manual Booking', $body);
         $this->assertStringContainsString('Airbnb iCal Feeds Active', $body);
+        $this->assertStringContainsString('id="channel-card-container"', $body);
+        $this->assertStringContainsString('Sync Now', $body);
+        $this->assertStringContainsString('hx-post="/channel-sync"', $body);
         $this->assertStringContainsString('Keypad PIN Integrations Ready', $body);
 
         // Check CSRF token inclusion
