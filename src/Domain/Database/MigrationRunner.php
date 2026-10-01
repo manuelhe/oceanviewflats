@@ -1,0 +1,435 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OceanViewFlats\Domain\Database;
+
+use PDO;
+use PDOException;
+
+/**
+ * Executes idempotent database schema creation and updates.
+ *
+ * Supports both direct database connection (for restricted cPanel shared hosting users)
+ * and server-level fallback with CREATE DATABASE (for local development).
+ */
+final class MigrationRunner
+{
+    /**
+     * Connects to MySQL/MariaDB, attempting direct connection to target database first.
+     * Falls back to server connection + CREATE DATABASE only if database doesn't exist.
+     *
+     * @param array<string, mixed> $config Database configuration
+     * @return PDO Active PDO connection
+     * @throws PDOException If connection fails
+     */
+    public static function connect(array $config): PDO
+    {
+        $host = (string) ($config['host'] ?? '127.0.0.1');
+        $port = isset($config['port']) ? (int) $config['port'] : 3306;
+        $dbname = (string) ($config['dbname'] ?? 'oceanviewflats_db');
+        $user = (string) ($config['user'] ?? 'root');
+        $pass = (string) ($config['pass'] ?? '');
+
+        $options = [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ];
+
+        // 1. Attempt direct connection to target database (cPanel shared hosting model)
+        try {
+            $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
+            return new PDO($dsn, $user, $pass, $options);
+        } catch (PDOException $directException) {
+            // 2. Fall back to server connection and CREATE DATABASE (local development)
+            try {
+                $serverDsn = "mysql:host={$host};port={$port};charset=utf8mb4";
+                $pdo = new PDO($serverDsn, $user, $pass, $options);
+                $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                $pdo->exec("USE `{$dbname}`");
+                return $pdo;
+            } catch (PDOException) {
+                // If server-level also fails, re-throw the original direct exception
+                throw $directException;
+            }
+        }
+    }
+
+    /**
+     * Executes all schema migrations idempotently and returns a log report.
+     *
+     * @param PDO $pdo Active PDO connection
+     * @param string $dbName Database name
+     * @return list<string> Migration execution logs
+     */
+    public static function run(PDO $pdo, string $dbName): array
+    {
+        $logs = [];
+        $driver = (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+
+        if ($driver === 'sqlite') {
+            self::runSqliteMigrations($pdo, $logs);
+            return $logs;
+        }
+
+        self::runMysqlMigrations($pdo, $dbName, $logs);
+
+        return $logs;
+    }
+
+    /**
+     * @param PDO $pdo
+     * @param string $dbName
+     * @param list<string> $logs
+     */
+    private static function runMysqlMigrations(PDO $pdo, string $dbName, array &$logs): void
+    {
+        // 1. reservations table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `reservations` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `reservation_uid` VARCHAR(36) NOT NULL UNIQUE,
+              `property_id` VARCHAR(10) NOT NULL,
+              `guest_name` VARCHAR(120) NOT NULL,
+              `guest_email` VARCHAR(100) NOT NULL,
+              `guest_phone` VARCHAR(25) NOT NULL,
+              `check_in` DATE NOT NULL,
+              `check_out` DATE NOT NULL,
+              `total_price` DECIMAL(10, 2) NOT NULL,
+              `refunded_amount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+              `source` VARCHAR(30) NOT NULL DEFAULT 'web',
+              `mercadopago_preference_id` VARCHAR(255) DEFAULT NULL,
+              `mercadopago_payment_id` VARCHAR(255) DEFAULT NULL,
+              `payment_status` VARCHAR(50) DEFAULT NULL,
+              `payment_method_id` VARCHAR(50) DEFAULT NULL,
+              `payment_detail` TEXT DEFAULT NULL,
+              `status` ENUM('pending_payment', 'confirmed', 'cancelled') NOT NULL DEFAULT 'pending_payment',
+              `lang` VARCHAR(5) NOT NULL DEFAULT 'en',
+              `registry_completed` TINYINT(1) NOT NULL DEFAULT 0,
+              `registry_completed_at` DATETIME DEFAULT NULL,
+              `door_code` VARCHAR(20) DEFAULT NULL,
+              `notes` TEXT DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              INDEX `idx_property_dates` (`property_id`, `check_in`, `check_out`),
+              INDEX `idx_status` (`status`),
+              INDEX `idx_registry_completed` (`registry_completed`),
+              INDEX `idx_source` (`source`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `reservations` verified/created.";
+
+        // Upgrade existing table columns (Self-healing columns)
+        $reservationColumns = [
+            'mercadopago_payment_id' => 'VARCHAR(255) DEFAULT NULL',
+            'payment_status' => 'VARCHAR(50) DEFAULT NULL',
+            'payment_method_id' => 'VARCHAR(50) DEFAULT NULL',
+            'payment_detail' => 'TEXT DEFAULT NULL',
+            'lang' => "VARCHAR(5) NOT NULL DEFAULT 'en'",
+            'registry_completed' => "TINYINT(1) NOT NULL DEFAULT 0",
+            'registry_completed_at' => "DATETIME DEFAULT NULL",
+            'door_code' => "VARCHAR(20) DEFAULT NULL",
+            'refunded_amount' => "DECIMAL(10, 2) NOT NULL DEFAULT 0.00",
+            'source' => "VARCHAR(30) NOT NULL DEFAULT 'web'",
+            'notes' => "TEXT DEFAULT NULL"
+        ];
+
+        foreach ($reservationColumns as $col => $type) {
+            $stmt = $pdo->prepare("
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_SCHEMA = :dbname 
+                  AND TABLE_NAME = 'reservations' 
+                  AND COLUMN_NAME = :col
+            ");
+            $stmt->execute(['dbname' => $dbName, 'col' => $col]);
+            $exists = $stmt->fetch();
+
+            if (!$exists) {
+                $pdo->exec("ALTER TABLE `reservations` ADD COLUMN `{$col}` {$type}");
+                $logs[] = "Upgrading reservations schema: Added column `{$col}`.";
+            }
+        }
+
+        // 2. payment_idempotency table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `payment_idempotency` (
+              `idempotency_key` VARCHAR(100) NOT NULL PRIMARY KEY,
+              `payment_id` VARCHAR(100) NOT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `payment_idempotency` verified/created.";
+
+        // 3. guest_registries table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `guest_registries` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `reservation_uid` VARCHAR(36) NOT NULL,
+              `property_id` VARCHAR(10) NOT NULL,
+              `check_in` DATE NOT NULL,
+              `check_out` DATE NOT NULL,
+              `guest_count` INT UNSIGNED NOT NULL DEFAULT 1,
+              `guests_payload` JSON NOT NULL,
+              `car_plates` VARCHAR(20) DEFAULT NULL,
+              `car_model` VARCHAR(100) DEFAULT NULL,
+              `ip_address` VARCHAR(45) DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              INDEX `idx_reg_reservation` (`reservation_uid`),
+              INDEX `idx_reg_property_dates` (`property_id`, `check_in`, `check_out`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `guest_registries` verified/created.";
+
+        // 4. admin_users table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `admin_users` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `email` VARCHAR(120) NOT NULL UNIQUE,
+              `password_hash` VARCHAR(255) NOT NULL,
+              `name` VARCHAR(100) NOT NULL,
+              `role` VARCHAR(20) NOT NULL DEFAULT 'admin',
+              `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+              `failed_login_attempts` INT UNSIGNED NOT NULL DEFAULT 0,
+              `locked_until` DATETIME DEFAULT NULL,
+              `last_login_at` DATETIME DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              INDEX `idx_admin_active` (`is_active`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `admin_users` verified/created.";
+
+        // 5. admin_audit_logs table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `admin_audit_logs` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `admin_user_id` INT UNSIGNED DEFAULT NULL,
+              `action` VARCHAR(50) NOT NULL,
+              `entity_type` VARCHAR(30) NOT NULL,
+              `entity_id` VARCHAR(50) NOT NULL,
+              `payload_before` JSON DEFAULT NULL,
+              `payload_after` JSON DEFAULT NULL,
+              `ip_address` VARCHAR(45) NOT NULL,
+              `user_agent` VARCHAR(255) DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              INDEX `idx_audit_entity` (`entity_type`, `entity_id`),
+              INDEX `idx_audit_admin` (`admin_user_id`),
+              INDEX `idx_audit_action` (`action`),
+              INDEX `idx_audit_created` (`created_at`),
+              CONSTRAINT `fk_audit_admin_user` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `admin_audit_logs` verified/created.";
+
+        // 6. calendar_blocks table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `calendar_blocks` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `property_id` VARCHAR(10) NOT NULL,
+              `start_date` DATE NOT NULL,
+              `end_date` DATE NOT NULL,
+              `reason` VARCHAR(255) NOT NULL,
+              `created_by` INT UNSIGNED DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              INDEX `idx_cb_property_dates` (`property_id`, `start_date`, `end_date`),
+              INDEX `idx_cb_created_by` (`created_by`),
+              CONSTRAINT `fk_cb_created_by` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `calendar_blocks` verified/created.";
+
+        // 7. property_rates table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `property_rates` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `property_id` VARCHAR(10) NOT NULL,
+              `start_date` DATE NOT NULL,
+              `end_date` DATE NOT NULL,
+              `season_name` VARCHAR(100) NOT NULL,
+              `price_per_night` DECIMAL(10, 2) NOT NULL,
+              `min_stay` INT UNSIGNED NOT NULL DEFAULT 2,
+              `cleaning_fee` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+              `resort_fee` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+              `created_by` INT UNSIGNED DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              INDEX `idx_pr_property_dates` (`property_id`, `start_date`, `end_date`),
+              INDEX `idx_pr_property` (`property_id`),
+              CONSTRAINT `fk_pr_created_by` FOREIGN KEY (`created_by`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `property_rates` verified/created.";
+
+        // 8. reservation_refunds table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `reservation_refunds` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `reservation_uid` VARCHAR(36) NOT NULL,
+              `mercadopago_refund_id` VARCHAR(100) DEFAULT NULL UNIQUE,
+              `mercadopago_payment_id` VARCHAR(100) NOT NULL,
+              `amount` DECIMAL(10, 2) NOT NULL,
+              `status` VARCHAR(30) NOT NULL DEFAULT 'approved',
+              `reason` VARCHAR(255) DEFAULT NULL,
+              `source` VARCHAR(30) NOT NULL DEFAULT 'admin',
+              `admin_user_id` INT UNSIGNED DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              INDEX `idx_ref_res_uid` (`reservation_uid`),
+              INDEX `idx_ref_payment_id` (`mercadopago_payment_id`),
+              INDEX `idx_ref_admin` (`admin_user_id`),
+              CONSTRAINT `fk_ref_admin_user` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `reservation_refunds` verified/created.";
+    }
+
+    /**
+     * @param PDO $pdo
+     * @param list<string> $logs
+     */
+    private static function runSqliteMigrations(PDO $pdo, array &$logs): void
+    {
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL UNIQUE,
+                property_id TEXT NOT NULL,
+                guest_name TEXT NOT NULL,
+                guest_email TEXT NOT NULL,
+                guest_phone TEXT NOT NULL,
+                check_in TEXT NOT NULL,
+                check_out TEXT NOT NULL,
+                total_price NUMERIC NOT NULL,
+                refunded_amount NUMERIC NOT NULL DEFAULT 0.00,
+                source TEXT NOT NULL DEFAULT "web",
+                mercadopago_preference_id TEXT DEFAULT NULL,
+                mercadopago_payment_id TEXT DEFAULT NULL,
+                payment_status TEXT DEFAULT NULL,
+                payment_method_id TEXT DEFAULT NULL,
+                payment_detail TEXT DEFAULT NULL,
+                status TEXT NOT NULL DEFAULT "pending_payment",
+                lang TEXT NOT NULL DEFAULT "en",
+                registry_completed INTEGER NOT NULL DEFAULT 0,
+                registry_completed_at TEXT DEFAULT NULL,
+                door_code TEXT DEFAULT NULL,
+                notes TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+        $logs[] = "Table `reservations` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS payment_idempotency (
+                idempotency_key TEXT PRIMARY KEY,
+                payment_id TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+        $logs[] = "Table `payment_idempotency` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS guest_registries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                property_id TEXT NOT NULL,
+                check_in TEXT NOT NULL,
+                check_out TEXT NOT NULL,
+                guest_count INTEGER NOT NULL DEFAULT 1,
+                guests_payload TEXT NOT NULL,
+                car_plates TEXT DEFAULT NULL,
+                car_model TEXT DEFAULT NULL,
+                ip_address TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+        $logs[] = "Table `guest_registries` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL DEFAULT "",
+                name TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT "admin",
+                is_active INTEGER NOT NULL DEFAULT 1,
+                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+                locked_until TEXT DEFAULT NULL,
+                last_login_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+        $logs[] = "Table `admin_users` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS admin_audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER DEFAULT NULL,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                payload_before TEXT DEFAULT NULL,
+                payload_after TEXT DEFAULT NULL,
+                ip_address TEXT NOT NULL,
+                user_agent TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (admin_user_id) REFERENCES admin_users (id) ON DELETE SET NULL
+            );
+        ');
+        $logs[] = "Table `admin_audit_logs` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS calendar_blocks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                property_id TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES admin_users (id) ON DELETE SET NULL
+            );
+        ');
+        $logs[] = "Table `calendar_blocks` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS property_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                property_id TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                season_name TEXT NOT NULL,
+                price_per_night NUMERIC NOT NULL,
+                min_stay INTEGER NOT NULL DEFAULT 2,
+                cleaning_fee NUMERIC NOT NULL DEFAULT 0.00,
+                resort_fee NUMERIC NOT NULL DEFAULT 0.00,
+                created_by INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (created_by) REFERENCES admin_users (id) ON DELETE SET NULL
+            );
+        ');
+        $logs[] = "Table `property_rates` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS reservation_refunds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL,
+                mercadopago_refund_id TEXT DEFAULT NULL UNIQUE,
+                mercadopago_payment_id TEXT NOT NULL,
+                amount NUMERIC NOT NULL,
+                status TEXT NOT NULL DEFAULT "approved",
+                reason TEXT DEFAULT NULL,
+                source TEXT NOT NULL DEFAULT "admin",
+                admin_user_id INTEGER DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (admin_user_id) REFERENCES admin_users (id) ON DELETE SET NULL
+            );
+        ');
+        $logs[] = "Table `reservation_refunds` verified/created.";
+    }
+}
