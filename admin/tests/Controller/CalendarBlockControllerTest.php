@@ -129,6 +129,8 @@ final class CalendarBlockControllerTest extends TestCase
 
         $response = $this->controller->create($request, $session);
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('#modal-container', $response->getHeader('HX-Retarget'));
+        $this->assertSame('innerHTML', $response->getHeader('HX-Reswap'));
         $this->assertStringContainsString('must be strictly after start date', $response->getBody());
     }
 
@@ -165,6 +167,8 @@ final class CalendarBlockControllerTest extends TestCase
 
         $response = $this->controller->create($request, $session);
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('#modal-container', $response->getHeader('HX-Retarget'));
+        $this->assertSame('innerHTML', $response->getHeader('HX-Reswap'));
         $this->assertStringContainsString('Collides with active direct reservation ovf_active_direct', $response->getBody());
     }
 
@@ -187,6 +191,8 @@ final class CalendarBlockControllerTest extends TestCase
 
         $response = $this->controller->create($request, $session);
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('#modal-container', $response->getHeader('HX-Retarget'));
+        $this->assertSame('innerHTML', $response->getHeader('HX-Reswap'));
         $this->assertStringContainsString('Proposed dates overlap with an existing maintenance hold', $response->getBody());
     }
 

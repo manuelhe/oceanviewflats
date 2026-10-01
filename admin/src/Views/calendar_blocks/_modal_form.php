@@ -150,6 +150,39 @@ $filter = !empty($filter) ? $filter : 'upcoming';
                     </button>
                 </div>
             </form>
+
+            <script>
+            (function() {
+                var startInput = document.getElementById('block-start-date');
+                var endInput = document.getElementById('block-end-date');
+                if (!startInput || !endInput) return;
+
+                function syncMinEndDate() {
+                    if (!startInput.value) return;
+                    var parts = startInput.value.split('-');
+                    if (parts.length !== 3) return;
+                    var start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    if (isNaN(start.getTime())) return;
+
+                    var minEnd = new Date(start);
+                    minEnd.setDate(minEnd.getDate() + 1);
+                    var y = minEnd.getFullYear();
+                    var m = String(minEnd.getMonth() + 1).padStart(2, '0');
+                    var d = String(minEnd.getDate()).padStart(2, '0');
+                    var minEndStr = y + '-' + m + '-' + d;
+                    endInput.min = minEndStr;
+
+                    if (endInput.value && endInput.value <= startInput.value) {
+                        endInput.value = minEndStr;
+                    }
+                }
+
+                startInput.addEventListener('change', syncMinEndDate);
+                if (startInput.value) {
+                    syncMinEndDate();
+                }
+            })();
+            </script>
         </div>
     </div>
 </div>

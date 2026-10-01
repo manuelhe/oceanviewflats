@@ -6,6 +6,8 @@
     <title><?= htmlspecialchars($title ?? 'Admin Console - Ocean View Flats', ENT_QUOTES, 'UTF-8') ?></title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- HTMX Configuration: Allow 422 Unprocessable Entity responses to swap into targets -->
+    <meta name="htmx-config" content='{"responseHandling": [{"code": "204", "swap": false}, {"code": "[23]..", "swap": true}, {"code": "422", "swap": true}, {"code": "[45]..", "swap": false, "error": true}, {"code": "...", "swap": false}]}'>
     <!-- HTMX CDN -->
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <?php $effectiveCsrfToken = (string) ($csrfToken ?? ($_SESSION['csrf_token'] ?? '')); ?>
@@ -87,6 +89,14 @@
 </footer>
 
 <script>
+// Global HTMX 422 validation response handler: ensures 422 validation errors swap into modal/form containers
+document.body.addEventListener('htmx:beforeSwap', function(evt) {
+    if (evt.detail && evt.detail.xhr && evt.detail.xhr.status === 422) {
+        evt.detail.shouldSwap = true;
+        evt.detail.isError = false;
+    }
+});
+
 window.closeReservationDrawer = window.closeReservationDrawer || function() {
     var container = document.getElementById('drawer-container');
     if (container) {

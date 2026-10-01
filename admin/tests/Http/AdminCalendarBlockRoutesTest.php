@@ -166,6 +166,8 @@ final class AdminCalendarBlockRoutesTest extends TestCase
 
         $response = $this->app->handle($request, $session);
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('#modal-container', $response->getHeader('HX-Retarget'));
+        $this->assertSame('innerHTML', $response->getHeader('HX-Reswap'));
         $this->assertStringContainsString('Collides with active direct reservation ovf_route_collision', $response->getBody());
     }
 
