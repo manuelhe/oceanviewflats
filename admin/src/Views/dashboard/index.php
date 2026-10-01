@@ -45,23 +45,11 @@
             </div>
         </div>
 
-        <div class="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-100 p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0 bg-emerald-50 rounded-lg p-3 text-emerald-600">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Channel Feeds</dt>
-                        <dd class="mt-1 text-sm font-semibold text-emerald-600">
-                            Airbnb iCal Feeds Active
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
+        <?php
+        $cardVars = $channelCardData ?? \OceanViewFlats\Admin\Controller\ChannelSyncController::buildCardViewData(null, (string) ($csrfToken ?? ''));
+        extract($cardVars, EXTR_OVERWRITE);
+        include __DIR__ . '/_channel_card.php';
+        ?>
 
         <div class="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-100 p-5">
             <div class="flex items-center">
