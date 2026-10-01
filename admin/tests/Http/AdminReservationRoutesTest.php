@@ -72,11 +72,35 @@ final class AdminReservationRoutesTest extends TestCase
             VALUES ('res-int-2', '1707', 'Pedro Test', 'pedro@test.com', '+573007654321', '2026-11-10', '2026-11-15', 1500000.00, 'confirmed');
         ");
 
-        $response = $this->dispatchAdmin(new Request('GET', '/reservations/res-int-2', server: ['HTTP_HX_REQUEST' => 'true']));
+        $response = $this->dispatchAdmin(new Request(
+            'GET',
+            '/reservations/res-int-2',
+            server: ['HTTP_HX_REQUEST' => 'true', 'HTTP_HX_TARGET' => 'drawer-container']
+        ));
 
         $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $response->getBody());
         $this->assertStringContainsString('Pedro Test', $response->getBody());
         $this->assertStringContainsString('res-int-2', $response->getBody());
+    }
+
+    public function testReservationShowRouteWithoutDrawerTargetRendersFullDashboard(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status)
+            VALUES ('res-int-full', '1707', 'Full Dashboard Guest', 'fulldash@test.com', '+573007654322', '2026-11-10', '2026-11-15', 1500000.00, 'confirmed');
+        ");
+
+        $response = $this->dispatchAdmin(new Request(
+            'GET',
+            '/reservations/res-int-full',
+            server: ['HTTP_HX_REQUEST' => 'true', 'HTTP_HX_TARGET' => 'body']
+        ));
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('<!DOCTYPE html>', $response->getBody());
+        $this->assertStringContainsString('Reservations Management', $response->getBody());
+        $this->assertStringContainsString('Full Dashboard Guest', $response->getBody());
     }
 
     public function testReservationRegistryRouteResolvesUidAttribute(): void
@@ -125,7 +149,7 @@ final class AdminReservationRoutesTest extends TestCase
         $this->assertStringContainsString('Available (3 Nights)', $response->getBody());
     }
 
-    public function testCreateManualReservationRouteStoresBookingAndEmitsLocationHeader(): void
+    public function testCreateManualReservationRouteStoresBookingAndEmitsOobDrawerAndPushUrl(): void
     {
         $response = $this->dispatchAdmin(new Request(
             'POST',
@@ -150,8 +174,11 @@ final class AdminReservationRoutesTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $headers = $response->getHeaders();
-        $this->assertArrayHasKey('HX-Location', $headers);
-        $this->assertMatchesRegularExpression('#^/reservations/res-man-[a-f0-9]+$#', $headers['HX-Location']);
+        $this->assertSame('reservationUpdated', $headers['HX-Trigger'] ?? null);
+        $this->assertMatchesRegularExpression('#^/reservations/res-man-[a-f0-9]+$#', (string) ($headers['HX-Push-Url'] ?? ''));
+        $this->assertStringContainsString('modal-container', $response->getBody());
+        $this->assertStringContainsString('drawer-container', $response->getBody());
+        $this->assertStringContainsString('Route Tester', $response->getBody());
 
         $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE guest_email = :email');
         $stmt->execute(['email' => 'route@test.com']);

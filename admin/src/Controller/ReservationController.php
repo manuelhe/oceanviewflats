@@ -97,7 +97,7 @@ final class ReservationController
                         <div class="bg-white rounded-xl shadow-xl p-6 max-w-sm text-center border border-gray-200">
                             <p class="text-sm font-semibold text-rose-600 mb-2">Reservation not found</p>
                             <p class="text-xs text-gray-500 mb-4">No reservation exists with UID: ' . htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') . '</p>
-                            <button type="button" onclick="document.getElementById(\'drawer-container\').innerHTML = \'\';" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-xs rounded-md text-gray-700 font-medium cursor-pointer">Dismiss</button>
+                            <button type="button" onclick="closeReservationDrawer();" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-xs rounded-md text-gray-700 font-medium cursor-pointer">Dismiss</button>
                         </div>
                     </div>
                 ';
@@ -115,11 +115,11 @@ final class ReservationController
             'publicSiteUrl' => $this->publicSiteUrl,
         ]);
 
-        if ($request->isHtmx()) {
+        if ($request->isHtmx() && $request->getHeader('HX-Target') === 'drawer-container') {
             return Response::html($drawerHtml);
         }
 
-        // Direct browser request: render full dashboard with pre-opened drawer
+        // Direct browser request or non-drawer HTMX request: render full dashboard with pre-opened drawer
         return Response::html($this->renderFullDashboard(
             session: $session,
             drawerHtml: $drawerHtml,
@@ -335,14 +335,27 @@ final class ReservationController
             $this->lifecycleService->fulfillBookingConfirmation($savedReservation);
         }
 
+        $dossier = $this->search->findWithAuditTrail($uid);
+        $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
+            'reservation' => $dossier !== null ? $dossier->reservation : $savedReservation->toArray(),
+            'auditLogs' => $dossier !== null ? $dossier->auditLogs : [],
+            'refunds' => $dossier !== null ? $dossier->refunds : [],
+            'csrfToken' => (string) ($session['csrf_token'] ?? ''),
+            'publicSiteUrl' => $this->publicSiteUrl,
+        ]);
+
         if ($request->isHtmx()) {
+            $responseBody = '<script>document.getElementById("modal-container").innerHTML = "";</script>';
+            $responseBody .= '<div id="drawer-container" hx-swap-oob="innerHTML">' . $drawerHtml . '</div>';
+
             return new Response(
                 statusCode: 200,
                 headers: [
-                    'HX-Location' => '/reservations/' . urlencode($uid),
+                    'Content-Type' => 'text/html; charset=UTF-8',
                     'HX-Trigger' => 'reservationUpdated',
+                    'HX-Push-Url' => '/reservations/' . urlencode($uid),
                 ],
-                body: ''
+                body: $responseBody
             );
         }
 

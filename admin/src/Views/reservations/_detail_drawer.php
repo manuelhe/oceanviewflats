@@ -29,10 +29,25 @@ $paymentStatus = (string) ($reservation['payment_status'] ?? '');
 $createdAt = (string) ($reservation['created_at'] ?? '');
 ?>
 
+<script>
+window.closeReservationDrawer = window.closeReservationDrawer || function() {
+    var container = document.getElementById('drawer-container');
+    if (container) {
+        container.innerHTML = '';
+    } else {
+        window.location.href = '/reservations';
+        return;
+    }
+    if (window.location.pathname.startsWith('/reservations/')) {
+        window.history.pushState(null, '', '/reservations');
+    }
+};
+</script>
+
 <div class="fixed inset-0 z-40 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
     <!-- Backdrop -->
-    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity duration-300"
-         onclick="document.getElementById('drawer-container').innerHTML = '';"
+    <div class="fixed inset-0 bg-gray-900/50 backdrop-blur-xs transition-opacity duration-300 cursor-pointer"
+         onclick="closeReservationDrawer();"
          aria-hidden="true"></div>
 
     <div class="fixed inset-y-0 right-0 max-w-full flex pl-10">
@@ -67,7 +82,7 @@ $createdAt = (string) ($reservation['created_at'] ?? '');
                     </p>
                 </div>
                 <button type="button"
-                        onclick="document.getElementById('drawer-container').innerHTML = '';"
+                        onclick="closeReservationDrawer();"
                         class="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer">
                     <span class="sr-only">Close panel</span>
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -352,7 +367,7 @@ $createdAt = (string) ($reservation['created_at'] ?? '');
                     <?php endif; ?>
                 </div>
                 <button type="button"
-                        onclick="document.getElementById('drawer-container').innerHTML = '';"
+                        onclick="closeReservationDrawer();"
                         class="px-4 py-2 border border-gray-300 rounded-lg shadow-2xs text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition cursor-pointer">
                     Close
                 </button>

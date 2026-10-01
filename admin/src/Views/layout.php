@@ -86,5 +86,20 @@
     </div>
 </footer>
 
+<script>
+window.closeReservationDrawer = window.closeReservationDrawer || function() {
+    var container = document.getElementById('drawer-container');
+    if (container) {
+        container.innerHTML = '';
+    } else {
+        window.location.href = '/reservations';
+        return;
+    }
+    if (window.location.pathname.startsWith('/reservations/')) {
+        window.history.pushState(null, '', '/reservations');
+    }
+};
+</script>
+
 </body>
 </html>
