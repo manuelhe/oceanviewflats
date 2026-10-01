@@ -108,9 +108,12 @@ final class ReservationControllerTest extends TestCase
         return $this->controller->list($req, $this->session);
     }
 
-    private function executeShow(string $uid, bool $isHtmx = false): Response
+    private function executeShow(string $uid, bool $isHtmx = false, ?string $hxTarget = null): Response
     {
         $server = $isHtmx ? ['HTTP_HX_REQUEST' => 'true'] : [];
+        if ($hxTarget !== null) {
+            $server['HTTP_HX_TARGET'] = $hxTarget;
+        }
         $request = (new Request('GET', '/reservations/' . $uid, server: $server))
             ->withAttribute('uid', $uid);
         return $this->controller->show($request, $this->session);
@@ -164,16 +167,27 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringNotContainsString('Alice Smith', $html);
     }
 
-    public function testShowReturnsDrawerPartialForHtmxRequest(): void
+    public function testShowReturnsDrawerPartialForHtmxDrawerContainerTarget(): void
     {
-        $html = $this->executeShow('res-1', isHtmx: true)->getBody();
+        $html = $this->executeShow('res-1', isHtmx: true, hxTarget: 'drawer-container')->getBody();
 
         $this->assertStringNotContainsString('<!DOCTYPE html>', $html);
+        $this->assertStringNotContainsString('Reservations Management', $html);
         $this->assertStringContainsString('slide-over-title', $html);
         $this->assertStringContainsString('Alice Smith', $html);
         $this->assertStringContainsString('1234#', $html);
         $this->assertStringContainsString('Operational Audit Trail', $html);
         $this->assertStringContainsString('pin_override', $html);
+    }
+
+    public function testShowReturnsFullDashboardForHtmxNonDrawerTarget(): void
+    {
+        $html = $this->executeShow('res-1', isHtmx: true, hxTarget: 'body')->getBody();
+
+        $this->assertStringContainsString('<!DOCTYPE html>', $html);
+        $this->assertStringContainsString('Reservations Management', $html);
+        $this->assertStringContainsString('slide-over-title', $html);
+        $this->assertStringContainsString('Alice Smith', $html);
     }
 
     public function testShowReturnsFullPageWithOpenDrawerForBrowserRequest(): void
@@ -388,7 +402,7 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Selected dates conflict', $response->getBody());
     }
 
-    public function testCreateManualReservationSuccessDispatchesEmailAndEmitsHxLocation(): void
+    public function testCreateManualReservationSuccessDispatchesEmailRendersOobDrawerAndClosesModal(): void
     {
         $this->ledger->method('isAvailable')->willReturn(true);
         $this->emailRenderer->method('renderGuestSubject')->willReturn('Your Stay Confirmation');
@@ -411,8 +425,11 @@ final class ReservationControllerTest extends TestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $headers = $response->getHeaders();
-        $this->assertArrayHasKey('HX-Location', $headers);
-        $this->assertMatchesRegularExpression('#^/reservations/res-man-[a-f0-9]+$#', $headers['HX-Location']);
+        $this->assertSame('reservationUpdated', $headers['HX-Trigger'] ?? null);
+        $this->assertMatchesRegularExpression('#^/reservations/res-man-[a-f0-9]+$#', (string) ($headers['HX-Push-Url'] ?? ''));
+        $this->assertStringContainsString('modal-container', $response->getBody());
+        $this->assertStringContainsString('drawer-container', $response->getBody());
+        $this->assertStringContainsString('Elena Rostova', $response->getBody());
 
         // Verify database row
         $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE guest_email = :email');
