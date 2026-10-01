@@ -172,7 +172,15 @@ final class CalendarBlockController
                 'filter' => $filter,
             ]);
 
-            return Response::html($modalHtml, 422);
+            return new Response(
+                statusCode: 422,
+                headers: [
+                    'Content-Type' => 'text/html; charset=UTF-8',
+                    'HX-Retarget' => '#modal-container',
+                    'HX-Reswap' => 'innerHTML',
+                ],
+                body: $modalHtml
+            );
         }
 
         // 5. Persist Maintenance Block
@@ -216,7 +224,7 @@ final class CalendarBlockController
 
         if ($request->isHtmx()) {
             $responseHtml = '<div id="blocks-container" hx-swap-oob="true">' . $tableHtml . '</div>';
-            $responseHtml .= '<div id="modal-container"></div>';
+            $responseHtml .= '<script>document.getElementById("modal-container").innerHTML = "";</script>';
 
             return new Response(
                 statusCode: 200,

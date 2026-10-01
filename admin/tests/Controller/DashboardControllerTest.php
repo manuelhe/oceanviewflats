@@ -81,4 +81,24 @@ final class DashboardControllerTest extends TestCase
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame(200, $response->getStatusCode());
     }
+
+    public function testLayoutIncludesHtmxConfigFor422Swapping(): void
+    {
+        $session = ['admin_user_id' => 1];
+        $request = new Request('GET', '/');
+
+        $response = $this->controller->index($request, $session);
+        $body = $response->getBody();
+
+        // Meta tag for HTMX 2.x responseHandling permitting 422 swapping
+        $this->assertStringContainsString('name="htmx-config"', $body);
+        $this->assertStringContainsString('"code": "422"', $body);
+        $this->assertStringContainsString('"swap": true', $body);
+
+        // Global htmx:beforeSwap listener for resilient 422 swapping and error suppression
+        $this->assertStringContainsString('htmx:beforeSwap', $body);
+        $this->assertStringContainsString('422', $body);
+        $this->assertStringContainsString('shouldSwap', $body);
+    }
 }
+
