@@ -44,12 +44,34 @@ final class ChannelSyncController
     }
 
     /**
+     * GET /channel-sync/panel: Renders the HTMX partial for the Calendar Blocks Inbound Channel Sync panel.
+     *
+     * @param array<string, mixed> $session
+     */
+    public function panel(Request $request, array &$session): Response
+    {
+        $panelData = self::buildPanelViewData(
+            syncService: $this->syncService,
+            csrfToken: (string) ($session['csrf_token'] ?? '')
+        );
+
+        $html = $this->viewRenderer->renderPartial('calendar_blocks/_channel_sync_panel.php', $panelData);
+
+        return Response::html($html, 200);
+    }
+
+    /**
      * POST /channel-sync: Triggers on-demand manual synchronization for all feeds or a specific property.
      *
      * @param array<string, mixed> $session
      */
     public function sync(Request $request, array &$session): Response
     {
+        $isPanelView = ($request->getQuery('view') === 'panel'
+            || $request->getPost('view') === 'panel'
+            || $request->getHeader('HX-Target') === 'channel-sync-panel'
+            || $request->getHeader('HX-Target') === '#channel-sync-panel');
+
         $rawPropertyId = (string) ($request->getPost('property_id', (string) $request->getQuery('property_id', 'all')));
         $propertyId = trim($rawPropertyId);
         if ($propertyId === '') {
@@ -75,15 +97,25 @@ final class ChannelSyncController
                 $entityId = $propertyId;
             }
         } catch (InvalidArgumentException $e) {
-            $cardData = self::buildCardViewData(
-                syncService: $this->syncService,
-                csrfToken: (string) ($session['csrf_token'] ?? ''),
-                notice: [
-                    'type' => 'error',
-                    'message' => $e->getMessage(),
-                ]
-            );
-            $html = $this->viewRenderer->renderPartial('dashboard/_channel_card.php', $cardData);
+            $notice = [
+                'type' => 'error',
+                'message' => $e->getMessage(),
+            ];
+            if ($isPanelView) {
+                $panelData = self::buildPanelViewData(
+                    syncService: $this->syncService,
+                    csrfToken: (string) ($session['csrf_token'] ?? ''),
+                    notice: $notice
+                );
+                $html = $this->viewRenderer->renderPartial('calendar_blocks/_channel_sync_panel.php', $panelData);
+            } else {
+                $cardData = self::buildCardViewData(
+                    syncService: $this->syncService,
+                    csrfToken: (string) ($session['csrf_token'] ?? ''),
+                    notice: $notice
+                );
+                $html = $this->viewRenderer->renderPartial('dashboard/_channel_card.php', $cardData);
+            }
             return Response::html($html, 422);
         }
 
@@ -162,13 +194,21 @@ final class ChannelSyncController
             ];
         }
 
-        $cardData = self::buildCardViewData(
-            syncService: $this->syncService,
-            csrfToken: (string) ($session['csrf_token'] ?? ''),
-            notice: $notice
-        );
-
-        $html = $this->viewRenderer->renderPartial('dashboard/_channel_card.php', $cardData);
+        if ($isPanelView) {
+            $panelData = self::buildPanelViewData(
+                syncService: $this->syncService,
+                csrfToken: (string) ($session['csrf_token'] ?? ''),
+                notice: $notice
+            );
+            $html = $this->viewRenderer->renderPartial('calendar_blocks/_channel_sync_panel.php', $panelData);
+        } else {
+            $cardData = self::buildCardViewData(
+                syncService: $this->syncService,
+                csrfToken: (string) ($session['csrf_token'] ?? ''),
+                notice: $notice
+            );
+            $html = $this->viewRenderer->renderPartial('dashboard/_channel_card.php', $cardData);
+        }
 
         return Response::html($html, 200);
     }
@@ -246,6 +286,199 @@ final class ChannelSyncController
             'noticeClasses' => $noticeClasses,
             'csrfToken' => $csrfToken,
         ];
+    }
+
+    /**
+     * Builds standard view data for the calendar blocks channel sync panel.
+     *
+     * @param array{type: string, message: string}|null $notice
+     * @return array<string, mixed>
+     */
+    public static function buildPanelViewData(
+        ?InboundChannelSyncServiceInterface $syncService,
+        string $csrfToken,
+        ?array $notice = null
+    ): array {
+        /** @var array<string|int, ChannelSyncStatus> $statuses */
+        $statuses = $syncService !== null ? $syncService->getAllStatuses() : [];
+
+        $health = self::resolveAggregateHealth($statuses);
+        $lastSyncedAt = self::resolveLatestSyncTimestamp($statuses);
+        $relativeSyncedTime = self::formatRelativeTime($lastSyncedAt);
+        $totalBlockedNights = $syncService !== null ? self::resolveTotalBlockedNights($syncService, $statuses) : 0;
+
+        $badgeText = match ($health) {
+            ChannelSyncStatus::STATUS_DEGRADED => 'Degraded',
+            ChannelSyncStatus::STATUS_ERROR => 'Error',
+            default => 'Healthy',
+        };
+
+        $badgeClasses = match ($health) {
+            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-50 text-amber-700 border-amber-200',
+            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-50 text-rose-700 border-rose-200',
+            default => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        };
+
+        $badgeDotClass = match ($health) {
+            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-500',
+            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-500',
+            default => 'bg-emerald-500',
+        };
+
+        $noticeClasses = '';
+        if ($notice !== null) {
+            $noticeClasses = match ($notice['type']) {
+                'error' => 'bg-rose-50 border border-rose-200 text-rose-800',
+                'warning' => 'bg-amber-50 border border-amber-200 text-amber-800',
+                'info' => 'bg-blue-50 border border-blue-200 text-blue-800',
+                default => 'bg-emerald-50 border border-emerald-200 text-emerald-800',
+            };
+        }
+
+        $feedUrls = $syncService !== null ? $syncService->getFeedUrls() : [];
+        $propertyIds = array_unique(array_merge(['1606', '1707'], array_keys($feedUrls), array_keys($statuses)));
+        $propertyIds = array_map('strval', $propertyIds);
+        sort($propertyIds);
+
+        $properties = [];
+        $diagnostics = [];
+
+        foreach ($propertyIds as $propId) {
+            $statusObj = $statuses[$propId] ?? null;
+
+            $unitHealth = ChannelSyncStatus::STATUS_HEALTHY;
+            if ($statusObj !== null) {
+                if ($statusObj->isError()) {
+                    $unitHealth = ChannelSyncStatus::STATUS_ERROR;
+                } elseif ($statusObj->isDegraded()) {
+                    $unitHealth = ChannelSyncStatus::STATUS_DEGRADED;
+                }
+            }
+
+            $unitBadgeText = match ($unitHealth) {
+                ChannelSyncStatus::STATUS_DEGRADED => 'Degraded',
+                ChannelSyncStatus::STATUS_ERROR => 'Error',
+                default => 'Healthy',
+            };
+
+            $unitBadgeClasses = match ($unitHealth) {
+                ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-50 text-amber-700 border-amber-200',
+                ChannelSyncStatus::STATUS_ERROR => 'bg-rose-50 text-rose-700 border-rose-200',
+                default => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            };
+
+            $unitBadgeDotClass = match ($unitHealth) {
+                ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-500',
+                ChannelSyncStatus::STATUS_ERROR => 'bg-rose-500',
+                default => 'bg-emerald-500',
+            };
+
+            $cached = $syncService !== null ? $syncService->getCachedNights($propId) : null;
+            $unitBlockedNights = $cached !== null ? count($cached) : ($statusObj?->getBlockedNightsCount() ?? 0);
+
+            $propName = match ($propId) {
+                '1606' => 'Apartment 1606',
+                '1707' => 'Apartment 1707',
+                default => "Apartment {$propId}",
+            };
+
+            $feedUrl = $feedUrls[$propId] ?? ($statusObj?->getFeedUrl() ?? null);
+            $maskedUrl = self::maskFeedUrl($feedUrl);
+
+            $isDegraded = $statusObj?->isDegraded() ?? false;
+            $isError = $statusObj?->isError() ?? false;
+            $httpCode = $statusObj?->getHttpCode();
+            $errorMessage = $statusObj?->getErrorMessage();
+
+            $properties[$propId] = [
+                'id' => $propId,
+                'name' => $propName,
+                'status' => $statusObj,
+                'health' => $unitHealth,
+                'badgeText' => $unitBadgeText,
+                'badgeClasses' => $unitBadgeClasses,
+                'badgeDotClass' => $unitBadgeDotClass,
+                'lastSyncedAt' => $statusObj?->getLastSyncedAt(),
+                'lastAttemptedAt' => $statusObj?->getLastAttemptedAt(),
+                'relativeSyncedTime' => self::formatRelativeTime($statusObj?->getLastSyncedAt()),
+                'blockedNightsCount' => $unitBlockedNights,
+                'feedUrl' => $feedUrl,
+                'maskedFeedUrl' => $maskedUrl,
+                'httpCode' => $httpCode,
+                'errorMessage' => $errorMessage,
+                'isDegraded' => $isDegraded,
+                'isError' => $isError,
+            ];
+
+            if ($isDegraded || $isError) {
+                $diagnostics[] = [
+                    'propertyId' => $propId,
+                    'propertyName' => $propName,
+                    'isDegraded' => $isDegraded,
+                    'isError' => $isError,
+                    'httpCode' => $httpCode,
+                    'errorMessage' => $errorMessage ?? 'Unknown error',
+                    'blockedNightsRetained' => $unitBlockedNights,
+                ];
+            }
+        }
+
+        return [
+            'health' => $health,
+            'badgeText' => $badgeText,
+            'badgeClasses' => $badgeClasses,
+            'badgeDotClass' => $badgeDotClass,
+            'lastSyncedAt' => $lastSyncedAt,
+            'relativeSyncedTime' => $relativeSyncedTime,
+            'totalBlockedNights' => $totalBlockedNights,
+            'properties' => $properties,
+            'hasDiagnostics' => !empty($diagnostics),
+            'diagnostics' => $diagnostics,
+            'syncNotice' => $notice,
+            'noticeClasses' => $noticeClasses,
+            'csrfToken' => $csrfToken,
+        ];
+    }
+
+    /**
+     * Masks sensitive tokens or query parameters in an iCal feed URL.
+     */
+    public static function maskFeedUrl(?string $url): string
+    {
+        if ($url === null || trim($url) === '') {
+            return 'Not configured';
+        }
+
+        $parsed = parse_url($url);
+        if (!is_array($parsed) || !isset($parsed['host'])) {
+            return $url;
+        }
+
+        $scheme = $parsed['scheme'] ?? 'https';
+        $host = $parsed['host'];
+        $path = $parsed['path'] ?? '';
+
+        $queryStr = '';
+        if (isset($parsed['query']) && $parsed['query'] !== '') {
+            parse_str($parsed['query'], $queryParts);
+            $maskedParts = [];
+            foreach ($queryParts as $key => $val) {
+                if (!is_scalar($val)) {
+                    continue;
+                }
+                $valStr = (string) $val;
+                $len = strlen($valStr);
+                if ($len > 8) {
+                    $maskedVal = substr($valStr, 0, 4) . '••••' . substr($valStr, -4);
+                } else {
+                    $maskedVal = '••••••••';
+                }
+                $maskedParts[] = urlencode((string) $key) . '=' . $maskedVal;
+            }
+            $queryStr = '?' . implode('&', $maskedParts);
+        }
+
+        return $scheme . '://' . $host . $path . $queryStr;
     }
 
     /**

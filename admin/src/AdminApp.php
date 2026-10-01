@@ -202,7 +202,8 @@ final class AdminApp
             blockRepository: $calendarBlockRepo,
             ledger: $ledger,
             viewRenderer: $viewRenderer,
-            auditLogger: $auditLogger
+            auditLogger: $auditLogger,
+            syncService: $channelSyncService
         );
 
         // 8. Security Middlewares & Router (immutable internal security pipeline)
@@ -222,6 +223,7 @@ final class AdminApp
             ->get('/logout', [$authController, 'logout'])
             ->get('/', [$dashboardController, 'index'])
             ->get('/channel-sync/card', [$channelSyncController, 'card'])
+            ->get('/channel-sync/panel', [$channelSyncController, 'panel'])
             ->post('/channel-sync', [$channelSyncController, 'sync'])
             ->get('/reservations', [$reservationController, 'list'])
             ->get('/reservations/new', [$reservationController, 'newReservation'])

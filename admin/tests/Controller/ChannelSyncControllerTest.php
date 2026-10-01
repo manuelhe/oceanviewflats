@@ -301,6 +301,182 @@ final class ChannelSyncControllerTest extends TestCase
 
         $this->assertStringContainsString('No feed configured for property ID: unknown_999', $body);
     }
+
+    public function testPanelRendersChannelSyncPanelHtml(): void
+    {
+        $status1606 = new ChannelSyncStatus(
+            propertyId: '1606',
+            status: ChannelSyncStatus::STATUS_HEALTHY,
+            lastSyncedAt: date('c', time() - 300),
+            lastAttemptedAt: date('c', time() - 300),
+            httpCode: 200,
+            blockedNightsCount: 4,
+            errorMessage: null
+        );
+        $status1707 = new ChannelSyncStatus(
+            propertyId: '1707',
+            status: ChannelSyncStatus::STATUS_HEALTHY,
+            lastSyncedAt: date('c', time() - 600),
+            lastAttemptedAt: date('c', time() - 600),
+            httpCode: 200,
+            blockedNightsCount: 2,
+            errorMessage: null
+        );
+
+        $fakeService = new FakeInboundChannelSyncService([
+            '1606' => $status1606,
+            '1707' => $status1707,
+        ]);
+
+        $controller = new ChannelSyncController(
+            syncService: $fakeService,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger
+        );
+
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'token123'];
+        $request = new Request('GET', '/channel-sync/panel');
+
+        $response = $controller->panel($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringContainsString('Inbound Channel Sync', $body);
+        $this->assertStringContainsString('Apartment 1606', $body);
+        $this->assertStringContainsString('Apartment 1707', $body);
+        $this->assertStringContainsString('Healthy', $body);
+        $this->assertStringContainsString('hx-post="/channel-sync?view=panel"', $body);
+        $this->assertStringContainsString('hx-post="/channel-sync?property_id=1606&view=panel"', $body);
+        $this->assertStringContainsString('hx-post="/channel-sync?property_id=1707&view=panel"', $body);
+        $this->assertStringContainsString('hx-target="#channel-sync-panel"', $body);
+        $this->assertStringContainsString('hx-swap="outerHTML"', $body);
+        $this->assertStringContainsString('hx-indicator="#sync-spinner-1606"', $body);
+        $this->assertStringContainsString('hx-indicator="#sync-spinner-all"', $body);
+    }
+
+    public function testPostChannelSyncWithPropertyIdAndPanelViewReturnsPanelHtml(): void
+    {
+        $fakeService = new FakeInboundChannelSyncService();
+
+        $controller = new ChannelSyncController(
+            syncService: $fakeService,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger
+        );
+
+        $session = ['admin_user_id' => 2, 'csrf_token' => 'token_xyz'];
+        $request = new Request(
+            method: 'POST',
+            uri: '/channel-sync',
+            query: ['property_id' => '1606', 'view' => 'panel']
+        );
+
+        $response = $controller->sync($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringContainsString('Feed synchronized successfully', $body);
+        $this->assertStringContainsString('Apartment 1606', $body);
+    }
+
+    public function testPostChannelSyncPerPropertyAuditLogging(): void
+    {
+        $fakeService = new FakeInboundChannelSyncService();
+
+        $controller = new ChannelSyncController(
+            syncService: $fakeService,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger
+        );
+
+        $session = ['admin_user_id' => 5, 'csrf_token' => 'token_xyz'];
+        $request = new Request(
+            method: 'POST',
+            uri: '/channel-sync',
+            query: ['property_id' => '1606', 'view' => 'panel']
+        );
+
+        $response = $controller->sync($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "channel_sync_manual" ORDER BY id DESC LIMIT 1');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertIsArray($log);
+        $this->assertSame(5, (int) $log['admin_user_id']);
+        $this->assertSame('1606', $log['entity_id']);
+    }
+
+    public function testDegradedStateWithRetainedCacheRendersErrorCalloutBanner(): void
+    {
+        $status1606 = new ChannelSyncStatus(
+            propertyId: '1606',
+            status: ChannelSyncStatus::STATUS_DEGRADED,
+            lastSyncedAt: date('c', time() - 3600),
+            lastAttemptedAt: date('c', time() - 60),
+            httpCode: 504,
+            blockedNightsCount: 3,
+            errorMessage: 'Gateway Timeout'
+        );
+
+        $fakeService = new FakeInboundChannelSyncService([
+            '1606' => $status1606,
+        ]);
+
+        $controller = new ChannelSyncController(
+            syncService: $fakeService,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger
+        );
+
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'token123'];
+        $request = new Request('GET', '/channel-sync/panel');
+
+        $response = $controller->panel($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringContainsString('id="channel-sync-diagnostics"', $body);
+        $this->assertStringContainsString('HTTP 504', $body);
+        $this->assertStringContainsString('Gateway Timeout', $body);
+        $this->assertStringContainsString('Previous cached blocks', $body);
+        $this->assertStringContainsString('safely retained', $body);
+    }
+
+    public function testPostChannelSyncWithHxTargetHeaderReturnsPanelHtml(): void
+    {
+        $fakeService = new FakeInboundChannelSyncService();
+
+        $controller = new ChannelSyncController(
+            syncService: $fakeService,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger
+        );
+
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'token_xyz'];
+        $request = new Request(
+            method: 'POST',
+            uri: '/channel-sync',
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => 'channel-sync-panel',
+            ]
+        );
+
+        $response = $controller->sync($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringNotContainsString('id="channel-card-container"', $body);
+    }
 }
 
 /**

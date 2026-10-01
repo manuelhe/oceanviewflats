@@ -8,6 +8,7 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlock;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
@@ -23,7 +24,8 @@ final class CalendarBlockController
         private readonly MaintenanceBlockRepositoryInterface $blockRepository,
         private readonly ReservationLedgerInterface $ledger,
         private readonly ViewRenderer $viewRenderer,
-        private readonly AuditLogger $auditLogger
+        private readonly AuditLogger $auditLogger,
+        private readonly ?InboundChannelSyncServiceInterface $syncService = null
     ) {
     }
 
@@ -51,6 +53,11 @@ final class CalendarBlockController
             return Response::html($tableHtml, 200);
         }
 
+        $panelData = ChannelSyncController::buildPanelViewData(
+            syncService: $this->syncService,
+            csrfToken: $csrfToken
+        );
+
         $fullHtml = $this->viewRenderer->render('calendar_blocks/index.php', [
             'propertyId' => $propertyId,
             'filter' => $filter,
@@ -58,6 +65,7 @@ final class CalendarBlockController
             'csrfToken' => $csrfToken,
             'currentUser' => $this->buildCurrentUser($session),
             'currentRoute' => '/calendar-blocks',
+            'channelSyncPanel' => $panelData,
         ]);
 
         return Response::html($fullHtml, 200);
