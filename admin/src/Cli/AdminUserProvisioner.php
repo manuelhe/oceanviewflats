@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Config\ConfigPathResolver;
 use OceanViewFlats\Admin\Db\DatabaseFactory;
+use OceanViewFlats\Domain\Support\EnvLoader;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -206,6 +207,9 @@ final class AdminUserProvisioner
         }
 
         $root = $baseDir ?? (getenv('OVF_CONFIG_ROOT') ?: dirname(__DIR__, 3));
+        if (class_exists(EnvLoader::class)) {
+            EnvLoader::load($root);
+        }
         $configPath = ConfigPathResolver::resolveConfigPath($root);
 
         /** @var mixed $config */
