@@ -323,6 +323,11 @@ export const dict = {
 		guideNoReservationFound:
 			"Please provide a valid reservation code or link from your confirmation email.",
 		registryBtnViewGuide: "Access Guest Guide & Door Codes",
+		registryLookupLoading: "Looking up reservation details...",
+		registryLookupNotFound:
+			"No reservation found matching this code. Please verify your reservation code or enter your stay details.",
+		registryAlreadyCompleted:
+			"A Guest Registry has already been completed for this reservation. You can proceed directly to your Guest Guide.",
 		dbTitle: "Direct Booking",
 		dbSubtitle:
 			"Rent directly from the owner and save up to 20% on booking fees",
@@ -704,6 +709,11 @@ export const dict = {
 		guideNoReservationFound:
 			"Por favor proporciona un código de reserva válido o usa el enlace de tu correo de confirmación.",
 		registryBtnViewGuide: "Acceder a la Guía del Huésped y Códigos",
+		registryLookupLoading: "Buscando detalles de la reserva...",
+		registryLookupNotFound:
+			"No se encontró ninguna reserva con este código. Verifique su código o ingrese los detalles de su estadía.",
+		registryAlreadyCompleted:
+			"Ya se completó el registro de huéspedes para esta reserva. Puede ingresar directamente a su Guía del Huésped.",
 		dbTitle: "Reserva Directa",
 		dbSubtitle:
 			"Alquila directamente con el propietario y ahorra hasta un 20% en comisiones de plataformas",
@@ -1091,6 +1101,11 @@ export const dict = {
 		guideNoReservationFound:
 			"Veuillez fournir un code de réservation valide ou utiliser le lien reçu par e-mail.",
 		registryBtnViewGuide: "Accéder au Guide des Voyageurs et Codes",
+		registryLookupLoading: "Recherche des détails de la réservation...",
+		registryLookupNotFound:
+			"Aucune réservation trouvée correspondant à ce code. Veuillez vérifier votre code ou saisir les détails de votre séjour.",
+		registryAlreadyCompleted:
+			"Le formulaire d'enregistrement a déjà été rempli pour cette réservation. Vous pouvez accéder directement à votre guide.",
 		dbTitle: "Réservation Directe",
 		dbSubtitle:
 			"Louez directement auprès du propriétaire et économisez jusqu'à 20% sur les frais de plateforme",
@@ -1471,6 +1486,11 @@ export const dict = {
 		guideNoReservationFound:
 			"Fornisci un codice di prenotazione valido o utilizza il link ricevuto via email.",
 		registryBtnViewGuide: "Accedi alla Guida per gli Ospiti e Codici",
+		registryLookupLoading: "Ricerca dei dettagli della prenotazione...",
+		registryLookupNotFound:
+			"Nessuna prenotazione trovata per questo codice. Verifica il tuo codice o inserisci i dettagli del soggiorno.",
+		registryAlreadyCompleted:
+			"La registrazione degli ospiti è già stata completata per questa prenotazione. Puoi accedere direttamente alla tua Guida per gli Ospiti.",
 		dbTitle: "Prenotazione Diretta",
 		dbSubtitle:
 			"Affitta direttamente dal proprietario e risparmia fino al 20% sulle commissioni delle piattaforme",
@@ -1853,6 +1873,11 @@ export const dict = {
 		guideNoReservationFound:
 			"Bitte geben Sie einen gültigen Reservierungscode an oder nutzen Sie den Link aus Ihrer Bestätigungs-E-Mail.",
 		registryBtnViewGuide: "Zum Gästehandbuch & Tür-Codes",
+		registryLookupLoading: "Reservierungsdetails werden geladen...",
+		registryLookupNotFound:
+			"Keine Reservierung für diesen Code gefunden. Bitte überprüfen Sie Ihren Code oder geben Sie Ihre Aufenthaltsdaten ein.",
+		registryAlreadyCompleted:
+			"Die Gästeregistrierung für diese Reservierung wurde bereits abgeschlossen. Sie können direkt zum Gästehandbuch wechseln.",
 		dbTitle: "Direktbuchung",
 		dbSubtitle:
 			"Buchen Sie direkt beim Eigentümer und sparen Sie bis zu 20 % an Plattformgebühren",
@@ -2236,6 +2261,11 @@ export const dict = {
 		guideNoReservationFound:
 			"有効な予約コードを入力するか、予約確認メールのリンクをご利用ください。",
 		registryBtnViewGuide: "ゲストガイドと暗証番号を確認する",
+		registryLookupLoading: "予約情報を確認中...",
+		registryLookupNotFound:
+			"このコードに一致する予約が見つかりませんでした。予約コードを確認するか、滞在詳細を入力してください。",
+		registryAlreadyCompleted:
+			"この予約の宿泊者名簿登録は既に完了しています。ゲストガイドへ直接お進みいただけます。",
 		dbTitle: "直接予約",
 		dbSubtitle:
 			"ホストから直接予約することで、プラットフォーム手数料を最大20%節約できます",

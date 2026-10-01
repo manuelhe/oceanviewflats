@@ -18,7 +18,24 @@ $carModel = (string) ($registry['car_model'] ?? '');
 $submittedAt = (string) ($registry['created_at'] ?? '');
 $ipAddress = (string) ($registry['ip_address'] ?? '');
 
-$registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?property=' . urlencode($propertyId) . '&code=' . urlencode($uid);
+$checkIn = (string) ($reservation['check_in'] ?? '');
+$checkOut = (string) ($reservation['check_out'] ?? '');
+$lang = (string) ($reservation['lang'] ?? 'es');
+
+$regParams = ['property' => $propertyId];
+if ($checkIn !== '') {
+    $regParams['check_in'] = $checkIn;
+}
+if ($checkOut !== '') {
+    $regParams['check_out'] = $checkOut;
+}
+$regParams['code'] = $uid;
+if ($lang !== '') {
+    $regParams['lang'] = $lang;
+}
+
+$registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?' . http_build_query($regParams);
+$guideUrl = rtrim($publicSiteUrl, '/') . '/guide/?' . http_build_query(['code' => $uid, 'lang' => $lang]);
 ?>
 
 <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -128,6 +145,28 @@ $registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?property=' . urlencode($
                                 </div>
                             <?php endforeach; ?>
                         </div>
+
+                        <!-- Copyable Guest Guide Link (Completed / Unlocked) -->
+                        <div class="space-y-1.5 pt-2 border-t border-gray-100">
+                            <label for="guide-link-input-completed" class="block text-xs font-semibold text-gray-700">
+                                Direct Guest Guide Link (Unlocked Access):
+                            </label>
+                            <div class="flex rounded-lg shadow-2xs">
+                                <input id="guide-link-input-completed"
+                                       type="text"
+                                       readonly
+                                       value="<?= htmlspecialchars($guideUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                       class="flex-1 block w-full px-3 py-2 text-xs font-mono bg-gray-50 border border-gray-300 rounded-l-lg select-all focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <button type="button"
+                                        onclick="navigator.clipboard.writeText(document.getElementById('guide-link-input-completed').value).then(() => { this.innerText = 'Copied!'; setTimeout(() => this.innerText = 'Copy Guide Link', 2000); });"
+                                        class="inline-flex items-center px-4 py-2 border border-l-0 border-indigo-600 text-xs font-medium rounded-r-lg text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer">
+                                    Copy Guide Link
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-gray-400">
+                                Direct link for the guest to access apartment and Wi-Fi credentials.
+                            </p>
+                        </div>
                     </div>
 
                 <?php else: ?>
@@ -161,27 +200,50 @@ $registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?property=' . urlencode($
                         </div>
                     </div>
 
-                    <!-- Copyable Registration Link -->
-                    <div class="space-y-1.5">
-                        <label for="registry-link-input" class="block text-xs font-semibold text-gray-700">
-                            Direct Guest Registry Link:
-                        </label>
-                        <div class="flex rounded-lg shadow-2xs">
-                            <input id="registry-link-input"
-                                   type="text"
-                                   readonly
-                                   value="<?= htmlspecialchars($registryUrl, ENT_QUOTES, 'UTF-8') ?>"
-                                   class="flex-1 block w-full px-3 py-2 text-xs font-mono bg-gray-50 border border-gray-300 rounded-l-lg select-all focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                            <button type="button"
-                                    id="copy-registry-btn"
-                                    onclick="navigator.clipboard.writeText(document.getElementById('registry-link-input').value).then(() => { this.innerText = 'Copied!'; setTimeout(() => this.innerText = 'Copy Link', 2000); });"
-                                    class="inline-flex items-center px-4 py-2 border border-l-0 border-indigo-600 text-xs font-medium rounded-r-lg text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer">
-                                Copy Link
-                            </button>
+                    <!-- Copyable Registration & Guide Links -->
+                    <div class="space-y-4">
+                        <div class="space-y-1.5">
+                            <label for="registry-link-input" class="block text-xs font-semibold text-gray-700">
+                                Direct Guest Registry Link:
+                            </label>
+                            <div class="flex rounded-lg shadow-2xs">
+                                <input id="registry-link-input"
+                                       type="text"
+                                       readonly
+                                       value="<?= htmlspecialchars($registryUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                       class="flex-1 block w-full px-3 py-2 text-xs font-mono bg-gray-50 border border-gray-300 rounded-l-lg select-all focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <button type="button"
+                                        id="copy-registry-btn"
+                                        onclick="navigator.clipboard.writeText(document.getElementById('registry-link-input').value).then(() => { this.innerText = 'Copied!'; setTimeout(() => this.innerText = 'Copy Link', 2000); });"
+                                        class="inline-flex items-center px-4 py-2 border border-l-0 border-indigo-600 text-xs font-medium rounded-r-lg text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer">
+                                    Copy Link
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-gray-400">
+                                Send this secure pre-filled link to the Primary Guest via WhatsApp or SMS to expedite their registration.
+                            </p>
                         </div>
-                        <p class="text-[11px] text-gray-400">
-                            Send this secure pre-filled link to the Primary Guest via WhatsApp or SMS to expedite their registration.
-                        </p>
+
+                        <div class="space-y-1.5">
+                            <label for="guide-link-input-pending" class="block text-xs font-semibold text-gray-700">
+                                Direct Guest Guide Link:
+                            </label>
+                            <div class="flex rounded-lg shadow-2xs">
+                                <input id="guide-link-input-pending"
+                                       type="text"
+                                       readonly
+                                       value="<?= htmlspecialchars($guideUrl, ENT_QUOTES, 'UTF-8') ?>"
+                                       class="flex-1 block w-full px-3 py-2 text-xs font-mono bg-gray-50 border border-gray-300 rounded-l-lg select-all focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                                <button type="button"
+                                        onclick="navigator.clipboard.writeText(document.getElementById('guide-link-input-pending').value).then(() => { this.innerText = 'Copied!'; setTimeout(() => this.innerText = 'Copy Guide Link', 2000); });"
+                                        class="inline-flex items-center px-4 py-2 border border-l-0 border-gray-300 text-xs font-medium rounded-r-lg text-gray-700 bg-gray-100 hover:bg-gray-200 transition cursor-pointer">
+                                    Copy Guide Link
+                                </button>
+                            </div>
+                            <p class="text-[11px] text-gray-400">
+                                Note: Access credentials remain locked until the guest completes the registry.
+                            </p>
+                        </div>
                     </div>
 
                 <?php endif; ?>

@@ -48,9 +48,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawCheckIn = urlParams.get('check_in') || urlParams.get('checkin') || '';
     const rawCheckOut = urlParams.get('check_out') || urlParams.get('checkout') || '';
 
-    // Relative asset path calculation for endpoints and cross-links
-    const pathPrefix = document.getElementById('btn-copy-door-code') ? '../' : './';
+    // Relative asset path calculation for endpoints and cross-links (guide views are located in /guide/)
+    const pathPrefix = '../';
     const registryPageName = lang === 'en' ? 'registry/index.html' : `registry/${lang}.html`;
+
+    // Safely sanitize URLs before assigning to href
+    function sanitizeUrl(url) {
+        if (!url || typeof url !== 'string') return '#';
+        const trimmed = url.trim();
+        if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) {
+            return trimmed;
+        }
+        try {
+            const parsed = new URL(trimmed, window.location.origin);
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                return parsed.href;
+            }
+        } catch (_) {
+            return '#';
+        }
+        return '#';
+    }
 
     // Construct default prefilled registry link
     function buildRegistryUrl(codeOverride) {
@@ -120,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             credentialLockedDesc.textContent = reasonMsg;
         }
 
-        const effectiveRegistryUrl = targetRegistryUrl || defaultRegistryUrl;
+        const effectiveRegistryUrl = sanitizeUrl(targetRegistryUrl || defaultRegistryUrl);
         if (registryLink) {
             registryLink.href = effectiveRegistryUrl;
         }
@@ -209,7 +227,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 setUnlockedState(data.credentials, data.reservation);
             } else if (data.status === 'registry_required') {
                 // Reservation valid and confirmed, but Guest Registry not yet submitted
-                const dynamicRegUrl = data.registry_url ? `${pathPrefix}${data.registry_url.replace(/^\//, '')}` : defaultRegistryUrl;
+                if (data.reservation) {
+                    setInitialDisplayDetails(
+                        data.reservation.guest_name,
+                        data.reservation.check_in,
+                        data.reservation.check_out,
+                        data.reservation.property_id
+                    );
+                }
+                let dynamicRegUrl = defaultRegistryUrl;
+                if (data.registry_url) {
+                    if (data.registry_url.startsWith('http://') || data.registry_url.startsWith('https://')) {
+                        dynamicRegUrl = data.registry_url;
+                    } else {
+                        dynamicRegUrl = `${pathPrefix}${data.registry_url.replace(/^\//, '')}`;
+                    }
+                }
                 setLockedState(dynamicRegUrl, data.message || msgLockedDesc);
             } else {
                 // Unauthorized / cancelled / not found

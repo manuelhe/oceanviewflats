@@ -231,8 +231,10 @@ final class ReservationControllerTest extends TestCase
         $html = $this->executeRegistry('res-2')->getBody();
 
         $this->assertStringContainsString('Guest Registry Pending', $html);
-        $this->assertStringContainsString('https://oceanviewflats.com/registry/?property=1606&amp;code=res-2', $html);
+        $this->assertStringContainsString('https://oceanviewflats.com/registry/?property=1606&amp;check_in=2026-10-10&amp;check_out=2026-10-15&amp;code=res-2&amp;lang=en', $html);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=res-2&amp;lang=en', $html);
         $this->assertStringContainsString('Copy Link', $html);
+        $this->assertStringContainsString('Copy Guide Link', $html);
     }
 
     public function testShowRegistryReturns404WhenReservationMissing(): void
