@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const hiddenCheckOut = document.getElementById('hidden-check-out');
     const hiddenReservationCode = document.getElementById('hidden-reservation-code');
     const btnUnlockedGuide = document.getElementById('btn-unlocked-guide');
+    const successTitle = document.getElementById('success-title');
+    const successDesc = document.getElementById('success-desc');
+
+    const msgLoading = form.getAttribute('data-msg-loading') || 'Loading...';
+    const msgNotFound = form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.';
+    const msgAlreadyCompleted = form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.';
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');
@@ -81,6 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (propertyVal) {
         displayProperty.textContent = `OceanViewFlats ${propertyVal}`;
         hiddenProperty.value = propertyVal;
+    } else if (reservationCodeVal) {
+        displayProperty.textContent = msgLoading;
+        hiddenProperty.value = "";
     } else {
         displayProperty.textContent = defaultPropMsg;
         hiddenProperty.value = "";
@@ -89,6 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (checkInVal) {
         displayCheckIn.textContent = checkInVal;
         hiddenCheckIn.value = checkInVal;
+    } else if (reservationCodeVal) {
+        displayCheckIn.textContent = "...";
+        hiddenCheckIn.value = "";
     } else {
         displayCheckIn.textContent = defaultDateMsg;
         hiddenCheckIn.value = "";
@@ -97,9 +109,78 @@ document.addEventListener('DOMContentLoaded', () => {
     if (checkOutVal) {
         displayCheckOut.textContent = checkOutVal;
         hiddenCheckOut.value = checkOutVal;
+    } else if (reservationCodeVal) {
+        displayCheckOut.textContent = "...";
+        hiddenCheckOut.value = "";
     } else {
         displayCheckOut.textContent = defaultDateMsg;
         hiddenCheckOut.value = "";
+    }
+
+    // Async lookup if reservation code is present
+    async function lookupReservation() {
+        if (!reservationCodeVal) return;
+
+        const actionPath = form.getAttribute('action') || 'api/registry-processor.php';
+        const processorBase = actionPath.replace('registry-processor.php', '');
+        const lookupUrl = `${processorBase}registry-lookup.php?code=${encodeURIComponent(reservationCodeVal)}&lang=${encodeURIComponent(lang)}`;
+
+        try {
+            const res = await fetch(lookupUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success && data.reservation) {
+                const r = data.reservation;
+                if (r.property_id) {
+                    displayProperty.textContent = `OceanViewFlats ${r.property_id}`;
+                    hiddenProperty.value = r.property_id;
+                }
+                if (r.check_in) {
+                    displayCheckIn.textContent = r.check_in;
+                    hiddenCheckIn.value = r.check_in;
+                }
+                if (r.check_out) {
+                    displayCheckOut.textContent = r.check_out;
+                    hiddenCheckOut.value = r.check_out;
+                }
+                const guest1NameInput = document.getElementById('guest-name-1');
+                if (guest1NameInput && !guest1NameInput.value && r.guest_name) {
+                    guest1NameInput.value = r.guest_name;
+                }
+
+                if (r.registry_completed) {
+                    if (btnUnlockedGuide) {
+                        const pageName = lang === 'en' ? 'index.html' : `${lang}.html`;
+                        const guideBase = `${processorBase.replace('api/', '')}guide/${pageName}`;
+                        btnUnlockedGuide.href = data.guide_url || `${guideBase}?code=${encodeURIComponent(reservationCodeVal)}`;
+                    }
+                    if (successDesc) {
+                        successDesc.textContent = msgAlreadyCompleted;
+                    }
+                    form.classList.add('hidden');
+                    successOverlay.classList.remove('hidden');
+                }
+            } else if (res.status === 404 || res.status === 403) {
+                if (!hiddenCheckIn.value) displayCheckIn.textContent = defaultDateMsg;
+                if (!hiddenCheckOut.value) displayCheckOut.textContent = defaultDateMsg;
+                if (!hiddenProperty.value) displayProperty.textContent = defaultPropMsg;
+
+                msgBox.textContent = data.message || msgNotFound;
+                msgBox.className = 'p-5 rounded-2xl text-sm font-medium mb-6 bg-amber-50 text-amber-800 border border-amber-200';
+                msgBox.classList.remove('hidden');
+            }
+        } catch (err) {
+            console.error('Error looking up reservation details:', err);
+            if (!hiddenCheckIn.value) displayCheckIn.textContent = defaultDateMsg;
+            if (!hiddenCheckOut.value) displayCheckOut.textContent = defaultDateMsg;
+            if (!hiddenProperty.value) displayProperty.textContent = defaultPropMsg;
+        }
+    }
+
+    if (reservationCodeVal) {
+        lookupReservation();
     }
 
     // 2. Manage Dynamic Guest Cards (up to 6 guests)

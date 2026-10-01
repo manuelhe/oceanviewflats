@@ -272,6 +272,17 @@ window.closeReservationDrawer = window.closeReservationDrawer || function() {
                                         class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left">
                                     <?= $registryCompleted ? 'Inspect Registry &rarr;' : 'View Pending Details &rarr;' ?>
                                 </button>
+                                <?php
+                                $guideLink = rtrim($publicSiteUrl, '/') . '/guide/?code=' . urlencode($uid);
+                                ?>
+                                <button type="button"
+                                        onclick="navigator.clipboard.writeText('<?= htmlspecialchars($guideLink, ENT_QUOTES, 'UTF-8') ?>').then(() => { this.innerText = 'Guide Link Copied!'; setTimeout(() => this.innerText = 'Copy Guest Guide Link', 2000); });"
+                                        class="inline-flex items-center text-[11px] font-semibold text-slate-700 hover:text-indigo-600 transition cursor-pointer text-left">
+                                    <svg class="w-3 h-3 mr-1 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                    Copy Guest Guide Link
+                                </button>
                                 <?php if (!$registryCompleted): ?>
                                     <button type="button"
                                             hx-post="/reservations/<?= urlencode($uid) ?>/registry/complete"

@@ -61,7 +61,7 @@ A Reservation originated and transacted directly through OceanViewFlats, maintai
 _Avoid_: Internal Booking, Native Reservation, Website Booking, Direct Booking
 
 **Manual Reservation**:
-A Reservation originated directly by an administrator without an external payment gateway (e.g. phone inquiry, external bank wire, or owner occupancy), attributed to an administrative payment source and confirmed immediately to secure calendar dates.
+A Reservation originated directly by an administrator without an external payment gateway (e.g. phone inquiry, external bank wire, or owner occupancy), attributed to an administrative payment source and confirmed immediately to secure calendar dates. Identified by a unique `res-man-*` reservation UID, which functions as an authoritative lookup token across both the Guest Registry and Guest Guide.
 _Avoid_: Offline Booking, Phone Order, Admin Reservation, Walk-in
 
 **Pending Reservation**:
@@ -151,7 +151,7 @@ _Avoid_: Calendar Export, ICS Feed, Availability Export
 ### Guest Onboarding & Fulfillment
 
 **Guest Registry**:
-The mandatory record of legal identification, ages, and vehicle details for all staying Guests required by building administration and regulatory compliance before Property access is granted.
+The mandatory record of legal identification, ages, and vehicle details for all staying Guests required by building administration and regulatory compliance before Property access is granted. Can be pre-filled via stay parameters in the query string or resolved asynchronously by reservation UID (`code=res-man-*` or `code=ovf_*`).
 _Avoid_: Check-in Form, Registration Card, Guest List
 
 **Guest Guide**:

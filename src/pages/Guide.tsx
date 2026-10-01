@@ -34,7 +34,11 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 	}, []);
 
 	return (
-		<div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800 scroll-smooth">
+		<div
+			id="guide-root"
+			data-asset-prefix={assetPrefix}
+			className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-800 scroll-smooth"
+		>
 			<Navigation
 				isScrolled={isScrolled}
 				lang={lang}

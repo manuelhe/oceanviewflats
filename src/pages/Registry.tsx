@@ -145,10 +145,16 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 							<div className="w-20 h-20 bg-emerald-500/10 text-emerald-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
 								<CheckCircle2 className="w-12 h-12" />
 							</div>
-							<h2 className="text-2xl md:text-3xl font-extrabold text-slate-900">
+							<h2
+								id="success-title"
+								className="text-2xl md:text-3xl font-extrabold text-slate-900"
+							>
 								{t.registrySuccess}
 							</h2>
-							<p className="text-slate-600 max-w-xl mx-auto leading-relaxed text-sm md:text-base font-light">
+							<p
+								id="success-desc"
+								className="text-slate-600 max-w-xl mx-auto leading-relaxed text-sm md:text-base font-light"
+							>
 								{t.registryWarmMsg}
 							</p>
 							<div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -174,6 +180,9 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 							action={`${assetPrefix}api/registry-processor.php`}
 							method="POST"
 							className="space-y-6 transition-opacity duration-300"
+							data-msg-loading={t.registryLookupLoading}
+							data-msg-not-found={t.registryLookupNotFound}
+							data-msg-already-completed={t.registryAlreadyCompleted}
 							noValidate
 						>
 							{/* Hidden Stay Parameter Fields */}

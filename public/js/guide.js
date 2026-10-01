@@ -49,7 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawCheckOut = urlParams.get('check_out') || urlParams.get('checkout') || '';
 
     // Relative asset path calculation for endpoints and cross-links
-    const pathPrefix = document.getElementById('btn-copy-door-code') ? '../' : './';
+    const guideRoot = document.getElementById('guide-root');
+    const pathPrefix = guideRoot?.getAttribute('data-asset-prefix') || (window.location.pathname.includes('/guide') ? '../' : './');
     const registryPageName = lang === 'en' ? 'registry/index.html' : `registry/${lang}.html`;
 
     // Construct default prefilled registry link
@@ -209,7 +210,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 setUnlockedState(data.credentials, data.reservation);
             } else if (data.status === 'registry_required') {
                 // Reservation valid and confirmed, but Guest Registry not yet submitted
-                const dynamicRegUrl = data.registry_url ? `${pathPrefix}${data.registry_url.replace(/^\//, '')}` : defaultRegistryUrl;
+                if (data.reservation) {
+                    setInitialDisplayDetails(
+                        data.reservation.guest_name,
+                        data.reservation.check_in,
+                        data.reservation.check_out,
+                        data.reservation.property_id
+                    );
+                }
+                let dynamicRegUrl = defaultRegistryUrl;
+                if (data.registry_url) {
+                    if (data.registry_url.startsWith('http://') || data.registry_url.startsWith('https://')) {
+                        dynamicRegUrl = data.registry_url;
+                    } else {
+                        dynamicRegUrl = `${pathPrefix}${data.registry_url.replace(/^\//, '')}`;
+                    }
+                }
                 setLockedState(dynamicRegUrl, data.message || msgLockedDesc);
             } else {
                 // Unauthorized / cancelled / not found
