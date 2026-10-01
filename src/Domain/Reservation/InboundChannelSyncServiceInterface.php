@@ -45,6 +45,13 @@ interface InboundChannelSyncServiceInterface
     public function getAllStatuses(): array;
 
     /**
+     * Retrieve configured property feed URLs.
+     *
+     * @return array<string|int, string> Keyed by property ID
+     */
+    public function getFeedUrls(): array;
+
+    /**
      * Parse RFC 5545 iCalendar content into sorted, deduplicated blocked nights (YYYY-MM-DD).
      *
      * @param string $icalContent

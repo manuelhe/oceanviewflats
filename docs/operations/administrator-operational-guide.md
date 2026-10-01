@@ -26,6 +26,7 @@ Recent architectural refactorings have transitioned the OceanViewFlats platform 
 | **Database Schema** | `reservations` table lacked registration status and door code tracking; no admin tables. | `reservations` tracks `registry_completed` and dynamic `door_code`; `guest_registries` audits guest IDs; `admin_users` and `admin_audit_logs` manage authenticated staff. | **MANDATORY**: Administrator must run `php scripts/migrate.php` on production. Omission causes SQL fatal errors on registry, access, and admin endpoints. |
 | **Credential Storage & Dynamic PINs** | Door codes were static and identical across all guests. | Lock requires a **7-digit PIN followed by '#'** (`0XXXXXX#`), dynamically generated per guest from the primary guest's Government ID/Passport (with phone fallback) upon Guest Registry completion. The code is saved to `reservations.door_code` and emailed to `RECIPIENT_EMAIL` so staff can program the physical lock in its companion app. | Staff must program the generated 7-digit PIN into the external smart-lock platform upon receiving the guest registry report. If needed, admins can manually override `door_code` via the admin portal or directly in MySQL. |
 | **Direct Quote Calculation** | Client JavaScript calculated subtotals from static JSON; backend verified superficial totals. | Backend `SeasonalPricer` authoritatively computes night-by-night rates, minimum stays, and fees from `public/data/prices.csv`. Client totals are ignored. | Any change in property nightly pricing or minimum-stay tiers must be made in `public/data/prices.csv`. |
+| **Inbound Channel Sync (iCal)** | No automated OTA calendar sync; manual date blocking required. | Automated background synchronization of external Airbnb iCal feeds via CLI cron (`scripts/sync-channels.php`) caching blocked dates to ephemeral JSON files (`avail_{property}.json`) without database mutations ([ADR 0002](../adr/0002-inbound-channel-sync-caching.md)). | Configure cPanel 15-minute cron job. Operations staff can trigger manual synchronization or bypass cooldown using CLI flags (`--force`, `--property`). |
 
 ---
 
@@ -51,9 +52,9 @@ The administrative subsystem is deployed using **cPanel Pattern A**, which decou
 │   ├── src/                     <-- Admin Application Controllers, Auth, & Http Handlers
 │   └── templates/               <-- Server-rendered PHP Templates (HTMX Components)
 ├── src/
-│   └── Domain/                  <-- Shared Domain Models (QuoteEngine, Ledger, DoorCode)
+│   └── Domain/                  <-- Shared Domain Models (QuoteEngine, Ledger, DoorCode, Reservation)
 ├── vendor/                      <-- Production Composer Autoloader & Dependencies
-└── scripts/                     <-- CLI Utilities (migrate.php, create-admin-user.php)
+└── scripts/                     <-- CLI Utilities (migrate.php, create-admin-user.php, sync-channels.php)
 ```
 
 > [!IMPORTANT]
@@ -432,7 +433,161 @@ The API enforces file-based rate limiting via `enforce_rate_limit()` in `public/
 
 ---
 
-## 10. Administrator Troubleshooting & Support Playbook
+## 10. Inbound Channel Synchronization (Cron & Troubleshooting)
+
+### 10.1 Architecture & Design Overview (ADR 0002)
+
+OceanViewFlats automatically imports reserved and blocked calendar dates from external Online Travel Agency (OTA) channels (specifically Airbnb iCal feeds) to eliminate double-bookings across direct and third-party booking channels.
+
+Per **[ADR 0002: Inbound Channel Sync Caching Architecture](../adr/0002-inbound-channel-sync-caching.md)**:
+1. **Zero Database Mutations**: External OTA sync writes exclusively to ephemeral, local JSON cache files (`public_html/cache/avail_{property}.json`) rather than mutating the MySQL `reservations` or `calendar_blocks` tables.
+2. **Ephemeral Disk Cache**: The public booking engine and quote API merge local database reservations with cached external blocks on read.
+3. **Structured Health Tracking**: Synchronization results and health states are recorded to `public_html/cache/channel_sync_status.json` with machine-readable timestamps, HTTP status codes, blocked night tallies, and actor attribution.
+4. **Pattern A CLI Separation**: Synchronization is executed via the CLI runner `/home/<user>/scripts/sync-channels.php`, isolated completely outside the public web root.
+
+### 10.2 cPanel Cron Configuration
+
+A 15-minute scheduled cron job must be configured in the cPanel **Cron Jobs** interface to regularly refresh external feeds in the background:
+
+```cron
+*/15 * * * * /usr/local/bin/php /home/<user>/scripts/sync-channels.php >> /home/<user>/logs/channel_sync.log 2>&1
+```
+
+* **PHP Binary**: `/usr/local/bin/php` (or the server's PHP 8.3 CLI binary path, e.g. `/usr/bin/php`).
+* **Script Location**: `/home/<user>/scripts/sync-channels.php`.
+* **Standard Output & Error Log**: `/home/<user>/logs/channel_sync.log`.
+* **Execution Interval**: `*/15 * * * *` (every 15 minutes). This interval respects OTA rate limits while keeping calendars updated.
+
+> [!TIP]
+> Ensure the `/home/<user>/logs` directory exists and has writable permissions (`chmod 0750 /home/<user>/logs`).
+
+### 10.3 Command-Line Interface (CLI) Usage
+
+System administrators and support engineers can manually execute synchronization tasks via SSH or terminal:
+
+```bash
+php scripts/sync-channels.php [options]
+```
+
+#### Supported Options & Flags:
+
+| Option | Shorthand | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `--property=<id>` | `-p <id>` | Synchronize only the specified property ID (e.g. `1606` or `1707`). | Sync all configured properties |
+| `--force` | `-f` | Bypass the 60-second cooldown window to force immediate upstream fetch. | `false` (60s cooldown enforced) |
+| `--help` | `-h` | Display the CLI help manual and usage examples. | N/A |
+
+#### Common Operational CLI Examples:
+
+```bash
+# 1. Run standard synchronization across all properties (respects 60s cooldown):
+php scripts/sync-channels.php
+
+# 2. Force immediate refresh across all properties (bypasses cooldown):
+php scripts/sync-channels.php --force
+
+# 3. Synchronize only Apartment 1606:
+php scripts/sync-channels.php --property=1606
+
+# 4. Force immediate refresh of Apartment 1707:
+php scripts/sync-channels.php --property=1707 --force
+```
+
+### 10.4 Feed Health Statuses & Operational States
+
+Every synchronization attempt evaluates and records property status in `channel_sync_status.json`:
+
+| Health Status | Description | Cache Handling | CLI Exit Code | Stdout Summary Header |
+| :--- | :--- | :--- | :--- | :--- |
+| **`healthy`** | Upstream feed fetched successfully (HTTP 200), iCal parsed, and calendar cache written to disk. | Fresh cache written to `avail_{property}.json`. | `0` | `[OK] Channel Sync Completed` |
+| **`healthy` (skipped)** | Sync was requested within the 60-second cooldown window. Redundant upstream fetch avoided. | Existing fresh cache preserved untouched. | `0` | `[OK] Channel Sync Completed` |
+| **`degraded`** | Upstream fetch failed (e.g. HTTP 500, network timeout, rate limit), but a previously valid cache exists. | **Retains existing cached nights** to safeguard against accidental double-bookings. | `0` | `[WARNING] Channel Sync Completed with warnings` |
+| **`error`** | Upstream fetch failed and **no prior cache exists** on disk (or cache is corrupted/unreadable). | No cached blocks available for this property. | `1` | `[ERROR] Channel Sync Completed with errors` |
+
+#### Human-Readable Output Formats:
+
+* **Normal Healthy Completion**:
+  ```text
+  [OK] Channel Sync Completed (source: cron)
+   - Property 1606: healthy (18 blocked nights)
+   - Property 1707: healthy (12 blocked nights)
+  ```
+
+* **Degraded State (Upstream Failure with Retained Cache)**:
+  ```text
+  [WARNING] Channel Sync Completed with warnings (source: cron)
+   - Property 1606: degraded (18 blocked nights, retained from cache - Upstream fetch failed (HTTP 500))
+   - Property 1707: healthy (12 blocked nights)
+  ```
+
+* **Fatal Error (No Prior Cache Available)**:
+  ```text
+  [ERROR] Channel Sync Completed with errors (source: cron)
+   - Property 1606: error (0 blocked nights, no cached dates available - Upstream fetch failed (HTTP 404))
+  ```
+
+### 10.5 Failure Recovery & Troubleshooting Runbook
+
+#### Symptom 1: Status reports `degraded` for one or more properties.
+* **Root Cause**: Upstream OTA provider (Airbnb) returned a non-200 HTTP code, encountered a transient network timeout, or enforced a temporary rate limit.
+* **System Safeguard**: OceanViewFlats automatically retains the existing cached blocked dates from the previous successful run. Direct booking guests cannot book dates that were previously confirmed blocked.
+* **Resolution**:
+  1. Check the sync log:
+     ```bash
+     tail -n 50 /home/<user>/logs/channel_sync.log
+     ```
+  2. Inspect the raw status file:
+     ```bash
+     cat public_html/cache/channel_sync_status.json
+     ```
+  3. Verify upstream feed URL connectivity directly using curl:
+     ```bash
+     curl -ILs "https://www.airbnb.com/calendar/ical/..." | head -n 20
+     ```
+  4. Once connectivity is verified, force a manual sync:
+     ```bash
+     php scripts/sync-channels.php --force
+     ```
+  5. When upstream responds with HTTP 200, the system automatically heals and transitions the property back to `healthy`.
+
+#### Symptom 2: Status reports `error`.
+* **Root Cause**: The upstream feed failed and there is no prior cache file in `public_html/cache/avail_{property}.json`.
+* **Resolution**:
+  1. Verify the feed URL configuration in `public_html/api/config.php` under the `ical_feeds` array:
+     ```php
+     'ical_feeds' => [
+         '1606' => 'https://www.airbnb.com/calendar/ical/...ics',
+         '1707' => 'https://www.airbnb.com/calendar/ical/...ics',
+     ],
+     ```
+  2. Verify that the cache directory exists and is writable:
+     ```bash
+     ls -ld public_html/cache
+     chmod 0755 public_html/cache
+     ```
+  3. Re-run with `--force` to test generation:
+     ```bash
+     php scripts/sync-channels.php --force
+     ```
+
+#### Symptom 3: Cron job produces no output or fails to execute.
+* **Resolution**:
+  1. Verify cron job is registered:
+     ```bash
+     crontab -l
+     ```
+  2. Run the script manually using the exact command specified in crontab to inspect direct output:
+     ```bash
+     /usr/local/bin/php /home/<user>/scripts/sync-channels.php
+     ```
+  3. Ensure `scripts/sync-channels.php` has appropriate execute/read permissions:
+     ```bash
+     chmod 0750 /home/<user>/scripts/sync-channels.php
+     ```
+
+---
+
+## 11. Administrator Troubleshooting & Support Playbook
 
 ### Scenario A: Guest states "The door code shows dots (••••••) and the Copy button does nothing."
 * **Root Cause 1: Guest has not submitted the guest registry.**
@@ -489,7 +644,7 @@ The API enforces file-based rate limiting via `enforce_rate_limit()` in `public/
 
 ---
 
-## 11. Post-Deployment Verification Checklist
+## 12. Post-Deployment Verification Checklist
 
 Upon deploying to staging or production, execute this complete verification checklist:
 
@@ -503,6 +658,16 @@ Upon deploying to staging or production, execute this complete verification chec
 - [ ] **Provision Initial Super-Admin Account**:
   ```bash
   php scripts/create-admin-user.php --email="admin@oceanviewflats.com" --name="Super Admin" --password="<secure-password>" --role="superadmin"
+  ```
+- [ ] **Verify Inbound Channel Synchronization CLI**:
+  ```bash
+  php scripts/sync-channels.php --force
+  ```
+  Confirm output displays `[OK] Channel Sync Completed` and verify creation of `cache/avail_1606.json`, `cache/avail_1707.json`, and `cache/channel_sync_status.json`.
+- [ ] **Configure 15-Minute cPanel Cron Job**:
+  Verify cron job registration in cPanel Cron Jobs:
+  ```cron
+  */15 * * * * /usr/local/bin/php /home/<user>/scripts/sync-channels.php >> /home/<user>/logs/channel_sync.log 2>&1
   ```
 - [ ] **Verify AutoSSL Status**:
   Visit `https://admin.oceanviewflats.com/login` and verify that the browser presents a valid SSL/TLS certificate without warnings.
