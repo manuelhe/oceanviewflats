@@ -48,10 +48,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawCheckIn = urlParams.get('check_in') || urlParams.get('checkin') || '';
     const rawCheckOut = urlParams.get('check_out') || urlParams.get('checkout') || '';
 
-    // Relative asset path calculation for endpoints and cross-links
-    const guideRoot = document.getElementById('guide-root');
-    const pathPrefix = guideRoot?.getAttribute('data-asset-prefix') || (window.location.pathname.includes('/guide') ? '../' : './');
+    // Relative asset path calculation for endpoints and cross-links (guide views are located in /guide/)
+    const pathPrefix = '../';
     const registryPageName = lang === 'en' ? 'registry/index.html' : `registry/${lang}.html`;
+
+    // Safely sanitize URLs before assigning to href
+    function sanitizeUrl(url) {
+        if (!url || typeof url !== 'string') return '#';
+        const trimmed = url.trim();
+        if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) {
+            return trimmed;
+        }
+        try {
+            const parsed = new URL(trimmed, window.location.origin);
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                return parsed.href;
+            }
+        } catch (_) {
+            return '#';
+        }
+        return '#';
+    }
 
     // Construct default prefilled registry link
     function buildRegistryUrl(codeOverride) {
@@ -121,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
             credentialLockedDesc.textContent = reasonMsg;
         }
 
-        const effectiveRegistryUrl = targetRegistryUrl || defaultRegistryUrl;
+        const effectiveRegistryUrl = sanitizeUrl(targetRegistryUrl || defaultRegistryUrl);
         if (registryLink) {
             registryLink.href = effectiveRegistryUrl;
         }

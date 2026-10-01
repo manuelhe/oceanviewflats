@@ -49,6 +49,24 @@ document.addEventListener('DOMContentLoaded', () => {
         ja: "登録中..."
     };
 
+    // Safely sanitize URLs before assigning to href
+    function sanitizeUrl(url) {
+        if (!url || typeof url !== 'string') return '#';
+        const trimmed = url.trim();
+        if (trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../')) {
+            return trimmed;
+        }
+        try {
+            const parsed = new URL(trimmed, window.location.origin);
+            if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+                return parsed.href;
+            }
+        } catch (_) {
+            return '#';
+        }
+        return '#';
+    }
+
     const defaultErrorMsg = errorMsgs[lang] || errorMsgs.en;
     const submittingMsg = submittingMsgs[lang] || submittingMsgs.en;
     const defaultDates = {
@@ -154,7 +172,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (btnUnlockedGuide) {
                         const pageName = lang === 'en' ? 'index.html' : `${lang}.html`;
                         const guideBase = `${processorBase.replace('api/', '')}guide/${pageName}`;
-                        btnUnlockedGuide.href = data.guide_url || `${guideBase}?code=${encodeURIComponent(reservationCodeVal)}`;
+                        const rawGuideUrl = data.guide_url || `${guideBase}?code=${encodeURIComponent(reservationCodeVal)}`;
+                        btnUnlockedGuide.href = sanitizeUrl(rawGuideUrl);
                     }
                     if (successDesc) {
                         successDesc.textContent = msgAlreadyCompleted;
