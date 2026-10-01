@@ -149,52 +149,77 @@ Configure the following secrets in GitHub under **Repository Settings** -> **Sec
 
 ## 5. Database Migration & Schema Management
 
-### 5.1 Remote Migration Execution via cPanel Terminal or SSH
+### 5.1 Resilient Environment Discovery (`EnvLoader`)
+On cPanel shared hosting, Apache environment variables (`SetEnv`) injected during CI/CD are loaded only within web request contexts, leaving standalone CLI shells and cron runners without database credentials.
 
-Database structural changes must **never** occur inline within HTTP request lifecycles. All schema migrations are centralized in `scripts/migrate.php` and executed via CLI:
+To prevent MySQL `1045 Access denied` errors, all CLI utilities (`scripts/migrate.php`, `scripts/create-admin-user.php`) and web setup endpoints utilize `OceanViewFlats\Domain\Support\EnvLoader`. `EnvLoader` automatically scans and parses `admin/public/.htaccess`, `public_html/.htaccess`, and local `.env` files, making database credentials immediately available across CLI, cron, and web runners without overwriting system environment variables.
+
+### 5.2 Migration Execution Methods
+
+Database structural changes must **never** occur inline within guest-facing HTTP request lifecycles. All schema migrations are centralized in `OceanViewFlats\Domain\Database\MigrationRunner` and can be executed via four alternative methods:
 
 #### Method A: Via SSH
 Connect to your cPanel host using the dedicated SFTP/SSH port (`2223`):
 ```bash
 ssh -p 2223 cpaneluser@cpanel.oceanviewflats.com
+cd /home/<user>
+php scripts/migrate.php
 ```
 
 #### Method B: Via cPanel Terminal
 1. Log in to cPanel.
 2. Under the **Advanced** section, click **Terminal**.
 3. Accept the terminal warning if opening for the first time.
+4. Execute:
+   ```bash
+   php scripts/migrate.php
+   ```
 
-#### Executing the Migrator:
-Once inside the terminal shell at your home directory (`/home/<user>/`):
-```bash
-pwd
-# Expected output: /home/<user>
+#### Method C: Via Scheduled cPanel Cron Job (Zero-SSH CLI Alternative)
+If your cPanel hosting tier does not grant interactive SSH or Terminal access, you can run migrations via a one-off cPanel Cron Job:
+1. Log in to cPanel and navigate to **Advanced** -> **Cron Jobs**.
+2. Under **Add New Cron Job**, select **Once Per Minute** (`* * * * *`).
+3. In the **Command** field, enter:
+   ```bash
+   /usr/local/bin/php /home/<cpanel_user>/scripts/migrate.php > /home/<cpanel_user>/migration.log 2>&1
+   ```
+4. Click **Add New Cron Job**.
+5. Wait 1–2 minutes, then open cPanel **File Manager** and inspect `/home/<cpanel_user>/migration.log` to verify completion.
+6. **Immediately delete the cron job** in cPanel once the migration succeeds.
 
-php scripts/migrate.php
-```
+#### Method D: Via Secure Web Setup Utility (`setup.php`)
+If command-line or cron execution is entirely unavailable, use the web-based setup utility hosted on the admin subdomain:
+1. Navigate to the setup endpoint in your browser with your pre-shared secret token:
+   ```text
+   https://admin.oceanviewflats.com/setup.php?token=YOUR_PRE_SHARED_SECRET
+   ```
+   *(Acceptable secrets include your `OVF_SETUP_TOKEN`, `OVF_ADMIN_SESSION_SECRET`, or `DB_PASS`)*.
+2. In the **1. Database Migrations** card, click **Run Database Migrations**.
+3. The interface will execute `MigrationRunner` and display real-time verification for all eight database tables.
+
+> [!CAUTION]
+> **Defense-in-Depth Auto-Lockout**:
+> As soon as an administrator account exists in `admin_users`, `setup.php` permanently disables itself and returns `HTTP 403 Forbidden` (`Setup is locked`). This prevents unauthorized migration triggering or credential overrides after initial provisioning.
 
 #### Expected Migration Output:
 ```text
 === OceanViewFlats Database Migration Running ===
-Connected to MySQL server on 127.0.0.1
+Connecting to MySQL server on 127.0.0.1 (database: cpaneluser_oceanviewflats_db)...
+Connected successfully.
+Running schema migrations...
 Database `cpaneluser_oceanviewflats_db` selected/created.
-Table `reservations` verified.
-Table `payment_idempotency` verified.
-Table `guest_registries` verified.
-Table `admin_users` verified.
-Table `admin_audit_logs` verified.
-Columns and indexes verified:
- - reservations.registry_completed
- - reservations.registry_completed_at
- - reservations.door_code
- - reservations.refunded_amount
- - reservations.source
- - admin_users.failed_login_attempts
- - admin_users.locked_until
+Table `reservations` verified/created.
+Table `payment_idempotency` verified/created.
+Table `guest_registries` verified/created.
+Table `admin_users` verified/created.
+Table `admin_audit_logs` verified/created.
+Table `calendar_blocks` verified/created.
+Table `property_rates` verified/created.
+Table `reservation_refunds` verified/created.
 === Database Migrations Completed Successfully! ===
 ```
 
-### 5.2 Schema Elements Managed by `scripts/migrate.php`
+### 5.3 Schema Elements Managed by `MigrationRunner`
 
 1. **`reservations` Table**:
    - `registry_completed`: `TINYINT(1) NOT NULL DEFAULT 0` (Blocks guide access until Colombian registry submission).
@@ -211,18 +236,41 @@ Columns and indexes verified:
    - Holds administrative accounts with Argon2id password hashes, role authorizations (`admin`, `superadmin`, `manager`, `viewer`), active status flags, failed login attempt counters, and lockout expiration timestamps.
 5. **`admin_audit_logs` Table**:
    - Immutable audit trail recording user ID, action, entity type, entity ID, metadata JSON payload, IP address, user agent, and timestamp.
+6. **`calendar_blocks` Table**:
+   - Tracks manual reservations and external channel blocks with conflict detection.
+7. **`property_rates` Table**:
+   - Manages dynamic seasonal rate overrides and cleaning fees.
+8. **`reservation_refunds` Table**:
+   - Tracks itemized refund disbursements and Mercado Pago refund references.
 
-### 5.3 Emergency SQL (Manual Execution Fallback)
+### 5.4 Emergency SQL (Manual Execution Fallback)
 
-If CLI terminal access is temporarily restricted, run the complete schema script [`scripts/schema.sql`](../../scripts/schema.sql) directly inside cPanel **phpMyAdmin** or MySQL command line.
+If neither CLI nor web migration runners can be used, run the complete schema script [`scripts/schema.sql`](../../scripts/schema.sql) directly inside cPanel **phpMyAdmin** or MySQL command line.
 
 ---
 
 ## 6. Administrator User Provisioning & Credential Runbook
 
-### 6.1 CLI Provisioning Utility Overview
+Administrator accounts are bootstrapped using either the CLI provisioning utility or the secure web setup interface. Both methods strictly enforce Argon2id password hashing and input validation.
 
-Administrator accounts are bootstrapped and managed exclusively through the CLI utility `scripts/create-admin-user.php`.
+### 6.1 Method 1: Web Provisioning via `setup.php` (Recommended for Initial Setup)
+
+When bootstrapping a fresh environment without SSH access:
+1. Open the setup interface:
+   ```text
+   https://admin.oceanviewflats.com/setup.php?token=YOUR_PRE_SHARED_SECRET
+   ```
+2. Run database migrations first if not already performed.
+3. In the **2. Provision Super Administrator** section, enter:
+   - **Full Name**: e.g. `Property Administrator`
+   - **Email Address**: e.g. `admin@oceanviewflats.com`
+   - **Password**: Minimum 8 characters
+4. Click **Create Administrator & Lock Setup**.
+5. Upon submission, the account is created via Argon2id, and the setup tool is **permanently locked**. Any subsequent attempt to access `setup.php` will display `Setup Locked (403)` and redirect to the admin login page (`https://admin.oceanviewflats.com/`).
+
+### 6.2 Method 2: CLI Provisioning via `scripts/create-admin-user.php`
+
+For operators with SSH or terminal access, or for ongoing maintenance:
 
 **Security Features**:
 - **CLI-Only Enforcement**: Rejects non-CLI invocations with HTTP 403 / exit code 1 to prevent web execution.
@@ -230,9 +278,8 @@ Administrator accounts are bootstrapped and managed exclusively through the CLI 
 - **Redaction**: Passwords are never echoed or written to terminal history, stdout, stderr, or system error logs.
 - **Idempotent Upsert**: Safely updates existing records without duplicate key errors, resetting failed login locks and updating roles seamlessly.
 
-### 6.2 Initial Super-Admin Provisioning
-
-To provision the initial administrator account after deployment, connect via cPanel Terminal or SSH and execute:
+#### Executing CLI Provisioning:
+Connect via cPanel Terminal or SSH and execute:
 
 ```bash
 php scripts/create-admin-user.php \
