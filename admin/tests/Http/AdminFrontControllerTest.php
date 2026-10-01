@@ -291,5 +291,165 @@ final class AdminFrontControllerTest extends TestCase
         $this->assertSame('GET, POST', $response->getHeaders()['Allow']);
         $this->assertStringContainsString('405 Method Not Allowed', $response->getBody());
     }
+
+    public function testEndToEndLoginFlowWithCsrfPersistenceOnLocalhost(): void
+    {
+        $userId = $this->createAdminUser('local_admin@oceanviewflats.com', 'LocalPass123!', 'Local Admin');
+
+        // Step 1: GET /login on localhost
+        $session = [];
+        $getRequest = new Request(
+            method: 'GET',
+            uri: '/login',
+            server: [
+                'HTTP_HOST' => 'localhost:8080',
+                'SERVER_NAME' => 'localhost',
+                'REMOTE_ADDR' => '127.0.0.1',
+            ]
+        );
+
+        $getResponse = $this->app->handle($getRequest, $session);
+
+        $this->assertSame(200, $getResponse->getStatusCode());
+        $this->assertNotEmpty($session['csrf_token']);
+        $tokenOnPage = (string) $session['csrf_token'];
+
+        // Verify cookie params on localhost are RFC 6265 compliant Host-Only cookies
+        $cookieParams = \OceanViewFlats\Admin\Middleware\SessionMiddleware::resolveCookieParams('localhost', false);
+        $this->assertSame('', $cookieParams['domain'], 'Localhost must use Host-Only cookies (empty domain)');
+        $this->assertFalse($cookieParams['secure']);
+
+        // Step 2: POST /login with retained session and CSRF token
+        $postRequest = new Request(
+            method: 'POST',
+            uri: '/login',
+            post: [
+                'email' => 'local_admin@oceanviewflats.com',
+                'password' => 'LocalPass123!',
+                'csrf_token' => $tokenOnPage,
+            ],
+            server: [
+                'HTTP_HOST' => 'localhost:8080',
+                'SERVER_NAME' => 'localhost',
+                'REMOTE_ADDR' => '127.0.0.1',
+                'HTTP_USER_AGENT' => 'Mozilla/5.0 Localhost Test',
+            ]
+        );
+
+        $postResponse = $this->app->handle($postRequest, $session);
+
+        // Crucial assertion: Must NOT be 403 Forbidden: Invalid CSRF Token
+        $this->assertSame(302, $postResponse->getStatusCode());
+        $this->assertSame('/', $postResponse->getHeaders()['Location']);
+        $this->assertSame($userId, $session['admin_user_id']);
+        $this->assertNotSame($tokenOnPage, $session['csrf_token'], 'CSRF token should rotate on login');
+
+        // Step 3: GET / with authenticated session
+        $dashboardRequest = new Request(
+            method: 'GET',
+            uri: '/',
+            server: [
+                'HTTP_HOST' => 'localhost:8080',
+                'SERVER_NAME' => 'localhost',
+                'REMOTE_ADDR' => '127.0.0.1',
+            ]
+        );
+
+        $dashboardResponse = $this->app->handle($dashboardRequest, $session);
+        $this->assertSame(200, $dashboardResponse->getStatusCode());
+        $this->assertStringContainsString('Local Admin', $dashboardResponse->getBody());
+        $this->assertStringContainsString((string) $session['csrf_token'], $dashboardResponse->getBody());
+    }
+
+    public function testEndToEndLoginFlowWithCsrfPersistenceBehindReverseProxy(): void
+    {
+        $userId = $this->createAdminUser('proxy_admin@oceanviewflats.com', 'ProxyPass123!', 'Proxy Admin');
+
+        // Step 1: GET /login behind reverse proxy terminating SSL
+        $session = [];
+        $serverEnv = [
+            'HTTP_HOST' => 'admin.oceanviewflats.com',
+            'SERVER_NAME' => 'admin.oceanviewflats.com',
+            'HTTP_X_FORWARDED_PROTO' => 'https',
+            'HTTPS' => 'off',
+            'SERVER_PORT' => '80',
+            'REMOTE_ADDR' => '10.0.1.20',
+        ];
+
+        $getRequest = new Request(
+            method: 'GET',
+            uri: '/login',
+            server: $serverEnv
+        );
+
+        $getResponse = $this->app->handle($getRequest, $session);
+        $this->assertSame(200, $getResponse->getStatusCode());
+        $csrfToken = (string) $session['csrf_token'];
+
+        // Step 2: POST /login with proxy HTTPS headers
+        $postRequest = new Request(
+            method: 'POST',
+            uri: '/login',
+            post: [
+                'email' => 'proxy_admin@oceanviewflats.com',
+                'password' => 'ProxyPass123!',
+                'csrf_token' => $csrfToken,
+            ],
+            server: array_merge($serverEnv, ['HTTP_USER_AGENT' => 'Proxy Client'])
+        );
+
+        $postResponse = $this->app->handle($postRequest, $session);
+
+        $this->assertSame(302, $postResponse->getStatusCode());
+        $this->assertSame('/', $postResponse->getHeaders()['Location']);
+        $this->assertSame($userId, $session['admin_user_id']);
+    }
+
+    public function testEndToEndLoginFlowWithCsrfPersistenceOnIpAddress(): void
+    {
+        $userId = $this->createAdminUser('ip_admin@oceanviewflats.com', 'IpPass123!', 'IP Admin');
+
+        // Step 1: GET /login on raw IPv4 address
+        $session = [];
+        $serverEnv = [
+            'HTTP_HOST' => '192.168.1.150:8000',
+            'SERVER_NAME' => '192.168.1.150',
+            'SERVER_PORT' => '8000',
+            'REMOTE_ADDR' => '192.168.1.50',
+        ];
+
+        $getRequest = new Request(
+            method: 'GET',
+            uri: '/login',
+            server: $serverEnv
+        );
+
+        $getResponse = $this->app->handle($getRequest, $session);
+        $this->assertSame(200, $getResponse->getStatusCode());
+        $csrfToken = (string) $session['csrf_token'];
+
+        // Verify cookie params on IP address resolve to empty domain (Host-Only)
+        $cookieParams = \OceanViewFlats\Admin\Middleware\SessionMiddleware::resolveCookieParams('192.168.1.150:8000', false);
+        $this->assertSame('', $cookieParams['domain'], 'IP address must use empty domain per RFC 6265');
+        $this->assertFalse($cookieParams['secure']);
+
+        // Step 2: POST /login with retained session and CSRF token
+        $postRequest = new Request(
+            method: 'POST',
+            uri: '/login',
+            post: [
+                'email' => 'ip_admin@oceanviewflats.com',
+                'password' => 'IpPass123!',
+                'csrf_token' => $csrfToken,
+            ],
+            server: array_merge($serverEnv, ['HTTP_USER_AGENT' => 'IP Browser Test'])
+        );
+
+        $postResponse = $this->app->handle($postRequest, $session);
+
+        $this->assertSame(302, $postResponse->getStatusCode());
+        $this->assertSame('/', $postResponse->getHeaders()['Location']);
+        $this->assertSame($userId, $session['admin_user_id']);
+    }
 }
 

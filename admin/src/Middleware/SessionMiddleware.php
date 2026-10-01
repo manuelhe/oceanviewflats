@@ -67,21 +67,45 @@ final class SessionMiddleware
     /**
      * Resolves session cookie parameters enforcing subdomain isolation and strict security flags.
      *
+     * Per RFC 6265 §4.1.2.3, omitting or setting an empty domain attribute creates a Host-Only cookie,
+     * which is required for localhost, IP addresses, and strict origin isolation.
+     *
      * @return array{lifetime: int, path: string, domain: string, secure: bool, httponly: bool, samesite: 'Strict'}
      */
     public static function resolveCookieParams(?string $serverName = null, ?bool $isHttps = null): array
     {
-        $domain = $serverName ?? (string) ($_SERVER['SERVER_NAME'] ?? '');
-        // Strip port from domain if present
-        $domain = explode(':', $domain)[0];
+        $rawHost = $serverName ?? (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
 
-        $secure = $isHttps ?? (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+        // Handle bracketed IPv6 (e.g. [::1]:8080) vs standard host:port
+        if (str_starts_with($rawHost, '[') && str_contains($rawHost, ']')) {
+            $host = substr($rawHost, 1, (int) strpos($rawHost, ']') - 1);
+        } else {
+            $host = trim(explode(':', $rawHost)[0]);
+        }
+
+        $isSecure = $isHttps ?? (
+            (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower((string) $_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+            || (isset($_SERVER['HTTP_X_FORWARDED_PORT']) && (int) $_SERVER['HTTP_X_FORWARDED_PORT'] === 443)
+            || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443)
+        );
+
+        // Host-Only cookie: leave domain empty for localhost, IPs, single-label hosts, or origin-scoped environments.
+        // Browsers strictly reject cookies with Domain=localhost or Domain=<ip-address> (RFC 6265).
+        $isLocalOrIp = $host === ''
+            || $host === 'localhost'
+            || !str_contains($host, '.')
+            || filter_var($host, FILTER_VALIDATE_IP) !== false;
+
+        // When $serverName is explicitly provided (and not local/IP), retain it.
+        // Otherwise, leave domain empty ('') for RFC 6265 Host-Only cookies across origin environments.
+        $domain = ($isLocalOrIp || $serverName === null) ? '' : $host;
 
         return [
             'lifetime' => 0,                            // Expire when browser closes
             'path' => '/',                              // Valid across all admin routes
-            'domain' => $domain,                        // Scoped strictly to host/subdomain
-            'secure' => $secure,                        // Secure cookie in production/HTTPS
+            'domain' => $domain,                        // Host-Only cookie or scoped subdomain
+            'secure' => $isSecure,                      // Secure cookie in production/HTTPS
             'httponly' => true,                         // Inaccessible to JavaScript
             'samesite' => 'Strict',                     // Block third-party transmission
         ];
