@@ -364,6 +364,17 @@ final class FakeInboundChannelSyncService implements InboundChannelSyncServiceIn
         return $this->statuses;
     }
 
+    /**
+     * @return array<string|int, string>
+     */
+    public function getFeedUrls(): array
+    {
+        return [
+            '1606' => 'https://example.com/ical/1606.ics',
+            '1707' => 'https://example.com/ical/1707.ics',
+        ];
+    }
+
     public function parseIcalToBlockedNights(string $icalContent): array
     {
         return [];
