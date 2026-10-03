@@ -363,4 +363,162 @@ final class ReservationLedgerTest extends TestCase
         $nights = $this->ledger->getBlockedNights('1707', $now);
         $this->assertSame(['2026-08-05', '2026-08-06', '2026-08-07'], $nights);
     }
+
+    public function testChannelBlockAbsorptionForAirbnbSource(): void
+    {
+        $this->channelBlockSource->addBlock(new ChannelBlock(
+            propertyId: '1606',
+            startDate: '2026-09-01',
+            endDate: '2026-09-05',
+            source: 'airbnb'
+        ));
+
+        // Without absorbing source: dates are blocked
+        $this->assertFalse($this->ledger->isAvailable('1606', '2026-09-01', '2026-09-05'));
+        $this->assertNotEmpty($this->ledger->getConflictReasons('1606', '2026-09-01', '2026-09-05'));
+        $this->assertNotNull($this->ledger->findChannelConflict('1606', '2026-09-01', '2026-09-05'));
+
+        // With different absorbing source (e.g. 'vrbo'): still blocked
+        $this->assertFalse($this->ledger->isAvailable('1606', '2026-09-01', '2026-09-05', null, 'vrbo'));
+
+        // With absorbing source 'airbnb' (case-insensitive): absorbed!
+        $this->assertTrue($this->ledger->isAvailable('1606', '2026-09-01', '2026-09-05', null, 'airbnb'));
+        $this->assertTrue($this->ledger->isAvailable('1606', '2026-09-01', '2026-09-05', null, 'Airbnb'));
+        $this->assertEmpty($this->ledger->getConflictReasons('1606', '2026-09-01', '2026-09-05', null, 'airbnb'));
+        $this->assertNull($this->ledger->findChannelConflict('1606', '2026-09-01', '2026-09-05', 'airbnb'));
+
+        // getBlockedNights with absorbingSource excludes absorbed nights
+        $nightsWithAbsorption = $this->ledger->getBlockedNights('1606', null, 'airbnb');
+        $this->assertEmpty($nightsWithAbsorption);
+    }
+
+    public function testHoldAbsorbsOverlappingChannelBlockForAirbnbReservation(): void
+    {
+        $now = new DateTimeImmutable('2026-09-01 10:00:00');
+
+        $this->channelBlockSource->addBlock(new ChannelBlock(
+            propertyId: '1606',
+            startDate: '2026-09-10',
+            endDate: '2026-09-15',
+            source: 'airbnb'
+        ));
+
+        $airbnbRes = new Reservation(
+            reservationUid: 'res-abnb-test1234',
+            propertyId: '1606',
+            guestName: 'Carlos Vives',
+            guestEmail: 'carlos@example.com',
+            guestPhone: '+573001112233',
+            checkIn: '2026-09-10',
+            checkOut: '2026-09-15',
+            totalPrice: 2500000.0,
+            status: ReservationStatus::CONFIRMED,
+            source: 'airbnb',
+            externalConfirmationCode: 'HM3ABC1234',
+            channelBlockUid: 'ical-block-1234',
+            createdAt: $now
+        );
+
+        $this->assertTrue($airbnbRes->isExternal());
+        $this->assertTrue($airbnbRes->isAirbnb());
+
+        // Hold must succeed by absorbing the channel block
+        $held = $this->ledger->hold($airbnbRes, $now);
+        $this->assertSame('res-abnb-test1234', $held->reservationUid);
+        $this->assertSame('airbnb', $held->source);
+
+        // Attempting to hold another airbnb reservation for overlapping dates absorbs channel block
+        // but fails due to the active reservation already held in repository
+        $secondAirbnbRes = new Reservation(
+            reservationUid: 'res-abnb-test5678',
+            propertyId: '1606',
+            guestName: 'Second Airbnb Guest',
+            guestEmail: 'second@example.com',
+            guestPhone: '+573009990000',
+            checkIn: '2026-09-12',
+            checkOut: '2026-09-14',
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED,
+            source: 'airbnb',
+            createdAt: $now
+        );
+
+        $this->expectException(ReservationConflictException::class);
+        $this->expectExceptionMessage('Dates overlap active direct reservation res-abnb-test1234');
+        $this->ledger->hold($secondAirbnbRes, $now);
+    }
+
+    public function testHoldRejectsWebReservationWhenAirbnbChannelBlockExists(): void
+    {
+        $now = new DateTimeImmutable('2026-09-01 10:00:00');
+
+        $this->channelBlockSource->addBlock(new ChannelBlock(
+            propertyId: '1606',
+            startDate: '2026-09-10',
+            endDate: '2026-09-15',
+            source: 'airbnb'
+        ));
+
+        $webRes = new Reservation(
+            reservationUid: 'ovf_web_conflict',
+            propertyId: '1606',
+            guestName: 'Direct Guest',
+            guestEmail: 'direct@example.com',
+            guestPhone: '+573009990000',
+            checkIn: '2026-09-12',
+            checkOut: '2026-09-14',
+            totalPrice: 1000000.0,
+            status: ReservationStatus::PENDING_PAYMENT,
+            source: 'web',
+            createdAt: $now
+        );
+
+        $this->expectException(ReservationConflictException::class);
+        $this->expectExceptionMessage('Dates overlap external airbnb channel block (2026-09-10 to 2026-09-15)');
+        $this->ledger->hold($webRes, $now);
+    }
+
+    public function testAirbnbReservationStillConflictedByMaintenanceHold(): void
+    {
+        $now = new DateTimeImmutable('2026-09-01 10:00:00');
+
+        // Add both an Airbnb channel block and a Maintenance hold
+        $this->channelBlockSource->addBlock(new ChannelBlock(
+            propertyId: '1606',
+            startDate: '2026-09-20',
+            endDate: '2026-09-25',
+            source: 'airbnb'
+        ));
+
+        $this->maintenanceBlockSource->addBlock(new MaintenanceBlock(
+            propertyId: '1606',
+            startDate: '2026-09-22',
+            endDate: '2026-09-24',
+            reason: 'Balcony Painting'
+        ));
+
+        // Even with absorbingSource = 'airbnb', the maintenance hold blocks availability
+        $this->assertFalse($this->ledger->isAvailable('1606', '2026-09-20', '2026-09-25', $now, 'airbnb'));
+        $reasons = $this->ledger->getConflictReasons('1606', '2026-09-20', '2026-09-25', $now, 'airbnb');
+        $this->assertCount(1, $reasons);
+        $this->assertStringContainsString('Balcony Painting', $reasons[0]);
+
+        $airbnbRes = new Reservation(
+            reservationUid: 'res-abnb-conflict-maint',
+            propertyId: '1606',
+            guestName: 'Guest With Conflict',
+            guestEmail: 'conflict@example.com',
+            guestPhone: '+573000001111',
+            checkIn: '2026-09-20',
+            checkOut: '2026-09-25',
+            totalPrice: 2000000.0,
+            status: ReservationStatus::CONFIRMED,
+            source: 'airbnb',
+            createdAt: $now
+        );
+
+        $this->expectException(ReservationConflictException::class);
+        $this->expectExceptionMessage('Dates overlap maintenance hold (Balcony Painting: 2026-09-22 to 2026-09-24)');
+        $this->ledger->hold($airbnbRes, $now);
+    }
 }

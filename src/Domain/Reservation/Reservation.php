@@ -254,6 +254,22 @@ final class Reservation
     }
 
     /**
+     * Identifies if this reservation originated from an external OTA platform (ADR 0007).
+     */
+    public function isExternal(): bool
+    {
+        return strtolower($this->source) === 'airbnb';
+    }
+
+    /**
+     * Identifies if this reservation specifically originated from Airbnb.
+     */
+    public function isAirbnb(): bool
+    {
+        return strtolower($this->source) === 'airbnb';
+    }
+
+    /**
      * Evaluates if the stay dates overlap with a given check-in / check-out interval.
      */
     public function overlaps(string $checkIn, string $checkOut): bool

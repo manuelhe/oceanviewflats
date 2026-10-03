@@ -282,8 +282,9 @@ final class ReservationController
             return $this->renderCreateError($request, 'Total price cannot be negative.');
         }
 
-        // Ledger conflict check
-        if (!$this->ledger->isAvailable($propertyId, $checkIn, $checkOut)) {
+        // Ledger conflict check (absorbs matching external channel block if source is airbnb per ADR 0007)
+        $absorbingSource = strtolower($source) === 'airbnb' ? 'airbnb' : null;
+        if (!$this->ledger->isAvailable($propertyId, $checkIn, $checkOut, null, $absorbingSource)) {
             return $this->renderCreateError($request, 'Selected dates conflict with an existing reservation or channel block.');
         }
 

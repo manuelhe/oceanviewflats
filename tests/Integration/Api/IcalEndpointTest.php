@@ -192,6 +192,80 @@ PHP;
         $this->assertStringContainsString('END:VCALENDAR', $res['stdout']);
     }
 
+    public function testIcalEndpointFiltersOutExternalAirbnbReservations(): void
+    {
+        $setupPdoCode = <<<'PHP'
+$pdo = new PDO("sqlite::memory:");
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+$pdo->exec("CREATE TABLE reservations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reservation_uid TEXT UNIQUE,
+    property_id TEXT,
+    guest_name TEXT,
+    guest_email TEXT,
+    guest_phone TEXT,
+    check_in TEXT,
+    check_out TEXT,
+    total_price REAL,
+    status TEXT,
+    payment_method_id TEXT,
+    mercadopago_payment_id TEXT,
+    payment_status TEXT,
+    payment_detail TEXT,
+    lang TEXT,
+    source TEXT DEFAULT 'web',
+    external_confirmation_code TEXT DEFAULT NULL,
+    channel_block_uid TEXT DEFAULT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)");
+$pdo->exec("CREATE TABLE admin_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE
+)");
+$pdo->exec("CREATE TABLE calendar_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    property_id TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    reason TEXT,
+    created_by INTEGER DEFAULT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+)");
+// 1. Direct confirmed booking (should be exported)
+$pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, source, created_at)
+    VALUES ('res-direct-101', '1606', 'Direct Guest', 'direct@example.com', '2026-08-01', '2026-08-05', 1500000, 'confirmed', 'web', datetime('now'))");
+// 2. External Airbnb reservation (must be excluded from outbound feed per ADR 0007)
+$pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, source, created_at)
+    VALUES ('res-abnb-999', '1606', 'Airbnb Guest', 'airbnb@example.com', '2026-08-10', '2026-08-15', 2000000, 'confirmed', 'airbnb', datetime('now'))");
+// 3. Maintenance block (should be exported)
+$pdo->exec("INSERT INTO calendar_blocks (id, property_id, start_date, end_date, reason, created_at)
+    VALUES (15, '1606', '2026-08-20', '2026-08-25', 'AC Maintenance', datetime('now'))");
+$GLOBALS['TEST_PDO'] = $pdo;
+PHP;
+
+        $res = $this->callEndpoint(['property' => '1606'], $setupPdoCode);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertStringContainsString('BEGIN:VCALENDAR', $res['stdout']);
+
+        // Direct booking is present
+        $this->assertStringContainsString('UID:res-direct-101@oceanviewflats.com', $res['stdout']);
+        $this->assertStringContainsString('SUMMARY:Blocked - OceanViewFlats Direct Booking', $res['stdout']);
+
+        // External Airbnb reservation is filtered out (ADR 0007 echo prevention)
+        $this->assertStringNotContainsString('res-abnb-999', $res['stdout']);
+
+        // Maintenance block is present
+        $this->assertStringContainsString('UID:block-15@oceanviewflats.com', $res['stdout']);
+        $this->assertStringContainsString('SUMMARY:Maintenance Hold', $res['stdout']);
+
+        $this->assertStringContainsString('END:VCALENDAR', $res['stdout']);
+    }
+
     /**
      * @param array<string, string> $params
      * @return array{exitCode: int, stdout: string, stderr: string}

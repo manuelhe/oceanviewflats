@@ -56,16 +56,18 @@ final class ReservationLedger implements ReservationLedgerInterface
         string $propertyId,
         string $checkIn,
         string $checkOut,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?string $absorbingSource = null
     ): bool {
-        return count($this->getConflictReasons($propertyId, $checkIn, $checkOut, $now)) === 0;
+        return count($this->getConflictReasons($propertyId, $checkIn, $checkOut, $now, $absorbingSource)) === 0;
     }
 
     public function getConflictReasons(
         string $propertyId,
         string $checkIn,
         string $checkOut,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?string $absorbingSource = null
     ): array {
         if ($checkIn >= $checkOut) {
             return [sprintf('Check-out date (%s) must be after check-in date (%s)', $checkOut, $checkIn)];
@@ -73,9 +75,12 @@ final class ReservationLedger implements ReservationLedgerInterface
 
         $reasons = [];
 
-        // 1. Evaluate ephemeral in-memory Channel Blocks (ADR 0002)
+        // 1. Evaluate ephemeral in-memory Channel Blocks (ADR 0002 & ADR 0007)
         $channelBlocks = $this->channelBlockSource->getBlocks($propertyId);
         foreach ($channelBlocks as $block) {
+            if ($absorbingSource !== null && strtolower($block->source) === strtolower($absorbingSource)) {
+                continue; // Absorbed matching external platform channel block (ADR 0007)
+            }
             if ($block->overlaps($checkIn, $checkOut)) {
                 $reasons[] = sprintf(
                     'Dates overlap external %s channel block (%s to %s)',
@@ -129,9 +134,13 @@ final class ReservationLedger implements ReservationLedgerInterface
     public function findChannelConflict(
         string $propertyId,
         string $checkIn,
-        string $checkOut
+        string $checkOut,
+        ?string $absorbingSource = null
     ): ?ChannelBlock {
         foreach ($this->channelBlockSource->getBlocks($propertyId) as $block) {
+            if ($absorbingSource !== null && strtolower($block->source) === strtolower($absorbingSource)) {
+                continue;
+            }
             if ($block->overlaps($checkIn, $checkOut)) {
                 return $block;
             }
@@ -171,10 +180,24 @@ final class ReservationLedger implements ReservationLedgerInterface
 
     public function getBlockedNights(
         string $propertyId,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?string $absorbingSource = null
     ): array {
         // Ephemeral channel nights
-        $channelNights = $this->channelBlockSource->getBlockedNights($propertyId);
+        if ($absorbingSource !== null) {
+            $channelBlocks = $this->channelBlockSource->getBlocks($propertyId);
+            $channelNights = [];
+            foreach ($channelBlocks as $block) {
+                if (strtolower($block->source) === strtolower($absorbingSource)) {
+                    continue;
+                }
+                foreach ($block->nights() as $night) {
+                    $channelNights[] = $night;
+                }
+            }
+        } else {
+            $channelNights = $this->channelBlockSource->getBlockedNights($propertyId);
+        }
 
         // Maintenance hold nights (ADR 0006)
         $maintenanceNights = $this->maintenanceBlockSource->getBlockedNights($propertyId);
@@ -216,11 +239,14 @@ final class ReservationLedger implements ReservationLedgerInterface
             );
         }
 
-        // 2. Ephemeral channel blocks checked in-memory (ADR 0002)
+        // 2. Ephemeral channel blocks checked in-memory (ADR 0002 & ADR 0007)
+        // External OTA reservations absorb matching channel blocks (ADR 0007)
+        $absorbingSource = $reservation->isExternal() ? $reservation->source : null;
         $channelConflict = $this->findChannelConflict(
             $reservation->propertyId,
             $reservation->checkIn,
-            $reservation->checkOut
+            $reservation->checkOut,
+            $absorbingSource
         );
         if ($channelConflict !== null) {
             throw ReservationConflictException::forDates(
