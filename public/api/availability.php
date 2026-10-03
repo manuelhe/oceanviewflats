@@ -10,6 +10,8 @@
 require_once __DIR__ . '/../../vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncService;
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 
 // Enforce security headers & CORS policy dynamically
@@ -36,83 +38,29 @@ if (!isset($icalFeeds[$propertyId])) {
     exit();
 }
 
-$feedUrl = $icalFeeds[$propertyId];
-
-// Define caching directory and file for upstream Airbnb calendar blocks (ADR 0002)
+// Define caching directory for upstream Airbnb calendar blocks (ADR 0002)
 $cacheDir = __DIR__ . '/../cache';
 if (!file_exists($cacheDir)) {
     mkdir($cacheDir, 0755, true);
 }
-$cacheFile = $cacheDir . '/avail_' . $propertyId . '.json';
+
+/** @var InboundChannelSyncServiceInterface $syncService */
+$syncService = $GLOBALS['TEST_CHANNEL_SYNC_SERVICE'] ?? new InboundChannelSyncService($icalFeeds, $cacheDir);
 $cacheLifetime = 15 * 60; // 15 minutes (in seconds)
 
-$shouldFetchUpstream = !file_exists($cacheFile) || (time() - filemtime($cacheFile)) >= $cacheLifetime;
+if ($syncService->isCacheStale($propertyId, $cacheLifetime)) {
+    $syncResult = $syncService->sync($propertyId, force: false, initiatedBy: 'public_traffic');
 
-if ($shouldFetchUpstream) {
-    // Fetch the upstream iCal feed from Airbnb
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $feedUrl);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3');
-    $icalData = curl_exec($ch);
-    $httpStatusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    // Fallback logic if feed fetch fails
-    if ($httpStatusCode !== 200 || !$icalData) {
-        if (!file_exists($cacheFile)) {
-            http_response_code(502);
-            echo json_encode(["error" => "Failed to retrieve calendar feed from Airbnb.", "status_code" => $httpStatusCode]);
-            exit();
-        }
-        // Stale cache will be read by FileCacheChannelBlockSource
-    } else {
-        // Parse the iCal VEVENT blocks to extract start/end dates
-        $blockedDates = [];
-        $lines = explode("\n", str_replace("\r", "", $icalData));
-        $isEvent = false;
-        $dtStart = '';
-        $dtEnd = '';
-
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === 'BEGIN:VEVENT') {
-                $isEvent = true;
-                $dtStart = '';
-                $dtEnd = '';
-            } elseif ($line === 'END:VEVENT') {
-                if ($isEvent && !empty($dtStart) && !empty($dtEnd)) {
-                    $start = strtotime($dtStart);
-                    $end = strtotime($dtEnd);
-                    
-                    if ($start && $end && $start < $end) {
-                        $current = $start;
-                        while ($current < $end) {
-                            $blockedDates[] = date('Y-m-d', $current);
-                            $current = strtotime("+1 day", $current);
-                        }
-                    }
-                }
-                $isEvent = false;
-            } elseif ($isEvent) {
-                if (strpos($line, 'DTSTART') === 0) {
-                    $parts = explode(':', $line);
-                    $dtStart = substr(end($parts), 0, 8); // Format YYYYMMDD
-                } elseif (strpos($line, 'DTEND') === 0) {
-                    $parts = explode(':', $line);
-                    $dtEnd = substr(end($parts), 0, 8); // Format YYYYMMDD
-                }
-            }
-        }
-
-        // Ensure unique, sorted dates
-        $blockedDates = array_values(array_unique($blockedDates));
-        sort($blockedDates);
-
-        // Save parsed array to local cache for in-memory channel block ingestion (ADR 0002)
-        file_put_contents($cacheFile, json_encode($blockedDates));
+    // Fallback logic if feed fetch fails and no cached calendar exists
+    if ($syncResult->getStatus()->isError() && !$syncService->hasCacheFile($propertyId)) {
+        http_response_code(502);
+        echo json_encode([
+            "error" => "Failed to retrieve calendar feed from Airbnb.",
+            "status_code" => $syncResult->getStatus()->getHttpCode() ?? 502,
+        ]);
+        exit();
     }
+    // Stale cache will be read by FileCacheChannelBlockSource and ReservationLedger
 }
 
 // Establish database connection to evaluate active direct reservations (ADR 0003)

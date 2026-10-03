@@ -7,6 +7,7 @@ namespace OceanViewFlats\Admin\Controller;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 
 /**
  * Controller handling the administrative dashboard overview and home interface.
@@ -14,7 +15,8 @@ use OceanViewFlats\Admin\Views\ViewRenderer;
 final class DashboardController
 {
     public function __construct(
-        private readonly ViewRenderer $viewRenderer
+        private readonly ViewRenderer $viewRenderer,
+        private readonly ?InboundChannelSyncServiceInterface $syncService = null
     ) {
     }
 
@@ -32,13 +34,20 @@ final class DashboardController
             'role' => $session['admin_user_role'] ?? 'admin',
         ];
 
+        $csrfToken = (string) ($session['csrf_token'] ?? '');
+        $channelCardData = ChannelSyncController::buildCardViewData(
+            syncService: $this->syncService,
+            csrfToken: $csrfToken
+        );
+
         $html = $this->viewRenderer->render(
             template: 'dashboard/index.php',
             data: [
                 'title' => 'Dashboard - Ocean View Flats Admin',
                 'currentRoute' => '/',
                 'currentUser' => $currentUser,
-                'csrfToken' => (string) ($session['csrf_token'] ?? ''),
+                'csrfToken' => $csrfToken,
+                'channelCardData' => $channelCardData,
             ]
         );
 

@@ -25,7 +25,7 @@ final class PathResolver
      */
     public static function resolve(string $relativePath, ?string $rootDir = null): string
     {
-        $cleanRoot = rtrim($rootDir ?? dirname(__DIR__, 3), '/\\');
+        $cleanRoot = rtrim($rootDir ?? (getenv('OVF_CONFIG_ROOT') ?: dirname(__DIR__, 3)), '/\\');
         $cleanRelative = (string) preg_replace('#^(public_html/|public/)#', '', ltrim($relativePath, '/\\'));
 
         $localPath = $cleanRoot . '/public/' . $cleanRelative;
@@ -68,7 +68,7 @@ final class PathResolver
      */
     public static function resolveDirectory(string $relativeDir, ?string $rootDir = null): string
     {
-        $cleanRoot = rtrim($rootDir ?? dirname(__DIR__, 3), '/\\');
+        $cleanRoot = rtrim($rootDir ?? (getenv('OVF_CONFIG_ROOT') ?: dirname(__DIR__, 3)), '/\\');
         $cleanRelative = (string) preg_replace('#^(public_html/|public/)#', '', ltrim($relativeDir, '/\\'));
 
         $localDir = $cleanRoot . '/public/' . $cleanRelative;

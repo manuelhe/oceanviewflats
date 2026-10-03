@@ -6,6 +6,7 @@
  * @var string $filter
  * @var list<array<string, mixed>> $blocks
  * @var string $csrfToken
+ * @var array<string, mixed>|null $channelSyncPanel
  */
 ?>
 
@@ -31,6 +32,14 @@
             </button>
         </div>
     </div>
+
+    <!-- Inbound Channel Sync Section -->
+    <?php
+    if (isset($channelSyncPanel)) {
+        extract($channelSyncPanel, EXTR_OVERWRITE);
+        include __DIR__ . '/_channel_sync_panel.php';
+    }
+    ?>
 
     <!-- Filter Bar (Unit Filter & Timeframe Selector) -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">

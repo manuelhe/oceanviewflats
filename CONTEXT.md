@@ -129,7 +129,7 @@ _Avoid_: Cancellation penalty, forfeit, withheld fee
 ### Channel Synchronization
 
 **Channel Sync**:
-The automated bidirectional exchange of calendar availability between OceanViewFlats and external booking channels using the iCalendar protocol to prevent dual-booking conflicts.
+The automated or administratively triggered bidirectional exchange of calendar availability between OceanViewFlats and external booking channels using the iCalendar protocol to prevent dual-booking conflicts.
 _Avoid_: Calendar Sync, iCal Integration, Availability Mirror
 
 **Channel Block**:

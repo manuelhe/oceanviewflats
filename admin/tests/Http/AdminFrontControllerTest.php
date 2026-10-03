@@ -8,6 +8,8 @@ use OceanViewFlats\Admin\AdminApp;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\InMemoryIpRateLimiter;
 use OceanViewFlats\Admin\Http\Request;
+use OceanViewFlats\Admin\Tests\Support\AdminDatabaseTestHelper;
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncService;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -17,6 +19,7 @@ final class AdminFrontControllerTest extends TestCase
     private InMemoryIpRateLimiter $rateLimiter;
     private AuthService $authService;
     private AdminApp $app;
+    private string $tempCacheDir;
 
     protected function setUp(): void
     {
@@ -25,39 +28,46 @@ final class AdminFrontControllerTest extends TestCase
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         ]);
 
-        $this->pdo->exec('
-            CREATE TABLE admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                name TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT "admin",
-                is_active INTEGER NOT NULL DEFAULT 1,
-                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-                locked_until TEXT DEFAULT NULL,
-                last_login_at TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE admin_audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                admin_user_id INTEGER DEFAULT NULL,
-                action TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                payload_before TEXT DEFAULT NULL,
-                payload_after TEXT DEFAULT NULL,
-                ip_address TEXT NOT NULL,
-                user_agent TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-        ');
+        AdminDatabaseTestHelper::initializeSchema($this->pdo);
 
         $this->rateLimiter = new InMemoryIpRateLimiter(maxAttempts: 10, windowSeconds: 900);
         $this->authService = new AuthService($this->pdo, $this->rateLimiter);
 
-        $this->app = AdminApp::createDefault($this->pdo, ['rate_limiter' => $this->rateLimiter]);
+        $this->tempCacheDir = sys_get_temp_dir() . '/ovf_test_cache_' . bin2hex(random_bytes(4));
+        mkdir($this->tempCacheDir, 0777, true);
+        $mockTransport = fn(string $url) => [
+            'statusCode' => 200,
+            'body' => "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:20261101\r\nDTEND;VALUE=DATE:20261105\r\nSUMMARY:Reserved\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+            'error' => null,
+        ];
+        $channelSyncService = new InboundChannelSyncService(
+            feedUrls: [
+                '1606' => 'https://example.com/ical/1606.ics',
+                '1707' => 'https://example.com/ical/1707.ics',
+            ],
+            cacheDir: $this->tempCacheDir,
+            httpTransport: $mockTransport
+        );
+
+        $this->app = AdminApp::createDefault($this->pdo, [
+            'rate_limiter' => $this->rateLimiter,
+            'channel_sync_service' => $channelSyncService,
+        ]);
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->tempCacheDir) && is_dir($this->tempCacheDir)) {
+            $files = glob($this->tempCacheDir . '/*');
+            if ($files !== false) {
+                foreach ($files as $file) {
+                    if (is_file($file)) {
+                        unlink($file);
+                    }
+                }
+            }
+            rmdir($this->tempCacheDir);
+        }
     }
 
     private function createAdminUser(string $email, string $password, string $name = 'Super Admin'): int
@@ -450,6 +460,130 @@ final class AdminFrontControllerTest extends TestCase
         $this->assertSame(302, $postResponse->getStatusCode());
         $this->assertSame('/', $postResponse->getHeaders()['Location']);
         $this->assertSame($userId, $session['admin_user_id']);
+    }
+
+    public function testChannelSyncEndpointsRequireAuthentication(): void
+    {
+        $session = ['csrf_token' => 'valid_csrf_token'];
+
+        // 1. Standard GET /channel-sync/card -> 302 redirect to /login
+        $reqCard = new Request('GET', '/channel-sync/card');
+        $respCard = $this->app->handle($reqCard, $session);
+        $this->assertSame(302, $respCard->getStatusCode());
+        $this->assertSame('/login', $respCard->getHeaders()['Location']);
+
+        // 2. Standard POST /channel-sync (with valid CSRF token but unauthenticated) -> 302 redirect to /login
+        $reqSync = new Request('POST', '/channel-sync', post: ['csrf_token' => 'valid_csrf_token']);
+        $respSync = $this->app->handle($reqSync, $session);
+        $this->assertSame(302, $respSync->getStatusCode());
+        $this->assertSame('/login', $respSync->getHeaders()['Location']);
+
+        // 3. HTMX GET /channel-sync/card -> 401 with HX-Redirect header
+        $reqHtmx = new Request('GET', '/channel-sync/card', server: ['HTTP_HX_REQUEST' => 'true']);
+        $respHtmx = $this->app->handle($reqHtmx, $session);
+        $this->assertSame(401, $respHtmx->getStatusCode());
+        $this->assertSame('/login', $respHtmx->getHeaders()['HX-Redirect']);
+
+        // 4. Standard GET /channel-sync/panel -> 302 redirect to /login
+        $reqPanel = new Request('GET', '/channel-sync/panel');
+        $respPanel = $this->app->handle($reqPanel, $session);
+        $this->assertSame(302, $respPanel->getStatusCode());
+        $this->assertSame('/login', $respPanel->getHeaders()['Location']);
+    }
+
+    public function testChannelSyncPostRequiresValidCsrfToken(): void
+    {
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'valid_secret_csrf'];
+
+        // Request with missing or invalid CSRF token
+        $request = new Request('POST', '/channel-sync', post: ['csrf_token' => 'wrong_token']);
+        $response = $this->app->handle($request, $session);
+
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertStringContainsString('CSRF', $response->getBody());
+    }
+
+    public function testAuthenticatedChannelSyncEndpointsDispatchSuccessfully(): void
+    {
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'valid_secret_csrf'];
+
+        // 1. GET /channel-sync/card
+        $getReq = new Request('GET', '/channel-sync/card');
+        $getResp = $this->app->handle($getReq, $session);
+
+        $this->assertSame(200, $getResp->getStatusCode());
+        $this->assertStringContainsString('id="channel-card-container"', $getResp->getBody());
+        $this->assertStringContainsString('Sync Now', $getResp->getBody());
+
+        // 2. POST /channel-sync with HX-CSRF-Token header
+        $postReq = new Request(
+            method: 'POST',
+            uri: '/channel-sync',
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_CSRF_TOKEN' => 'valid_secret_csrf',
+                'REMOTE_ADDR' => '127.0.0.1',
+            ]
+        );
+        $postResp = $this->app->handle($postReq, $session);
+
+        $this->assertSame(200, $postResp->getStatusCode());
+        $this->assertStringContainsString('id="channel-card-container"', $postResp->getBody());
+        $this->assertStringContainsString('Sync Now', $postResp->getBody());
+
+        // Verify audit log entry
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "channel_sync_manual"');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertIsArray($log);
+        $this->assertSame(1, (int) $log['admin_user_id']);
+        $this->assertSame('channel_sync', $log['entity_type']);
+    }
+
+    public function testAuthenticatedChannelSyncPanelEndpointsDispatchSuccessfully(): void
+    {
+        $session = ['admin_user_id' => 1, 'admin_email' => 'admin@oceanviewflats.com', 'csrf_token' => 'valid_secret_csrf'];
+
+        // 1. GET /channel-sync/panel
+        $getPanelReq = new Request('GET', '/channel-sync/panel');
+        $getPanelResp = $this->app->handle($getPanelReq, $session);
+
+        $this->assertSame(200, $getPanelResp->getStatusCode());
+        $this->assertStringContainsString('id="channel-sync-panel"', $getPanelResp->getBody());
+        $this->assertStringContainsString('Property 1606', $getPanelResp->getBody());
+        $this->assertStringContainsString('Property 1707', $getPanelResp->getBody());
+
+        // 2. POST /channel-sync with property_id=1606&view=panel
+        $postUnitReq = new Request(
+            method: 'POST',
+            uri: '/channel-sync',
+            query: ['property_id' => '1606', 'view' => 'panel'],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_CSRF_TOKEN' => 'valid_secret_csrf',
+                'REMOTE_ADDR' => '127.0.0.1',
+            ]
+        );
+        $postUnitResp = $this->app->handle($postUnitReq, $session);
+
+        $this->assertSame(200, $postUnitResp->getStatusCode());
+        $this->assertStringContainsString('id="channel-sync-panel"', $postUnitResp->getBody());
+        $this->assertStringContainsString('Feed synchronized successfully', $postUnitResp->getBody());
+
+        // Verify audit log has entity_id = 1606
+        $stmt = $this->pdo->query('SELECT * FROM admin_audit_logs WHERE action = "channel_sync_manual" AND entity_id = "1606"');
+        $this->assertInstanceOf(\PDOStatement::class, $stmt);
+        $log = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertIsArray($log);
+        $this->assertSame('1606', $log['entity_id']);
+
+        // 3. GET /calendar-blocks includes channel sync panel
+        $calendarReq = new Request('GET', '/calendar-blocks');
+        $calendarResp = $this->app->handle($calendarReq, $session);
+
+        $this->assertSame(200, $calendarResp->getStatusCode());
+        $this->assertStringContainsString('id="channel-sync-panel"', $calendarResp->getBody());
+        $this->assertStringContainsString('Inbound Channel Sync', $calendarResp->getBody());
     }
 }
 

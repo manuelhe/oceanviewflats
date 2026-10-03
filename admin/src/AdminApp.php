@@ -10,6 +10,7 @@ use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
 use OceanViewFlats\Admin\Auth\IpRateLimiterInterface;
 use OceanViewFlats\Admin\Controller\AuthController;
 use OceanViewFlats\Admin\Controller\CalendarBlockController;
+use OceanViewFlats\Admin\Controller\ChannelSyncController;
 use OceanViewFlats\Admin\Controller\DashboardController;
 use OceanViewFlats\Admin\Controller\RateController;
 use OceanViewFlats\Admin\Controller\ReservationController;
@@ -38,6 +39,8 @@ use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
 use OceanViewFlats\Domain\Quote\RateSourceInterface;
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncService;
+use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\PdoMaintenanceBlockRepository;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
@@ -103,14 +106,23 @@ final class AdminApp
         /** @var ViewRenderer $viewRenderer */
         $viewRenderer = $options['view_renderer'] ?? new ViewRenderer($viewsPath);
 
-        // 4. Controllers: Auth & Dashboard
+        // 4. Controllers: Auth, Dashboard & Channel Sync
+        /** @var InboundChannelSyncServiceInterface $channelSyncService */
+        $channelSyncService = $options['channel_sync_service'] ?? InboundChannelSyncService::createDefault();
+
         $authController = new AuthController(
             auditLogger: $auditLogger,
             authService: $authService,
             viewRenderer: $viewRenderer
         );
         $dashboardController = new DashboardController(
-            viewRenderer: $viewRenderer
+            viewRenderer: $viewRenderer,
+            syncService: $channelSyncService
+        );
+        $channelSyncController = new ChannelSyncController(
+            syncService: $channelSyncService,
+            viewRenderer: $viewRenderer,
+            auditLogger: $auditLogger
         );
 
         // 5. Reservation Dependencies & Controller
@@ -190,7 +202,8 @@ final class AdminApp
             blockRepository: $calendarBlockRepo,
             ledger: $ledger,
             viewRenderer: $viewRenderer,
-            auditLogger: $auditLogger
+            auditLogger: $auditLogger,
+            syncService: $channelSyncService
         );
 
         // 8. Security Middlewares & Router (immutable internal security pipeline)
@@ -204,11 +217,14 @@ final class AdminApp
             authMiddleware: $authMiddleware
         );
 
-        // 9. Register All 27 Declarative Administrative Routes
+        // 9. Register Declarative Administrative Routes
         $router->get('/login', [$authController, 'showLogin'])
             ->post('/login', [$authController, 'login'])
             ->get('/logout', [$authController, 'logout'])
             ->get('/', [$dashboardController, 'index'])
+            ->get('/channel-sync/card', [$channelSyncController, 'card'])
+            ->get('/channel-sync/panel', [$channelSyncController, 'panel'])
+            ->post('/channel-sync', [$channelSyncController, 'sync'])
             ->get('/reservations', [$reservationController, 'list'])
             ->get('/reservations/new', [$reservationController, 'newReservation'])
             ->post('/reservations/quote-preview', [$reservationController, 'quotePreview'])

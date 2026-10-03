@@ -66,6 +66,47 @@ final class CalendarBlockControllerTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString('Maintenance & Calendar Holds', $response->getBody());
         $this->assertStringContainsString('+ Add Maintenance Hold', $response->getBody());
+        $this->assertStringContainsString('id="channel-sync-panel"', $response->getBody());
+        $this->assertStringContainsString('Inbound Channel Sync', $response->getBody());
+        $this->assertStringContainsString('Property 1606', $response->getBody());
+        $this->assertStringContainsString('Property 1707', $response->getBody());
+    }
+
+    public function testIndexRendersChannelSyncPanelWithInjectedSyncService(): void
+    {
+        $status1606 = new \OceanViewFlats\Domain\Reservation\ChannelSyncStatus(
+            propertyId: '1606',
+            status: \OceanViewFlats\Domain\Reservation\ChannelSyncStatus::STATUS_HEALTHY,
+            lastSyncedAt: date('c', time() - 120),
+            lastAttemptedAt: date('c', time() - 120),
+            httpCode: 200,
+            blockedNightsCount: 9,
+            errorMessage: null
+        );
+
+        $fakeSyncService = new FakeCalendarBlockSyncService(['1606' => $status1606]);
+
+        $controller = new CalendarBlockController(
+            blockRepository: $this->blockRepo,
+            ledger: $this->ledger,
+            viewRenderer: new ViewRenderer(dirname(__DIR__, 2) . '/src/Views'),
+            auditLogger: new AuditLogger($this->pdo),
+            syncService: $fakeSyncService
+        );
+
+        $session = [
+            'admin_user_id' => 1,
+            'admin_email' => 'admin@oceanviewflats.com',
+            'csrf_token' => 'test_token',
+        ];
+
+        $request = new Request(method: 'GET', uri: '/calendar-blocks');
+        $response = $controller->index($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('id="channel-sync-panel"', $response->getBody());
+        $this->assertStringContainsString('9', $response->getBody());
+        $this->assertStringContainsString('blocked nights', $response->getBody());
     }
 
     public function testIndexRendersHtmxPartial(): void
@@ -296,5 +337,86 @@ final class CalendarBlockControllerTest extends TestCase
         $this->assertCount(1, $logs);
         $this->assertSame('calendar_block', $logs[0]['entity_type']);
         $this->assertSame((string) $id, $logs[0]['entity_id']);
+    }
+}
+
+/**
+ * Fake implementation of InboundChannelSyncServiceInterface for CalendarBlockController testing.
+ */
+final class FakeCalendarBlockSyncService implements \OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface
+{
+    /**
+     * @param array<string|int, \OceanViewFlats\Domain\Reservation\ChannelSyncStatus> $statuses
+     */
+    public function __construct(
+        public array $statuses = []
+    ) {
+    }
+
+    public function sync(string $propertyId, bool $force = false, string $initiatedBy = 'system'): \OceanViewFlats\Domain\Reservation\ChannelSyncResult
+    {
+        $status = $this->statuses[$propertyId] ?? new \OceanViewFlats\Domain\Reservation\ChannelSyncStatus(
+            propertyId: $propertyId,
+            status: \OceanViewFlats\Domain\Reservation\ChannelSyncStatus::STATUS_HEALTHY,
+            lastSyncedAt: date('c'),
+            lastAttemptedAt: date('c'),
+            httpCode: 200,
+            blockedNightsCount: 0,
+            errorMessage: null
+        );
+
+        return new \OceanViewFlats\Domain\Reservation\ChannelSyncResult(
+            propertyId: $propertyId,
+            status: $status,
+            wasSkippedDueToCooldown: false,
+            blockedNights: [],
+            message: 'OK'
+        );
+    }
+
+    public function syncAll(bool $force = false, string $initiatedBy = 'system'): array
+    {
+        return [
+            '1606' => $this->sync('1606', $force, $initiatedBy),
+            '1707' => $this->sync('1707', $force, $initiatedBy),
+        ];
+    }
+
+    public function getStatus(string $propertyId): ?\OceanViewFlats\Domain\Reservation\ChannelSyncStatus
+    {
+        return $this->statuses[$propertyId] ?? null;
+    }
+
+    public function getAllStatuses(): array
+    {
+        return $this->statuses;
+    }
+
+    public function getFeedUrls(): array
+    {
+        return [
+            '1606' => 'https://example.com/ical/1606.ics',
+            '1707' => 'https://example.com/ical/1707.ics',
+        ];
+    }
+
+    public function parseIcalToBlockedNights(string $icalContent): array
+    {
+        return [];
+    }
+
+    public function isCacheStale(string $propertyId, int $ttlSeconds = 900): bool
+    {
+        return false;
+    }
+
+    public function hasCacheFile(string $propertyId): bool
+    {
+        return isset($this->statuses[$propertyId]);
+    }
+
+    public function getCachedNights(string $propertyId): ?array
+    {
+        return isset($this->statuses[$propertyId]) ? ['2026-11-01', '2026-11-02'] : null;
     }
 }

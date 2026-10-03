@@ -12,6 +12,10 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <?php $effectiveCsrfToken = (string) ($csrfToken ?? ($_SESSION['csrf_token'] ?? '')); ?>
     <meta name="csrf-token" content="<?= htmlspecialchars($effectiveCsrfToken, ENT_QUOTES, 'UTF-8') ?>">
+    <style>
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline-flex; }
+    </style>
 </head>
 <body class="min-h-full flex flex-col font-sans text-gray-900 antialiased" hx-headers='{"HX-CSRF-Token": "<?= htmlspecialchars($effectiveCsrfToken, ENT_QUOTES, 'UTF-8') ?>"}'>
 
