@@ -34,6 +34,9 @@ $pdo->exec("CREATE TABLE reservations (
     registry_completed_at TEXT,
     door_code TEXT,
     source TEXT,
+    external_confirmation_code TEXT DEFAULT NULL,
+    channel_block_uid TEXT DEFAULT NULL,
+    refunded_amount REAL DEFAULT 0.0,
     notes TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP

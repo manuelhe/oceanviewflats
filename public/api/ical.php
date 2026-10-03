@@ -82,6 +82,11 @@ echo "CALSCALE:GREGORIAN\r\n";
 echo "METHOD:PUBLISH\r\n";
 
 foreach ($activeReservations as $res) {
+    // Exclude external platform reservations (e.g. Airbnb) to prevent circular sync echoes back to Airbnb (ADR 0007)
+    if ($res->isExternal()) {
+        continue;
+    }
+
     $uid = $res->reservationUid . '@oceanviewflats.com';
     $dtstamp = formatICalDateTime($res->createdAt->format('Y-m-d H:i:s'));
     $dtstart = formatICalDate($res->checkIn);

@@ -15,16 +15,19 @@ interface ReservationLedgerInterface
 {
     /**
      * Verifies whether the requested property is available for the given dates.
+     * Optionally absorbs channel blocks matching $absorbingSource (e.g. 'airbnb' per ADR 0007).
      */
     public function isAvailable(
         string $propertyId,
         string $checkIn,
         string $checkOut,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?string $absorbingSource = null
     ): bool;
 
     /**
      * Returns a list of conflict reasons if the requested dates are blocked, or empty if available.
+     * Optionally absorbs channel blocks matching $absorbingSource (e.g. 'airbnb' per ADR 0007).
      *
      * @return list<string>
      */
@@ -32,17 +35,27 @@ interface ReservationLedgerInterface
         string $propertyId,
         string $checkIn,
         string $checkOut,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?string $absorbingSource = null
     ): array;
 
     /**
      * Finds the first overlapping ephemeral channel block, or null if none.
+     * Channel blocks originating from $absorbingSource are absorbed/ignored (ADR 0007).
      */
     public function findChannelConflict(
         string $propertyId,
         string $checkIn,
-        string $checkOut
+        string $checkOut,
+        ?string $absorbingSource = null
     ): ?ChannelBlock;
+
+    /**
+     * Retrieves all active ephemeral channel blocks for a property.
+     *
+     * @return list<ChannelBlock>
+     */
+    public function getChannelBlocks(string $propertyId): array;
 
     /**
      * Finds the first overlapping maintenance block, or null if none.
@@ -71,7 +84,8 @@ interface ReservationLedgerInterface
      */
     public function getBlockedNights(
         string $propertyId,
-        ?DateTimeImmutable $now = null
+        ?DateTimeImmutable $now = null,
+        ?string $absorbingSource = null
     ): array;
 
     /**

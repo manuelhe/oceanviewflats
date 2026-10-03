@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS `reservations` (
   `total_price` DECIMAL(10, 2) NOT NULL,
   `refunded_amount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
   `source` VARCHAR(30) NOT NULL DEFAULT 'web',
+  `external_confirmation_code` VARCHAR(64) DEFAULT NULL,
+  `channel_block_uid` VARCHAR(128) DEFAULT NULL,
   -- Checkout Pro preference tracking
   `mercadopago_preference_id` VARCHAR(255) DEFAULT NULL,
   -- Checkout Bricks (Custom API) payment tracking
@@ -47,7 +49,9 @@ CREATE TABLE IF NOT EXISTS `reservations` (
   INDEX `idx_property_dates` (`property_id`, `check_in`, `check_out`),
   INDEX `idx_status` (`status`),
   INDEX `idx_registry_completed` (`registry_completed`),
-  INDEX `idx_source` (`source`)
+  INDEX `idx_source` (`source`),
+  INDEX `idx_external_code` (`external_confirmation_code`),
+  INDEX `idx_channel_block_uid` (`channel_block_uid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. Create Payment Idempotency Log Table

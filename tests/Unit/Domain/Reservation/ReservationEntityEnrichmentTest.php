@@ -31,6 +31,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
             total_price REAL,
             refunded_amount REAL DEFAULT 0.00,
             source TEXT DEFAULT 'web',
+            external_confirmation_code TEXT DEFAULT NULL,
+            channel_block_uid TEXT DEFAULT NULL,
             status TEXT,
             payment_method_id TEXT,
             mercadopago_preference_id TEXT,
@@ -245,13 +247,17 @@ final class ReservationEntityEnrichmentTest extends TestCase
             status: ReservationStatus::CONFIRMED,
             source: 'admin_dashboard',
             notes: 'Requires cot for toddler',
-            refundedAmount: 250000.0
+            refundedAmount: 250000.0,
+            externalConfirmationCode: 'HM987654321',
+            channelBlockUid: 'ical-uid-abc-123'
         );
 
         $saved = $repo->save($reservation);
         $this->assertSame('admin_dashboard', $saved->source);
         $this->assertSame('Requires cot for toddler', $saved->notes);
         $this->assertSame(250000.0, $saved->refundedAmount);
+        $this->assertSame('HM987654321', $saved->externalConfirmationCode);
+        $this->assertSame('ical-uid-abc-123', $saved->channelBlockUid);
 
         $fetched = $repo->findByUid('ovf_pdo_enriched');
         $this->assertNotNull($fetched);
@@ -259,6 +265,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
         $this->assertSame('admin_dashboard', $fetched->source);
         $this->assertSame('Requires cot for toddler', $fetched->notes);
         $this->assertSame(250000.0, $fetched->refundedAmount);
+        $this->assertSame('HM987654321', $fetched->externalConfirmationCode);
+        $this->assertSame('ical-uid-abc-123', $fetched->channelBlockUid);
 
         // Test update via save()
         $updated = $fetched->withRefund(50000.0, 'Updated: Toddler cot included + refund');
@@ -269,6 +277,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
         $this->assertSame(300000.0, $refetched->refundedAmount);
         $this->assertSame('Updated: Toddler cot included + refund', $refetched->notes);
         $this->assertSame('admin_dashboard', $refetched->source);
+        $this->assertSame('HM987654321', $refetched->externalConfirmationCode);
+        $this->assertSame('ical-uid-abc-123', $refetched->channelBlockUid);
     }
 
     public function testInMemoryReservationRepositorySavesAndLoadsEnrichedFields(): void
@@ -287,18 +297,24 @@ final class ReservationEntityEnrichmentTest extends TestCase
             status: ReservationStatus::CONFIRMED,
             source: 'whatsapp_bot',
             notes: 'Late arrival after 9 PM',
-            refundedAmount: 120000.0
+            refundedAmount: 120000.0,
+            externalConfirmationCode: 'AIRBNB-XYZ',
+            channelBlockUid: 'block-uid-999'
         );
 
         $saved = $repo->save($reservation);
         $this->assertSame('whatsapp_bot', $saved->source);
         $this->assertSame('Late arrival after 9 PM', $saved->notes);
         $this->assertSame(120000.0, $saved->refundedAmount);
+        $this->assertSame('AIRBNB-XYZ', $saved->externalConfirmationCode);
+        $this->assertSame('block-uid-999', $saved->channelBlockUid);
 
         $fetched = $repo->findByUid('ovf_inmem_enriched');
         $this->assertNotNull($fetched);
         $this->assertSame('whatsapp_bot', $fetched->source);
         $this->assertSame('Late arrival after 9 PM', $fetched->notes);
         $this->assertSame(120000.0, $fetched->refundedAmount);
+        $this->assertSame('AIRBNB-XYZ', $fetched->externalConfirmationCode);
+        $this->assertSame('block-uid-999', $fetched->channelBlockUid);
     }
 }

@@ -119,11 +119,6 @@ final class AdminApp
             viewRenderer: $viewRenderer,
             syncService: $channelSyncService
         );
-        $channelSyncController = new ChannelSyncController(
-            syncService: $channelSyncService,
-            viewRenderer: $viewRenderer,
-            auditLogger: $auditLogger
-        );
 
         // 5. Reservation Dependencies & Controller
         $publicSiteUrl = (string) ($options['public_site_url'] ?? (getenv('PUBLIC_SITE_URL') ?: 'https://oceanviewflats.com'));
@@ -197,13 +192,22 @@ final class AdminApp
             csvPath: $csvPath
         );
 
-        // 7. Calendar Blocks Repository & Controller
+        // 7. Channel Sync & Calendar Blocks Controllers
+        $channelSyncController = new ChannelSyncController(
+            syncService: $channelSyncService,
+            viewRenderer: $viewRenderer,
+            auditLogger: $auditLogger,
+            ledger: $ledger,
+            reservationRepository: $reservationRepository
+        );
+
         $calendarBlockController = new CalendarBlockController(
             blockRepository: $calendarBlockRepo,
             ledger: $ledger,
             viewRenderer: $viewRenderer,
             auditLogger: $auditLogger,
-            syncService: $channelSyncService
+            syncService: $channelSyncService,
+            reservationRepository: $reservationRepository
         );
 
         // 8. Security Middlewares & Router (immutable internal security pipeline)

@@ -48,7 +48,9 @@ final class InMemoryReservationRepository implements ReservationRepositoryInterf
             doorCode: $reservation->doorCode,
             source: $reservation->source,
             notes: $reservation->notes,
-            refundedAmount: $reservation->refundedAmount
+            refundedAmount: $reservation->refundedAmount,
+            externalConfirmationCode: $reservation->externalConfirmationCode,
+            channelBlockUid: $reservation->channelBlockUid
         );
 
         $this->records[$saved->reservationUid] = $saved;

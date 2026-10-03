@@ -64,7 +64,11 @@
             </div>
         </div>
 
-        <?php if ($source === 'owner_stay'): ?>
+        <?php if ($source === 'airbnb'): ?>
+            <p class="text-[10px] text-emerald-800 italic font-medium">
+                * Airbnb booking absorbs overlapping Airbnb channel blocks. Pricing defaults to $0.00 COP (Host Payout).
+            </p>
+        <?php elseif ($source === 'owner_stay'): ?>
             <p class="text-[10px] text-emerald-800 italic font-medium">
                 * Owner Stay automatically zeroes total pricing ($0.00 COP).
             </p>
