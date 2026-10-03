@@ -147,7 +147,9 @@ final class ChannelSyncController
             } elseif ($result->getStatus()->isDegraded()) {
                 $anyDegraded = true;
             }
-            $totalBlockedNights += $result->getBlockedNightsCount();
+            $today = date('Y-m-d');
+            $activeNights = array_filter($result->getBlockedNights(), fn(string $n) => $n >= $today);
+            $totalBlockedNights += count($activeNights);
         }
 
         $this->auditLogger->record(
@@ -169,11 +171,15 @@ final class ChannelSyncController
             $notice = [
                 'type' => 'info',
                 'message' => $firstResult->getMessage() ?? 'Cooldown active. Feed was recently synchronized.',
+                'isCooldown' => true,
+                'propertyId' => $entityId !== 'all' ? $entityId : null,
             ];
         } elseif ($anyCooldown) {
             $notice = [
                 'type' => 'info',
                 'message' => 'Cooldown active on one or more feeds (minimum 60s). Showing fresh cached calendar.',
+                'isCooldown' => true,
+                'propertyId' => null,
             ];
         } elseif ($anyError) {
             $notice = [
@@ -214,9 +220,54 @@ final class ChannelSyncController
     }
 
     /**
+     * Helper returning visual badge and icon presentation metadata for a given health status.
+     *
+     * @return array{
+     *     badgeText: string,
+     *     badgeClasses: string,
+     *     badgeDotClass: string,
+     *     iconBgClass: string,
+     *     iconTextClass: string
+     * }
+     */
+    public static function getHealthBadgeMeta(string $health): array
+    {
+        return match ($health) {
+            'pending' => [
+                'badgeText' => 'Pending',
+                'badgeClasses' => 'bg-gray-100 text-gray-700 border-gray-200',
+                'badgeDotClass' => 'bg-gray-400',
+                'iconBgClass' => 'bg-gray-100',
+                'iconTextClass' => 'text-gray-500',
+            ],
+            ChannelSyncStatus::STATUS_DEGRADED => [
+                'badgeText' => 'Degraded',
+                'badgeClasses' => 'bg-amber-50 text-amber-700 border-amber-200',
+                'badgeDotClass' => 'bg-amber-500',
+                'iconBgClass' => 'bg-amber-50',
+                'iconTextClass' => 'text-amber-600',
+            ],
+            ChannelSyncStatus::STATUS_ERROR => [
+                'badgeText' => 'Error',
+                'badgeClasses' => 'bg-rose-50 text-rose-700 border-rose-200',
+                'badgeDotClass' => 'bg-rose-500',
+                'iconBgClass' => 'bg-rose-50',
+                'iconTextClass' => 'text-rose-600',
+            ],
+            default => [
+                'badgeText' => 'Healthy',
+                'badgeClasses' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                'badgeDotClass' => 'bg-emerald-500',
+                'iconBgClass' => 'bg-emerald-50',
+                'iconTextClass' => 'text-emerald-600',
+            ],
+        };
+    }
+
+    /**
      * Builds standard view data for the dashboard channel stat card.
      *
-     * @param array{type: string, message: string}|null $notice
+     * @param array{type: string, message: string, isCooldown?: bool, propertyId?: ?string}|null $notice
      * @return array<string, mixed>
      */
     public static function buildCardViewData(
@@ -232,35 +283,12 @@ final class ChannelSyncController
         $relativeSyncedTime = self::formatRelativeTime($lastSyncedAt);
         $totalBlockedNights = $syncService !== null ? self::resolveTotalBlockedNights($syncService, $statuses) : 0;
 
-        $badgeText = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'Degraded',
-            ChannelSyncStatus::STATUS_ERROR => 'Error',
-            default => 'Healthy',
-        };
-
-        $badgeClasses = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-50 text-amber-700 border-amber-200',
-            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-50 text-rose-700 border-rose-200',
-            default => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        };
-
-        $badgeDotClass = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-500',
-            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-500',
-            default => 'bg-emerald-500',
-        };
-
-        $iconBgClass = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-50',
-            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-50',
-            default => 'bg-emerald-50',
-        };
-
-        $iconTextClass = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'text-amber-600',
-            ChannelSyncStatus::STATUS_ERROR => 'text-rose-600',
-            default => 'text-emerald-600',
-        };
+        $badgeMeta = self::getHealthBadgeMeta($health);
+        $badgeText = $badgeMeta['badgeText'];
+        $badgeClasses = $badgeMeta['badgeClasses'];
+        $badgeDotClass = $badgeMeta['badgeDotClass'];
+        $iconBgClass = $badgeMeta['iconBgClass'];
+        $iconTextClass = $badgeMeta['iconTextClass'];
 
         $noticeClasses = '';
         if ($notice !== null) {
@@ -291,7 +319,7 @@ final class ChannelSyncController
     /**
      * Builds standard view data for the calendar blocks channel sync panel.
      *
-     * @param array{type: string, message: string}|null $notice
+     * @param array{type: string, message: string, isCooldown?: bool, propertyId?: ?string}|null $notice
      * @return array<string, mixed>
      */
     public static function buildPanelViewData(
@@ -307,23 +335,10 @@ final class ChannelSyncController
         $relativeSyncedTime = self::formatRelativeTime($lastSyncedAt);
         $totalBlockedNights = $syncService !== null ? self::resolveTotalBlockedNights($syncService, $statuses) : 0;
 
-        $badgeText = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'Degraded',
-            ChannelSyncStatus::STATUS_ERROR => 'Error',
-            default => 'Healthy',
-        };
-
-        $badgeClasses = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-50 text-amber-700 border-amber-200',
-            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-50 text-rose-700 border-rose-200',
-            default => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-        };
-
-        $badgeDotClass = match ($health) {
-            ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-500',
-            ChannelSyncStatus::STATUS_ERROR => 'bg-rose-500',
-            default => 'bg-emerald-500',
-        };
+        $badgeMeta = self::getHealthBadgeMeta($health);
+        $badgeText = $badgeMeta['badgeText'];
+        $badgeClasses = $badgeMeta['badgeClasses'];
+        $badgeDotClass = $badgeMeta['badgeDotClass'];
 
         $noticeClasses = '';
         if ($notice !== null) {
@@ -347,39 +362,37 @@ final class ChannelSyncController
             $statusObj = $statuses[$propId] ?? null;
 
             $unitHealth = ChannelSyncStatus::STATUS_HEALTHY;
+            if ($statusObj === null || $statusObj->getLastSyncedAt() === null) {
+                $unitHealth = 'pending';
+            }
             if ($statusObj !== null) {
                 if ($statusObj->isError()) {
                     $unitHealth = ChannelSyncStatus::STATUS_ERROR;
                 } elseif ($statusObj->isDegraded()) {
                     $unitHealth = ChannelSyncStatus::STATUS_DEGRADED;
+                } elseif ($statusObj->getLastSyncedAt() === null) {
+                    $unitHealth = 'pending';
                 }
             }
 
-            $unitBadgeText = match ($unitHealth) {
-                ChannelSyncStatus::STATUS_DEGRADED => 'Degraded',
-                ChannelSyncStatus::STATUS_ERROR => 'Error',
-                default => 'Healthy',
-            };
+            $unitMeta = self::getHealthBadgeMeta($unitHealth);
+            $unitBadgeText = $unitMeta['badgeText'];
+            $unitBadgeClasses = $unitMeta['badgeClasses'];
+            $unitBadgeDotClass = $unitMeta['badgeDotClass'];
 
-            $unitBadgeClasses = match ($unitHealth) {
-                ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-50 text-amber-700 border-amber-200',
-                ChannelSyncStatus::STATUS_ERROR => 'bg-rose-50 text-rose-700 border-rose-200',
-                default => 'bg-emerald-50 text-emerald-700 border-emerald-200',
-            };
-
-            $unitBadgeDotClass = match ($unitHealth) {
-                ChannelSyncStatus::STATUS_DEGRADED => 'bg-amber-500',
-                ChannelSyncStatus::STATUS_ERROR => 'bg-rose-500',
-                default => 'bg-emerald-500',
-            };
-
+            $today = date('Y-m-d');
             $cached = $syncService !== null ? $syncService->getCachedNights($propId) : null;
-            $unitBlockedNights = $cached !== null ? count($cached) : ($statusObj?->getBlockedNightsCount() ?? 0);
+            if ($cached !== null) {
+                $activeNights = array_filter($cached, fn(string $night) => $night >= $today);
+                $unitBlockedNights = count($activeNights);
+            } else {
+                $unitBlockedNights = $statusObj?->getBlockedNightsCount() ?? 0;
+            }
 
             $propName = match ($propId) {
-                '1606' => 'Apartment 1606',
-                '1707' => 'Apartment 1707',
-                default => "Apartment {$propId}",
+                '1606' => 'Property 1606',
+                '1707' => 'Property 1707',
+                default => "Property {$propId}",
             };
 
             $feedUrl = $feedUrls[$propId] ?? ($statusObj?->getFeedUrl() ?? null);
@@ -525,20 +538,25 @@ final class ChannelSyncController
 
     /**
      * Resolves aggregate health status across all tracked feeds.
+     * When no feed has ever been synced (all last_synced_at === null), reports 'pending'.
      *
      * @param array<string|int, ChannelSyncStatus> $statuses
-     * @return 'healthy'|'degraded'|'error'
+     * @return 'healthy'|'degraded'|'error'|'pending'
      */
     public static function resolveAggregateHealth(array $statuses): string
     {
         if (empty($statuses)) {
-            return ChannelSyncStatus::STATUS_HEALTHY;
+            return 'pending';
         }
 
         $hasError = false;
         $hasDegraded = false;
+        $allUnsynced = true;
 
         foreach ($statuses as $status) {
+            if ($status->getLastSyncedAt() !== null) {
+                $allUnsynced = false;
+            }
             if ($status->isError()) {
                 $hasError = true;
             } elseif ($status->isDegraded()) {
@@ -551,6 +569,9 @@ final class ChannelSyncController
         }
         if ($hasDegraded) {
             return ChannelSyncStatus::STATUS_DEGRADED;
+        }
+        if ($allUnsynced) {
+            return 'pending';
         }
 
         return ChannelSyncStatus::STATUS_HEALTHY;
@@ -582,24 +603,24 @@ final class ChannelSyncController
 
     /**
      * Resolves total active/cached blocked nights count across all tracked feeds.
+     * Historical past nights (< today) are filtered out so they are not counted as active.
      *
      * @param array<string|int, ChannelSyncStatus> $statuses
      */
     public static function resolveTotalBlockedNights(InboundChannelSyncServiceInterface $syncService, array $statuses): int
     {
+        $today = date('Y-m-d');
         $total = 0;
         $propertiesToCheck = array_unique(array_merge(array_keys($statuses), ['1606', '1707']));
 
         foreach ($propertiesToCheck as $propId) {
             $propStr = (string) $propId;
-            if (isset($statuses[$propStr])) {
-                $cached = $syncService->getCachedNights($propStr);
-                $total += $cached !== null ? count($cached) : $statuses[$propStr]->getBlockedNightsCount();
-            } else {
-                $cached = $syncService->getCachedNights($propStr);
-                if ($cached !== null) {
-                    $total += count($cached);
-                }
+            $cached = $syncService->getCachedNights($propStr);
+            if ($cached !== null) {
+                $activeNights = array_filter($cached, fn(string $night) => $night >= $today);
+                $total += count($activeNights);
+            } elseif (isset($statuses[$propStr])) {
+                $total += $statuses[$propStr]->getBlockedNightsCount();
             }
         }
 

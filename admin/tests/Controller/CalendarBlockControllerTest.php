@@ -68,8 +68,8 @@ final class CalendarBlockControllerTest extends TestCase
         $this->assertStringContainsString('+ Add Maintenance Hold', $response->getBody());
         $this->assertStringContainsString('id="channel-sync-panel"', $response->getBody());
         $this->assertStringContainsString('Inbound Channel Sync', $response->getBody());
-        $this->assertStringContainsString('Apartment 1606', $response->getBody());
-        $this->assertStringContainsString('Apartment 1707', $response->getBody());
+        $this->assertStringContainsString('Property 1606', $response->getBody());
+        $this->assertStringContainsString('Property 1707', $response->getBody());
     }
 
     public function testIndexRendersChannelSyncPanelWithInjectedSyncService(): void

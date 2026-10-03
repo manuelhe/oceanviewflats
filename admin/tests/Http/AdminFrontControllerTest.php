@@ -550,8 +550,8 @@ final class AdminFrontControllerTest extends TestCase
 
         $this->assertSame(200, $getPanelResp->getStatusCode());
         $this->assertStringContainsString('id="channel-sync-panel"', $getPanelResp->getBody());
-        $this->assertStringContainsString('Apartment 1606', $getPanelResp->getBody());
-        $this->assertStringContainsString('Apartment 1707', $getPanelResp->getBody());
+        $this->assertStringContainsString('Property 1606', $getPanelResp->getBody());
+        $this->assertStringContainsString('Property 1707', $getPanelResp->getBody());
 
         // 2. POST /channel-sync with property_id=1606&view=panel
         $postUnitReq = new Request(

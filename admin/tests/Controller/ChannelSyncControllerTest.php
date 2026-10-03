@@ -73,8 +73,8 @@ final class ChannelSyncControllerTest extends TestCase
 
         $this->assertStringContainsString('id="channel-card-container"', $body);
         $this->assertStringContainsString('Healthy', $body);
-        $this->assertStringContainsString('Airbnb iCal Feeds Active', $body);
-        $this->assertStringContainsString('12', $body); // 7 + 5 blocked nights
+        $this->assertStringContainsString('Channel Feeds Active', $body);
+        $this->assertStringContainsString('4', $body); // 2 + 2 active blocked nights
         $this->assertStringContainsString('blocked nights', $body);
         $this->assertStringContainsString('Synced 4 mins ago', $body);
         $this->assertStringContainsString('hx-post="/channel-sync"', $body);
@@ -344,8 +344,8 @@ final class ChannelSyncControllerTest extends TestCase
 
         $this->assertStringContainsString('id="channel-sync-panel"', $body);
         $this->assertStringContainsString('Inbound Channel Sync', $body);
-        $this->assertStringContainsString('Apartment 1606', $body);
-        $this->assertStringContainsString('Apartment 1707', $body);
+        $this->assertStringContainsString('Property 1606', $body);
+        $this->assertStringContainsString('Property 1707', $body);
         $this->assertStringContainsString('Healthy', $body);
         $this->assertStringContainsString('hx-post="/channel-sync?view=panel"', $body);
         $this->assertStringContainsString('hx-post="/channel-sync?property_id=1606&view=panel"', $body);
@@ -380,7 +380,7 @@ final class ChannelSyncControllerTest extends TestCase
 
         $this->assertStringContainsString('id="channel-sync-panel"', $body);
         $this->assertStringContainsString('Feed synchronized successfully', $body);
-        $this->assertStringContainsString('Apartment 1606', $body);
+        $this->assertStringContainsString('Property 1606', $body);
     }
 
     public function testPostChannelSyncPerPropertyAuditLogging(): void

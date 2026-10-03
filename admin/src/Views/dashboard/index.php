@@ -46,9 +46,10 @@
         </div>
 
         <?php
-        $cardVars = $channelCardData ?? \OceanViewFlats\Admin\Controller\ChannelSyncController::buildCardViewData(null, (string) ($csrfToken ?? ''));
-        extract($cardVars, EXTR_OVERWRITE);
-        include __DIR__ . '/_channel_card.php';
+        if (isset($channelCardData)) {
+            extract($channelCardData, EXTR_OVERWRITE);
+            include __DIR__ . '/_channel_card.php';
+        }
         ?>
 
         <div class="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-100 p-5">

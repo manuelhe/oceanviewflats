@@ -11,7 +11,7 @@
  * @var string|null $lastSyncedAt
  * @var string $relativeSyncedTime
  * @var int $totalBlockedNights
- * @var array{type: string, message: string}|null $syncNotice
+ * @var array{type: string, message: string, isCooldown?: bool, propertyId?: ?string}|null $syncNotice
  * @var string $noticeClasses
  * @var string $csrfToken
  */
@@ -27,7 +27,7 @@
                 </div>
                 <div class="ml-4">
                     <h3 class="text-sm font-medium text-gray-500">Channel Feeds</h3>
-                    <p class="text-xs text-emerald-600 font-semibold">Airbnb iCal Feeds Active</p>
+                    <p class="text-xs text-emerald-600 font-semibold">Channel Feeds Active</p>
                 </div>
             </div>
             <!-- Health Badge -->
@@ -55,10 +55,21 @@
         </div>
 
         <?php if (!empty($syncNotice)): ?>
-            <div class="mt-3 p-2.5 rounded-lg text-xs <?= $noticeClasses ?> flex items-start space-x-2">
+            <div class="mt-3 p-2.5 rounded-lg text-xs <?= $noticeClasses ?> flex items-start justify-between space-x-2">
                 <div class="flex-1">
-                    <?= htmlspecialchars($syncNotice['message'], ENT_QUOTES, 'UTF-8') ?>
+                    <span><?= htmlspecialchars($syncNotice['message'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php if (!empty($syncNotice['isCooldown'])): ?>
+                        <button type="button"
+                                hx-post="/channel-sync?force=1"
+                                hx-target="#channel-card-container"
+                                hx-swap="outerHTML"
+                                hx-indicator="#channel-sync-spinner"
+                                class="ml-1.5 font-bold underline hover:opacity-80 cursor-pointer">
+                            Force Sync
+                        </button>
+                    <?php endif; ?>
                 </div>
+                <button type="button" onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600 cursor-pointer" aria-label="Dismiss notice">&times;</button>
             </div>
         <?php endif; ?>
     </div>

@@ -35,9 +35,10 @@
 
     <!-- Inbound Channel Sync Section -->
     <?php
-    $panelVars = $channelSyncPanel ?? \OceanViewFlats\Admin\Controller\ChannelSyncController::buildPanelViewData(null, $csrfToken);
-    extract($panelVars, EXTR_OVERWRITE);
-    include __DIR__ . '/_channel_sync_panel.php';
+    if (isset($channelSyncPanel)) {
+        extract($channelSyncPanel, EXTR_OVERWRITE);
+        include __DIR__ . '/_channel_sync_panel.php';
+    }
     ?>
 
     <!-- Filter Bar (Unit Filter & Timeframe Selector) -->

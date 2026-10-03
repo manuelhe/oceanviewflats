@@ -6,7 +6,7 @@
  * Supports on-demand manual sync for all feeds or individual units,
  * live health indicators, masked feed links, and diagnostic error banners per ADR 0002.
  *
- * @var string $health ('healthy'|'degraded'|'error')
+ * @var string $health ('healthy'|'degraded'|'error'|'pending')
  * @var string $badgeText
  * @var string $badgeClasses
  * @var string $badgeDotClass
@@ -17,7 +17,7 @@
  *     id: string,
  *     name: string,
  *     status: ?\OceanViewFlats\Domain\Reservation\ChannelSyncStatus,
- *     health: 'healthy'|'degraded'|'error',
+ *     health: 'healthy'|'degraded'|'error'|'pending',
  *     badgeText: string,
  *     badgeClasses: string,
  *     badgeDotClass: string,
@@ -42,7 +42,7 @@
  *     errorMessage: string,
  *     blockedNightsRetained: int
  * }> $diagnostics
- * @var array{type: string, message: string}|null $syncNotice
+ * @var array{type: string, message: string, isCooldown?: bool, propertyId?: ?string}|null $syncNotice
  * @var string $noticeClasses
  * @var string $csrfToken
  */
@@ -59,7 +59,7 @@
             <div>
                 <div class="flex items-center space-x-2">
                     <h2 class="text-base font-bold text-gray-900 tracking-tight">Inbound Channel Sync</h2>
-                    <span class="text-2xs font-semibold px-2 py-0.5 bg-gray-100 text-gray-600 rounded">Airbnb iCal</span>
+                    <span class="text-2xs font-semibold px-2 py-0.5 bg-gray-100 text-gray-600 rounded">Channel Feeds</span>
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">
                     Live upstream calendar feeds imported to reserve dates, prevent double-bookings, and track external holds.
@@ -134,7 +134,20 @@
     <!-- User Action Notification Banner (Sync Feedback / Cooldown) -->
     <?php if (!empty($syncNotice)): ?>
         <div class="p-3 rounded-lg text-xs <?= $noticeClasses ?> flex items-center justify-between">
-            <span><?= htmlspecialchars($syncNotice['message'], ENT_QUOTES, 'UTF-8') ?></span>
+            <div class="flex items-center space-x-2">
+                <span><?= htmlspecialchars($syncNotice['message'], ENT_QUOTES, 'UTF-8') ?></span>
+                <?php if (!empty($syncNotice['isCooldown'])): ?>
+                    <button type="button"
+                            hx-post="/channel-sync?force=1&view=panel<?= !empty($syncNotice['propertyId']) ? '&property_id=' . urlencode($syncNotice['propertyId']) : '' ?>"
+                            hx-target="#channel-sync-panel"
+                            hx-swap="outerHTML"
+                            hx-indicator="#sync-spinner-all"
+                            class="ml-2 font-bold underline hover:opacity-80 cursor-pointer">
+                        Force Sync
+                    </button>
+                <?php endif; ?>
+            </div>
+            <button type="button" onclick="this.parentElement.remove()" class="text-gray-400 hover:text-gray-600 cursor-pointer" aria-label="Dismiss notification">&times;</button>
         </div>
     <?php endif; ?>
 
@@ -146,7 +159,7 @@
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-2">
                             <span class="text-sm font-bold text-gray-900"><?= htmlspecialchars($prop['name'], ENT_QUOTES, 'UTF-8') ?></span>
-                            <span class="text-2xs font-semibold uppercase px-2 py-0.5 bg-gray-200 text-gray-700 rounded">Unit <?= htmlspecialchars($prop['id'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="text-2xs font-semibold uppercase px-2 py-0.5 bg-gray-200 text-gray-700 rounded">Property <?= htmlspecialchars($prop['id'], ENT_QUOTES, 'UTF-8') ?></span>
                         </div>
                         <!-- Individual Unit Health Badge -->
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border <?= $prop['badgeClasses'] ?>">
@@ -190,7 +203,7 @@
                             hx-indicator="#sync-spinner-<?= htmlspecialchars((string) $prop['id'], ENT_QUOTES, 'UTF-8') ?>"
                             hx-disabled-elt="this"
                             class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-semibold rounded-lg text-gray-700 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                        <span>Sync Unit</span>
+                        <span>Sync Property</span>
                         <span id="sync-spinner-<?= htmlspecialchars((string) $prop['id'], ENT_QUOTES, 'UTF-8') ?>" class="htmx-indicator ml-1.5">
                             <svg class="animate-spin h-3.5 w-3.5 text-gray-600" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
