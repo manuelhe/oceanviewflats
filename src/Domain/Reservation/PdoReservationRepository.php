@@ -33,6 +33,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             'total_price',
             'refunded_amount',
             'source',
+            'external_confirmation_code',
+            'channel_block_uid',
             'status',
             'payment_method_id',
             'mercadopago_preference_id',
@@ -60,6 +62,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':total_price' => $reservation->totalPrice,
             ':refunded_amount' => $reservation->refundedAmount,
             ':source' => $reservation->source,
+            ':external_confirmation_code' => $reservation->externalConfirmationCode,
+            ':channel_block_uid' => $reservation->channelBlockUid,
             ':status' => $reservation->status->value,
             ':payment_method_id' => $reservation->paymentMethodId,
             ':mercadopago_preference_id' => $reservation->mercadopagoPreferenceId,
@@ -80,6 +84,8 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             'total_price',
             'refunded_amount',
             'source',
+            'external_confirmation_code',
+            'channel_block_uid',
             'status',
             'payment_method_id',
             'mercadopago_preference_id',
@@ -439,7 +445,9 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null,
             source: isset($row['source']) && $row['source'] !== '' ? (string) $row['source'] : 'web',
             notes: isset($row['notes']) ? (string) $row['notes'] : null,
-            refundedAmount: isset($row['refunded_amount']) ? (float) $row['refunded_amount'] : 0.0
+            refundedAmount: isset($row['refunded_amount']) ? (float) $row['refunded_amount'] : 0.0,
+            externalConfirmationCode: isset($row['external_confirmation_code']) && $row['external_confirmation_code'] !== '' ? (string) $row['external_confirmation_code'] : null,
+            channelBlockUid: isset($row['channel_block_uid']) && $row['channel_block_uid'] !== '' ? (string) $row['channel_block_uid'] : null
         );
     }
 }

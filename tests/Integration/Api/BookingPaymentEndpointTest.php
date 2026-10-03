@@ -65,6 +65,8 @@ final class BookingPaymentEndpointTest extends TestCase
                 payment_detail TEXT,
                 notes TEXT,
                 source TEXT DEFAULT 'web',
+                external_confirmation_code TEXT DEFAULT NULL,
+                channel_block_uid TEXT DEFAULT NULL,
                 lang TEXT,
                 registry_completed INTEGER DEFAULT 0,
                 registry_completed_at TEXT,

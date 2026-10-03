@@ -64,6 +64,8 @@ final class ReservationRepositoryTest extends TestCase
             registry_completed_at TEXT,
             door_code TEXT,
             source TEXT DEFAULT 'web',
+            external_confirmation_code TEXT DEFAULT NULL,
+            channel_block_uid TEXT DEFAULT NULL,
             notes TEXT,
             refunded_amount REAL DEFAULT 0.0,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,

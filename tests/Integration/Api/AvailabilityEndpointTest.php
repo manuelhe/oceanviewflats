@@ -84,6 +84,10 @@ $pdo->exec("CREATE TABLE reservations (
     mercadopago_payment_id TEXT,
     payment_status TEXT,
     payment_detail TEXT,
+    source TEXT DEFAULT 'web',
+    external_confirmation_code TEXT DEFAULT NULL,
+    channel_block_uid TEXT DEFAULT NULL,
+    refunded_amount REAL DEFAULT 0.0,
     lang TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP

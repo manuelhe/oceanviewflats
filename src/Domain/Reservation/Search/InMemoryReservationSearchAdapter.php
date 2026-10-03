@@ -138,12 +138,14 @@ final class InMemoryReservationSearchAdapter implements ReservationSearchInterfa
                 $email = mb_strtolower((string) ($row['guest_email'] ?? ''));
                 $phone = mb_strtolower((string) ($row['guest_phone'] ?? ''));
                 $uid = mb_strtolower((string) ($row['reservation_uid'] ?? ''));
+                $extCode = mb_strtolower((string) ($row['external_confirmation_code'] ?? ''));
 
                 if (
                     str_contains($name, $needle) === false
                     && str_contains($email, $needle) === false
                     && str_contains($phone, $needle) === false
                     && str_contains($uid, $needle) === false
+                    && str_contains($extCode, $needle) === false
                 ) {
                     return false;
                 }

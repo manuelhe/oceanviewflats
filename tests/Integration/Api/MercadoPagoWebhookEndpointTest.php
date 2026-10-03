@@ -39,6 +39,8 @@ final class MercadoPagoWebhookEndpointTest extends TestCase
                 refunded_amount REAL NOT NULL DEFAULT 0.00,
                 status TEXT NOT NULL,
                 source TEXT NOT NULL DEFAULT "web",
+                external_confirmation_code TEXT DEFAULT NULL,
+                channel_block_uid TEXT DEFAULT NULL,
                 mercadopago_preference_id TEXT DEFAULT NULL,
                 mercadopago_payment_id TEXT DEFAULT NULL,
                 payment_status TEXT DEFAULT NULL,

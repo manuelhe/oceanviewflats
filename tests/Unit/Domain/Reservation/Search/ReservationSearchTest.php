@@ -35,6 +35,8 @@ final class ReservationSearchTest extends TestCase
             total_price REAL,
             refunded_amount REAL DEFAULT 0.00,
             source TEXT DEFAULT 'web',
+            external_confirmation_code TEXT DEFAULT NULL,
+            channel_block_uid TEXT DEFAULT NULL,
             status TEXT,
             payment_method_id TEXT,
             mercadopago_preference_id TEXT,
@@ -532,5 +534,51 @@ final class ReservationSearchTest extends TestCase
         $this->assertNull($adapter->findWithAuditTrail('non_existent'));
         $this->assertNull($adapter->findGuestRegistry('non_existent'));
         $this->assertSame([], $adapter->findRefunds('non_existent'));
+    }
+
+    public function testSearchByExternalConfirmationCode(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, external_confirmation_code, channel_block_uid
+            ) VALUES (
+                'res-abnb-test-1', '1606', 'Sofia Vergara', 'sofia@example.com', '+57 300 999 8888',
+                '2026-12-01', '2026-12-05', 3000000.0, 'confirmed', 'airbnb', 'HM3XYZ1234', 'ical-vevent-999'
+            )
+        ");
+
+        $pdoAdapter = new PdoReservationSearchAdapter($pdo);
+        $result = $pdoAdapter->search(ReservationSearchCriteria::fromArray(['query' => 'HM3XYZ1234']));
+        $this->assertSame(1, $result->totalCount);
+        $this->assertSame('res-abnb-test-1', $result->items[0]['reservation_uid']);
+
+        // Case-insensitive search
+        $resultLower = $pdoAdapter->search(ReservationSearchCriteria::fromArray(['query' => 'hm3xyz1234']));
+        $this->assertSame(1, $resultLower->totalCount);
+
+        // Also test InMemoryReservationSearchAdapter
+        $inMemoryAdapter = new InMemoryReservationSearchAdapter([
+            [
+                'id' => 1,
+                'reservation_uid' => 'res-abnb-test-1',
+                'property_id' => '1606',
+                'guest_name' => 'Sofia Vergara',
+                'guest_email' => 'sofia@example.com',
+                'guest_phone' => '+57 300 999 8888',
+                'check_in' => '2026-12-01',
+                'check_out' => '2026-12-05',
+                'total_price' => 3000000.0,
+                'status' => 'confirmed',
+                'source' => 'airbnb',
+                'external_confirmation_code' => 'HM3XYZ1234',
+                'channel_block_uid' => 'ical-vevent-999'
+            ]
+        ]);
+
+        $inMemRes = $inMemoryAdapter->search(ReservationSearchCriteria::fromArray(['query' => 'hm3xyz1234']));
+        $this->assertSame(1, $inMemRes->totalCount);
+        $this->assertSame('res-abnb-test-1', $inMemRes->items[0]['reservation_uid']);
     }
 }
