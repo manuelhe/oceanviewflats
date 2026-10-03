@@ -9,9 +9,13 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\ChannelSyncResult;
 use OceanViewFlats\Domain\Reservation\ChannelSyncStatus;
 use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
+use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 
 /**
  * Administrative controller managing inbound OTA (Airbnb) iCalendar feed synchronization,
@@ -22,7 +26,9 @@ final class ChannelSyncController
     public function __construct(
         private readonly InboundChannelSyncServiceInterface $syncService,
         private readonly ViewRenderer $viewRenderer,
-        private readonly AuditLogger $auditLogger
+        private readonly AuditLogger $auditLogger,
+        private readonly ?ReservationLedgerInterface $ledger = null,
+        private readonly ?ReservationRepositoryInterface $reservationRepository = null
     ) {
     }
 
@@ -52,7 +58,10 @@ final class ChannelSyncController
     {
         $panelData = self::buildPanelViewData(
             syncService: $this->syncService,
-            csrfToken: (string) ($session['csrf_token'] ?? '')
+            csrfToken: (string) ($session['csrf_token'] ?? ''),
+            notice: null,
+            ledger: $this->ledger,
+            reservationRepository: $this->reservationRepository
         );
 
         $html = $this->viewRenderer->renderPartial('calendar_blocks/_channel_sync_panel.php', $panelData);
@@ -204,7 +213,9 @@ final class ChannelSyncController
             $panelData = self::buildPanelViewData(
                 syncService: $this->syncService,
                 csrfToken: (string) ($session['csrf_token'] ?? ''),
-                notice: $notice
+                notice: $notice,
+                ledger: $this->ledger,
+                reservationRepository: $this->reservationRepository
             );
             $html = $this->viewRenderer->renderPartial('calendar_blocks/_channel_sync_panel.php', $panelData);
         } else {
@@ -325,7 +336,9 @@ final class ChannelSyncController
     public static function buildPanelViewData(
         ?InboundChannelSyncServiceInterface $syncService,
         string $csrfToken,
-        ?array $notice = null
+        ?array $notice = null,
+        ?ReservationLedgerInterface $ledger = null,
+        ?ReservationRepositoryInterface $reservationRepository = null
     ): array {
         /** @var array<string|int, ChannelSyncStatus> $statuses */
         $statuses = $syncService !== null ? $syncService->getAllStatuses() : [];
@@ -436,6 +449,8 @@ final class ChannelSyncController
             }
         }
 
+        $detectedBlocks = self::resolveDetectedExternalBlocks($ledger, $reservationRepository, $propertyIds);
+
         return [
             'health' => $health,
             'badgeText' => $badgeText,
@@ -450,6 +465,7 @@ final class ChannelSyncController
             'syncNotice' => $notice,
             'noticeClasses' => $noticeClasses,
             'csrfToken' => $csrfToken,
+            'detectedBlocks' => $detectedBlocks,
         ];
     }
 
@@ -625,5 +641,80 @@ final class ChannelSyncController
         }
 
         return $total;
+    }
+
+    /**
+     * Resolves external platform bookings from iCal feeds and determines onboarding status.
+     *
+     * @param list<string> $propertyIds
+     * @return list<array<string, mixed>>
+     */
+    private static function resolveDetectedExternalBlocks(
+        ?ReservationLedgerInterface $ledger,
+        ?ReservationRepositoryInterface $reservationRepository,
+        array $propertyIds
+    ): array {
+        if ($ledger === null) {
+            return [];
+        }
+
+        $today = date('Y-m-d');
+        $detectedBlocks = [];
+
+        foreach ($propertyIds as $propId) {
+            $propName = match ($propId) {
+                '1606' => 'Apartment 1606',
+                '1707' => 'Apartment 1707',
+                default => "Property {$propId}",
+            };
+            $blocks = $ledger->getChannelBlocks($propId);
+            $activeReservations = $reservationRepository !== null ? $reservationRepository->findActiveByProperty($propId) : [];
+
+            foreach ($blocks as $block) {
+                if ($block->endDate <= $today) {
+                    continue;
+                }
+
+                $matchingRes = self::findMatchingAirbnbReservation($activeReservations, $block);
+
+                $startTs = strtotime($block->startDate);
+                $endTs = strtotime($block->endDate);
+                $nights = ($startTs !== false && $endTs !== false) ? (int) max(1, ($endTs - $startTs) / 86400) : 1;
+
+                $detectedBlocks[] = [
+                    'propertyId' => $propId,
+                    'propertyName' => $propName,
+                    'startDate' => $block->startDate,
+                    'endDate' => $block->endDate,
+                    'nights' => $nights,
+                    'source' => $block->source,
+                    'summary' => $block->summary,
+                    'isOnboarded' => $matchingRes !== null,
+                    'reservationUid' => $matchingRes?->reservationUid,
+                    'guestName' => $matchingRes?->guestName,
+                ];
+            }
+        }
+
+        usort($detectedBlocks, static fn(array $a, array $b): int => strcmp((string) $a['startDate'], (string) $b['startDate']));
+
+        return $detectedBlocks;
+    }
+
+    /**
+     * Finds an active Airbnb reservation matching a given channel block.
+     *
+     * @param list<Reservation> $activeReservations
+     */
+    private static function findMatchingAirbnbReservation(array $activeReservations, ChannelBlock $block): ?Reservation
+    {
+        foreach ($activeReservations as $res) {
+            if ($res->isAirbnb()) {
+                if ($block->overlaps($res->checkIn, $res->checkOut) || ($res->checkIn === $block->startDate && $res->checkOut === $block->endDate)) {
+                    return $res;
+                }
+            }
+        }
+        return null;
     }
 }

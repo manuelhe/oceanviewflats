@@ -51,6 +51,13 @@ interface ReservationLedgerInterface
     ): ?ChannelBlock;
 
     /**
+     * Retrieves all active ephemeral channel blocks for a property.
+     *
+     * @return list<ChannelBlock>
+     */
+    public function getChannelBlocks(string $propertyId): array;
+
+    /**
      * Finds the first overlapping maintenance block, or null if none.
      */
     public function findMaintenanceConflict(

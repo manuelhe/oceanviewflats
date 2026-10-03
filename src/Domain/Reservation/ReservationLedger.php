@@ -148,6 +148,11 @@ final class ReservationLedger implements ReservationLedgerInterface
         return null;
     }
 
+    public function getChannelBlocks(string $propertyId): array
+    {
+        return $this->channelBlockSource->getBlocks($propertyId);
+    }
+
     public function findMaintenanceConflict(
         string $propertyId,
         string $checkIn,

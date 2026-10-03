@@ -168,8 +168,21 @@ final class ReservationController
      */
     public function newReservation(Request $request, array &$session): Response
     {
+        $propertyId = (string) $request->getQuery('property_id', '');
+        $checkIn = (string) $request->getQuery('check_in', '');
+        $checkOut = (string) $request->getQuery('check_out', '');
+        $source = (string) $request->getQuery('source', 'manual_override');
+        $channelBlockUid = (string) $request->getQuery('channel_block_uid', '');
+        $externalConfirmationCode = (string) $request->getQuery('external_confirmation_code', '');
+
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_create_modal.php', [
             'errorMessage' => null,
+            'propertyId' => $propertyId,
+            'checkIn' => $checkIn,
+            'checkOut' => $checkOut,
+            'source' => $source,
+            'channelBlockUid' => $channelBlockUid,
+            'externalConfirmationCode' => $externalConfirmationCode,
         ]);
 
         if ($request->isHtmx()) {
@@ -206,15 +219,16 @@ final class ReservationController
             return Response::html($html);
         }
 
-        $isAvailable = $this->ledger->isAvailable($propertyId, $checkIn, $checkOut);
-        $conflictReasons = $isAvailable ? [] : $this->ledger->getConflictReasons($propertyId, $checkIn, $checkOut);
+        $absorbingSource = (strtolower($source) === 'airbnb') ? 'airbnb' : null;
+        $isAvailable = $this->ledger->isAvailable($propertyId, $checkIn, $checkOut, null, $absorbingSource);
+        $conflictReasons = $isAvailable ? [] : $this->ledger->getConflictReasons($propertyId, $checkIn, $checkOut, null, $absorbingSource);
         $quote = null;
         $defaultPrice = 0.0;
 
         if ($isAvailable) {
             try {
                 $quote = $this->quoteEngine->quote($propertyId, $checkIn, $checkOut);
-                $defaultPrice = ($source === 'owner_stay') ? 0.0 : $quote->totalCop;
+                $defaultPrice = ($source === 'owner_stay' || strtolower($source) === 'airbnb') ? 0.0 : $quote->totalCop;
             } catch (Throwable) {
                 $isAvailable = false;
                 $conflictReasons[] = 'Failed to calculate rate quote for specified dates.';
@@ -254,8 +268,20 @@ final class ReservationController
         $notes = trim((string) ($body['notes'] ?? ''));
         $preMarkRegistry = isset($body['pre_mark_registry']) && (string) $body['pre_mark_registry'] === '1';
         $sendConfirmationEmail = isset($body['send_confirmation_email']) && (string) $body['send_confirmation_email'] === '1';
+        $externalConfirmationCode = trim((string) ($body['external_confirmation_code'] ?? ''));
+        $channelBlockUid = trim((string) ($body['channel_block_uid'] ?? '')) ?: null;
 
-        $totalPrice = is_numeric($totalPriceRaw) ? (float) $totalPriceRaw : -1.0;
+        $isAirbnb = (strtolower($source) === 'airbnb');
+
+        if ($isAirbnb) {
+            $airbnbResult = $this->normalizeAirbnbInputs($externalConfirmationCode, $totalPriceRaw, $guestEmail, $guestPhone, $sendConfirmationEmail);
+            if (is_string($airbnbResult)) {
+                return $this->renderCreateError($request, $airbnbResult);
+            }
+            [$guestEmail, $guestPhone, $totalPrice] = $airbnbResult;
+        } else {
+            $totalPrice = is_numeric($totalPriceRaw) ? (float) $totalPriceRaw : -1.0;
+        }
 
         // Validation
         if (!in_array($propertyId, ['1606', '1707'], true)) {
@@ -283,13 +309,13 @@ final class ReservationController
         }
 
         // Ledger conflict check (absorbs matching external channel block if source is airbnb per ADR 0007)
-        $absorbingSource = strtolower($source) === 'airbnb' ? 'airbnb' : null;
+        $absorbingSource = $isAirbnb ? 'airbnb' : null;
         if (!$this->ledger->isAvailable($propertyId, $checkIn, $checkOut, null, $absorbingSource)) {
             return $this->renderCreateError($request, 'Selected dates conflict with an existing reservation or channel block.');
         }
 
         // Generate UID and random Door Code
-        $uid = 'res-man-' . bin2hex(random_bytes(6));
+        $uid = $isAirbnb ? ('res-abnb-' . bin2hex(random_bytes(4))) : ('res-man-' . bin2hex(random_bytes(6)));
         $doorCode = DoorCodeGenerator::generateRandom();
 
         $currentUser = $this->buildCurrentUser($session);
@@ -305,7 +331,7 @@ final class ReservationController
             checkOut: $checkOut,
             totalPrice: $totalPrice,
             status: ReservationStatus::CONFIRMED,
-            paymentMethodId: 'manual',
+            paymentMethodId: $isAirbnb ? 'external_ota' : 'manual',
             paymentStatus: 'approved',
             lang: 'es',
             createdAt: new DateTimeImmutable(),
@@ -314,6 +340,8 @@ final class ReservationController
             registryCompletedAt: $registryCompletedAt,
             doorCode: $doorCode,
             source: $source,
+            externalConfirmationCode: $isAirbnb ? $externalConfirmationCode : null,
+            channelBlockUid: $isAirbnb ? $channelBlockUid : null,
             notes: $notes !== '' ? $notes : null
         );
 
@@ -321,7 +349,7 @@ final class ReservationController
 
         // Record audit trail
         $this->auditLogger->record(
-            action: 'manual_reservation_created',
+            action: $isAirbnb ? 'airbnb_reservation_created' : 'manual_reservation_created',
             entityType: 'reservation',
             entityId: $uid,
             before: null,
@@ -860,10 +888,56 @@ final class ReservationController
         return Response::html($modalHtml, 422);
     }
 
+    /**
+     * @return array{0: string, 1: string, 2: float}|string Normalized [guestEmail, guestPhone, totalPrice] or error string
+     */
+    private function normalizeAirbnbInputs(
+        string $externalConfirmationCode,
+        mixed $totalPriceRaw,
+        string $guestEmail,
+        string $guestPhone,
+        bool $sendConfirmationEmail
+    ): array|string {
+        if ($externalConfirmationCode === '') {
+            return 'Airbnb confirmation code is required.';
+        }
+
+        if ($totalPriceRaw === null || trim((string) $totalPriceRaw) === '') {
+            $totalPrice = 0.0;
+        } else {
+            $totalPrice = is_numeric($totalPriceRaw) ? (float) $totalPriceRaw : -1.0;
+        }
+
+        if ($guestEmail === '' && !$sendConfirmationEmail) {
+            $cleanCode = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $externalConfirmationCode) ?? 'guest');
+            $guestEmail = 'airbnb-' . $cleanCode . '@guest.oceanviewflats.com';
+        }
+
+        if ($guestPhone === '') {
+            $guestPhone = 'N/A';
+        }
+
+        return [$guestEmail, $guestPhone, $totalPrice];
+    }
+
     private function renderCreateError(Request $request, string $errorMessage): Response
     {
+        $body = $request->getAllPost();
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_create_modal.php', [
             'errorMessage' => $errorMessage,
+            'propertyId' => (string) ($body['property_id'] ?? ''),
+            'checkIn' => (string) ($body['check_in'] ?? ''),
+            'checkOut' => (string) ($body['check_out'] ?? ''),
+            'source' => (string) ($body['source'] ?? 'manual_override'),
+            'channelBlockUid' => (string) ($body['channel_block_uid'] ?? ''),
+            'externalConfirmationCode' => (string) ($body['external_confirmation_code'] ?? ''),
+            'guestName' => (string) ($body['guest_name'] ?? ''),
+            'guestEmail' => (string) ($body['guest_email'] ?? ''),
+            'guestPhone' => (string) ($body['guest_phone'] ?? ''),
+            'totalPrice' => (string) ($body['total_price'] ?? ''),
+            'notes' => (string) ($body['notes'] ?? ''),
+            'preMarkRegistry' => isset($body['pre_mark_registry']),
+            'sendConfirmationEmail' => isset($body['send_confirmation_email']),
         ]);
 
         return Response::html($modalHtml, 422);

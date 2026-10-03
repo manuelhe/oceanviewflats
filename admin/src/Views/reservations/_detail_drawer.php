@@ -27,6 +27,9 @@ $mpPaymentId = (string) ($reservation['mercadopago_payment_id'] ?? '');
 $mpPrefId = (string) ($reservation['mercadopago_preference_id'] ?? '');
 $paymentStatus = (string) ($reservation['payment_status'] ?? '');
 $createdAt = (string) ($reservation['created_at'] ?? '');
+$externalConfirmationCode = (string) ($reservation['external_confirmation_code'] ?? '');
+$channelBlockUid = (string) ($reservation['channel_block_uid'] ?? '');
+$isAirbnbReservation = (strtolower((string) $source) === 'airbnb' || str_starts_with($uid, 'res-abnb-'));
 ?>
 
 <script>
@@ -41,6 +44,48 @@ window.closeReservationDrawer = window.closeReservationDrawer || function() {
     if (window.location.pathname.startsWith('/reservations/')) {
         window.history.pushState(null, '', '/reservations');
     }
+};
+
+window.switchDispatchLang = window.switchDispatchLang || function(uid, lang) {
+    var ta = document.getElementById('dispatch-snippet-' + uid);
+    var btnEs = document.getElementById('btn-lang-es-' + uid);
+    var btnEn = document.getElementById('btn-lang-en-' + uid);
+    var copyText = document.getElementById('copy-text-' + uid);
+    if (!ta) return;
+    if (lang === 'es') {
+        ta.value = ta.getAttribute('data-text-es') || '';
+        ta.setAttribute('data-current-lang', 'es');
+        if (btnEs) {
+            btnEs.className = 'px-2.5 py-1 rounded-md transition cursor-pointer bg-white text-gray-900 shadow-2xs font-bold';
+        }
+        if (btnEn) {
+            btnEn.className = 'px-2.5 py-1 rounded-md transition cursor-pointer text-gray-500 hover:text-gray-900';
+        }
+        if (copyText) copyText.innerText = 'Copy ES Message';
+    } else {
+        ta.value = ta.getAttribute('data-text-en') || '';
+        ta.setAttribute('data-current-lang', 'en');
+        if (btnEn) {
+            btnEn.className = 'px-2.5 py-1 rounded-md transition cursor-pointer bg-white text-gray-900 shadow-2xs font-bold';
+        }
+        if (btnEs) {
+            btnEs.className = 'px-2.5 py-1 rounded-md transition cursor-pointer text-gray-500 hover:text-gray-900';
+        }
+        if (copyText) copyText.innerText = 'Copy EN Message';
+    }
+};
+
+window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
+    var ta = document.getElementById('dispatch-snippet-' + uid);
+    var copyText = document.getElementById('copy-text-' + uid);
+    if (!ta) return;
+    navigator.clipboard.writeText(ta.value).then(function() {
+        if (copyText) {
+            var orig = copyText.innerText;
+            copyText.innerText = 'Copied to Clipboard!';
+            setTimeout(function() { copyText.innerText = orig; }, 2000);
+        }
+    });
 };
 </script>
 
@@ -142,6 +187,22 @@ window.closeReservationDrawer = window.closeReservationDrawer || function() {
                         <span>Source: <strong class="text-gray-700 uppercase"><?= htmlspecialchars($source, ENT_QUOTES, 'UTF-8') ?></strong></span>
                         <span>Booked: <?= htmlspecialchars($createdAt, ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
+                    <?php if ($externalConfirmationCode !== ''): ?>
+                        <div class="mt-2 text-xs bg-rose-50/70 border border-rose-200/60 rounded-lg p-2.5 flex items-center justify-between">
+                            <div>
+                                <span class="text-2xs font-bold uppercase text-rose-700 tracking-wider block">Airbnb Confirmation Code</span>
+                                <span class="font-mono font-bold text-gray-900"><?= htmlspecialchars($externalConfirmationCode, ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                            <?php if ($channelBlockUid !== ''): ?>
+                                <div class="text-right">
+                                    <span class="text-2xs font-bold uppercase text-gray-400 tracking-wider block">Channel Block</span>
+                                    <span class="font-mono text-2xs text-gray-600 truncate max-w-[150px] inline-block" title="<?= htmlspecialchars($channelBlockUid, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($channelBlockUid, ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
 
                 <!-- 3. Financial & Payment Summary -->
@@ -299,6 +360,97 @@ window.closeReservationDrawer = window.closeReservationDrawer || function() {
                         </div>
                     </div>
                 </div>
+
+                <?php if ($isAirbnbReservation): ?>
+                    <?php
+                    $guestFirstName = explode(' ', trim($guestName))[0];
+                    $registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?code=' . urlencode($uid);
+                    $guideUrl = rtrim($publicSiteUrl, '/') . '/guide/?code=' . urlencode($uid);
+                    $doorPin = $doorCode !== '' ? $doorCode : '(Generated upon completion)';
+
+                    // Stage 1 vs Stage 2 text strings
+                    $esText = $registryCompleted
+                        ? "Hola {$guestFirstName}, tu registro ha sido verificado satisfactoriamente. Tu código digital de acceso para la cerradura inteligente es: {$doorPin}. Puedes consultar la guía de llegada, red Wi-Fi y normas del apartamento en este enlace: {$guideUrl}\n\n¡Que tengas una excelente estadía en Santa Marta!"
+                        : "Hola {$guestFirstName}, ¡gracias por reservar en OceanViewFlats! Para autorizar tu ingreso en la portería del condominio en Playa Salguero y preparar tu llegada, por favor diligencia el registro obligatorio de huéspedes aquí: {$registryUrl}\n\nUna vez completado, recibirás de inmediato el código digital de la puerta y la guía completa del apartamento. ¡Quedamos muy atentos!";
+
+                    $enText = $registryCompleted
+                        ? "Hello {$guestFirstName}, your guest registration is verified! Your smart door lock access code is: {$doorPin}. You can view full arrival directions, Wi-Fi details, and apartment amenities in your guest guide here: {$guideUrl}\n\nEnjoy your stay in Santa Marta!"
+                        : "Hello {$guestFirstName}, thank you for booking OceanViewFlats! To ensure security clearance at the Playa Salguero condominium reception and prepare your check-in, please complete our mandatory guest registration here: {$registryUrl}\n\nOnce completed, your temporal door code PIN and apartment arrival guide will unlock immediately. We look forward to hosting you!";
+                    ?>
+                    <!-- 4.1 Airbnb Chat Dispatch Card (ADR 0007 / Variant A) -->
+                    <div class="space-y-3 pt-6" id="airbnb-chat-dispatch-section">
+                        <div class="bg-white rounded-xl border border-rose-200 shadow-2xs overflow-hidden">
+                            <!-- Card Header -->
+                            <div class="p-4 bg-rose-50/50 border-b border-rose-100 flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-8 h-8 rounded-lg bg-rose-500/10 text-[#FF385C] flex items-center justify-center font-bold">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center space-x-2">
+                                            <h3 class="text-xs font-bold uppercase tracking-wider text-gray-900">Airbnb Chat Dispatch</h3>
+                                            <?php if ($registryCompleted): ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-bold bg-emerald-100 text-emerald-800">
+                                                    Stage 2: Access Dispatched
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-bold bg-amber-100 text-amber-800">
+                                                    Stage 1: Registry Required
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <p class="text-2xs text-gray-500">One-click copyable message for the Airbnb guest messenger inbox.</p>
+                                    </div>
+                                </div>
+
+                                <!-- Language Segmented Pill Toggle -->
+                                <div class="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-2xs font-semibold">
+                                    <button type="button"
+                                            id="btn-lang-es-<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>"
+                                            onclick="switchDispatchLang('<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>', 'es')"
+                                            class="px-2.5 py-1 rounded-md transition cursor-pointer bg-white text-gray-900 shadow-2xs font-bold">
+                                        ES
+                                    </button>
+                                    <button type="button"
+                                            id="btn-lang-en-<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>"
+                                            onclick="switchDispatchLang('<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>', 'en')"
+                                            class="px-2.5 py-1 rounded-md transition cursor-pointer text-gray-500 hover:text-gray-900">
+                                        EN
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Pre-formatted Message Snippet Body -->
+                            <div class="p-4 space-y-3">
+                                <textarea id="dispatch-snippet-<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>"
+                                          readonly
+                                          rows="6"
+                                          data-text-es="<?= htmlspecialchars($esText, ENT_QUOTES, 'UTF-8') ?>"
+                                          data-text-en="<?= htmlspecialchars($enText, ENT_QUOTES, 'UTF-8') ?>"
+                                          data-current-lang="es"
+                                          class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs font-mono text-gray-800 whitespace-pre-wrap select-all leading-relaxed focus:outline-none focus:ring-1 focus:ring-rose-400"><?= htmlspecialchars($esText, ENT_QUOTES, 'UTF-8') ?></textarea>
+
+                                <div class="flex items-center justify-between text-2xs">
+                                    <span class="text-gray-500 flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                        <?php if ($registryCompleted): ?>
+                                            ADR 0001: Registry complete. Door PIN and Guide are unlocked.
+                                        <?php else: ?>
+                                            ADR 0001: Door PIN and Guide are locked until registry is completed.
+                                        <?php endif; ?>
+                                    </span>
+                                    <button type="button"
+                                            id="btn-copy-dispatch-<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>"
+                                            onclick="copyDispatchSnippet('<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>')"
+                                            class="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-[#FF385C] hover:bg-[#E00B41] text-white font-bold shadow-2xs transition cursor-pointer">
+                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                                        <span id="copy-text-<?= htmlspecialchars($uid, ENT_QUOTES, 'UTF-8') ?>">Copy ES Message</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <!-- 5. Audit Trail Timeline -->
                 <div class="space-y-4 pt-6">

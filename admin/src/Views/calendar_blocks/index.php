@@ -106,3 +106,6 @@
 
 <!-- Modal Container for HTMX Modal Injection -->
 <div id="modal-container"></div>
+
+<!-- Reservation Detail Drawer Container -->
+<div id="drawer-container"></div>
