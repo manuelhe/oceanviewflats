@@ -41,16 +41,20 @@ final class RateController
         $propertyId = $this->resolvePropertyId((string) $request->getQuery('property_id', '1606'));
         $year = $this->resolveYear((string) $request->getQuery('year', ''));
 
-        $contentHtml = $this->renderContentHtml($propertyId, $year, session: $session);
+        $viewContainerHtml = $this->renderViewContainerHtml($propertyId, $year, session: $session);
 
         if ($request->isHtmx()) {
-            return Response::html($contentHtml, 200);
+            $headerActionsHtml = $this->renderHeaderActionsHtml($propertyId, $year, oob: true, session: $session);
+            return Response::html($viewContainerHtml . "\n" . $headerActionsHtml, 200);
         }
+
+        $headerActionsHtml = $this->renderHeaderActionsHtml($propertyId, $year, oob: false, session: $session);
 
         $fullHtml = $this->viewRenderer->render('rates/index.php', [
             'propertyId' => $propertyId,
             'year' => $year,
-            'contentHtml' => $contentHtml,
+            'headerActionsHtml' => $headerActionsHtml,
+            'viewContainerHtml' => $viewContainerHtml,
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'currentUser' => $this->buildCurrentUser($session),
             'currentRoute' => '/rates',
@@ -181,15 +185,22 @@ final class RateController
         );
 
         // 5. Response: close modal and emit trigger for HTMX update
-        $contentHtml = $this->renderContentHtml(
+        $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
             flashMessage: "Seasonal tier '{$seasonName}' created successfully.",
             flashType: 'success',
+            oob: true,
+            session: $session
+        );
+        $headerActionsHtml = $this->renderHeaderActionsHtml(
+            $propertyId,
+            $year,
+            oob: true,
             session: $session
         );
 
-        $responseHtml = '<div id="rates-content" hx-swap-oob="true">' . $contentHtml . '</div>';
+        $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml;
 
         return new Response(
             statusCode: 200,
@@ -333,15 +344,22 @@ final class RateController
         );
 
         // 5. Response: close modal and emit trigger for HTMX update
-        $contentHtml = $this->renderContentHtml(
+        $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
             flashMessage: "Seasonal tier '{$seasonName}' updated successfully.",
             flashType: 'success',
+            oob: true,
+            session: $session
+        );
+        $headerActionsHtml = $this->renderHeaderActionsHtml(
+            $propertyId,
+            $year,
+            oob: true,
             session: $session
         );
 
-        $responseHtml = '<div id="rates-content" hx-swap-oob="true">' . $contentHtml . '</div>';
+        $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml;
 
         return new Response(
             statusCode: 200,
@@ -387,12 +405,19 @@ final class RateController
         // 2. Delete Record
         $this->rateRepository->delete($id);
 
-        // 3. Re-render Content
-        $contentHtml = $this->renderContentHtml(
+        // 3. Re-render View Container & Header Actions
+        $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
             flashMessage: "Seasonal tier '{$existing['season_name']}' deleted successfully. Dates will use property base pricing.",
             flashType: 'success',
+            oob: false,
+            session: $session
+        );
+        $headerActionsHtml = $this->renderHeaderActionsHtml(
+            $propertyId,
+            $year,
+            oob: true,
             session: $session
         );
 
@@ -402,7 +427,7 @@ final class RateController
                 'Content-Type' => 'text/html; charset=UTF-8',
                 'HX-Trigger' => 'rateUpdated',
             ],
-            body: $contentHtml
+            body: $viewContainerHtml . "\n" . $headerActionsHtml
         );
     }
 
@@ -449,11 +474,18 @@ final class RateController
             $flashType = 'error';
         }
 
-        $contentHtml = $this->renderContentHtml(
+        $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
             flashMessage: $flashMessage,
             flashType: $flashType,
+            oob: false,
+            session: $session
+        );
+        $headerActionsHtml = $this->renderHeaderActionsHtml(
+            $propertyId,
+            $year,
+            oob: true,
             session: $session
         );
 
@@ -463,7 +495,7 @@ final class RateController
                 'Content-Type' => 'text/html; charset=UTF-8',
                 'HX-Trigger' => 'rateUpdated',
             ],
-            body: $contentHtml
+            body: $viewContainerHtml . "\n" . $headerActionsHtml
         );
     }
 
@@ -559,6 +591,54 @@ final class RateController
             ],
             body: $modalHtml
         );
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     */
+    private function renderHeaderActionsHtml(
+        string $propertyId,
+        int $year,
+        bool $oob = false,
+        array $session = []
+    ): string {
+        $csrfToken = (string) ($session['csrf_token'] ?? '');
+
+        return $this->viewRenderer->renderPartial('rates/_header_actions.php', [
+            'propertyId' => $propertyId,
+            'year' => $year,
+            'csrfToken' => $csrfToken,
+            'oob' => $oob,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     */
+    private function renderViewContainerHtml(
+        string $propertyId,
+        int $year,
+        ?string $flashMessage = null,
+        ?string $flashType = null,
+        bool $oob = false,
+        array $session = []
+    ): string {
+        $contentHtml = $this->renderContentHtml(
+            $propertyId,
+            $year,
+            flashMessage: $flashMessage,
+            flashType: $flashType,
+            session: $session
+        );
+        $csrfToken = (string) ($session['csrf_token'] ?? '');
+
+        return $this->viewRenderer->renderPartial('rates/_rates_view.php', [
+            'propertyId' => $propertyId,
+            'year' => $year,
+            'contentHtml' => $contentHtml,
+            'csrfToken' => $csrfToken,
+            'oob' => $oob,
+        ]);
     }
 
     /**

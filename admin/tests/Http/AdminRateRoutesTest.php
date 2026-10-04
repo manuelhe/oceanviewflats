@@ -69,7 +69,59 @@ final class AdminRateRoutesTest extends TestCase
 
         $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('Seasonal Pricing & Rates', $response->getBody());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Seasonal Pricing & Rates', $body);
+        $this->assertStringContainsString('Property:', $body);
+        $this->assertStringNotContainsString('Unit:', $body);
+        $this->assertStringContainsString('id="rates-view-container"', $body);
+        $this->assertStringContainsString('id="rates-header-actions"', $body);
+
+        // Active/inactive property and year pills
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-indigo-600 text-white shadow-2xs[^"]*"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*class="[^"]*bg-gray-100 text-gray-700 hover:bg-gray-200[^"]*"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-gray-900 text-white font-semibold[^"]*"[^>]*>\s*2026\s*<\/a>/s', $body);
+    }
+
+    public function testHtmxGetRatesReturnsViewContainerAndOobHeaderActions(): void
+    {
+        $request = new Request(
+            'GET',
+            '/rates',
+            query: ['property_id' => '1707', 'year' => '2027'],
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+        $session = [
+            'admin_user_id' => 1,
+            'admin_user_name' => 'Manuel Admin',
+            'admin_user_email' => 'admin@oceanviewflats.com',
+            'admin_user_role' => 'admin',
+            'csrf_token' => 'valid-csrf-token',
+        ];
+
+        $response = $this->app->handle($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Must not contain full layout shell
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $body);
+
+        // Must contain rates-view-container and OOB rates-header-actions
+        $this->assertStringContainsString('id="rates-view-container"', $body);
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $body);
+
+        // Active pills: 1707 and 2027
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-indigo-600 text-white shadow-2xs[^"]*"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*class="[^"]*bg-gray-100 text-gray-700 hover:bg-gray-200[^"]*"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-gray-900 text-white font-semibold[^"]*"[^>]*>\s*2027\s*<\/a>/s', $body);
+
+        // Sibling state preservation
+        $this->assertStringContainsString('href="/rates?property_id=1606&year=2027"', $body);
+        $this->assertStringContainsString('href="/rates?property_id=1707&year=2026"', $body);
+
+        // Header actions sync
+        $this->assertStringContainsString('/rates/new?property_id=1707&year=2027', $body);
+        $this->assertStringContainsString('"property_id": "1707", "year": 2027', $body);
     }
 
     public function testPostRatesFailsWithoutCsrf(): void
@@ -119,6 +171,8 @@ final class AdminRateRoutesTest extends TestCase
         $resCreate = $this->app->handle($reqCreate, $session);
         $this->assertSame(200, $resCreate->getStatusCode());
         $this->assertSame('rateUpdated', $resCreate->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container" hx-swap-oob="outerHTML"', $resCreate->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $resCreate->getBody());
 
         $rates = $this->rateRepo->getRatesForProperty('1606', 2026);
         $this->assertCount(1, $rates);
@@ -144,6 +198,8 @@ final class AdminRateRoutesTest extends TestCase
         $resUpdate = $this->app->handle($reqUpdate, $session);
         $this->assertSame(200, $resUpdate->getStatusCode());
         $this->assertSame('rateUpdated', $resUpdate->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container" hx-swap-oob="outerHTML"', $resUpdate->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $resUpdate->getBody());
 
         $updatedTier = $this->rateRepo->findRateById($tierId);
         $this->assertNotNull($updatedTier);
@@ -152,12 +208,14 @@ final class AdminRateRoutesTest extends TestCase
         // 5. DELETE /rates/{id} with CSRF header
         $reqDelete = new Request(
             'DELETE',
-            "/rates/{$tierId}",
+            "/rates/{$tierId}?property_id=1606&year=2026",
             server: ['HTTP_X_CSRF_TOKEN' => $csrf]
         );
         $resDelete = $this->app->handle($reqDelete, $session);
         $this->assertSame(200, $resDelete->getStatusCode());
         $this->assertSame('rateUpdated', $resDelete->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container"', $resDelete->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $resDelete->getBody());
 
         $this->assertNull($this->rateRepo->findRateById($tierId));
     }
@@ -182,6 +240,8 @@ final class AdminRateRoutesTest extends TestCase
         $resSeed = $this->app->handle($reqSeed, $session);
         $this->assertSame(200, $resSeed->getStatusCode());
         $this->assertSame('rateUpdated', $resSeed->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container"', $resSeed->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $resSeed->getBody());
         $this->assertStringContainsString('Successfully imported 2 seasonal rate tiers', $resSeed->getBody());
     }
 }

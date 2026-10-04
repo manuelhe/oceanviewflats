@@ -45,7 +45,7 @@
             </p>
             <div class="pt-2 flex items-center justify-center space-x-3">
                 <button type="button"
-                        hx-get="/rates/new?property_id=<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>"
+                        hx-get="/rates/new?property_id=<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>&year=<?= $year ?>"
                         hx-target="#modal-container"
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer">
                     + Add New Tier
@@ -53,7 +53,8 @@
                 <button type="button"
                         hx-post="/rates/seed-from-csv"
                         hx-vals='{"property_id": "<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>", "year": <?= $year ?>, "csrf_token": "<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>"}'
-                        hx-target="#rates-content"
+                        hx-target="#rates-view-container"
+                        hx-swap="outerHTML"
                         hx-confirm="Seed default seasonal pricing from prices.csv? Non-overlapping tiers will be imported."
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition cursor-pointer">
                     Seed from prices.csv
@@ -116,7 +117,8 @@
                                 <button type="button"
                                         hx-delete="/rates/<?= $rateId ?>?property_id=<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>&year=<?= $year ?>"
                                         hx-headers='{"X-CSRF-Token": "<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>"}'
-                                        hx-target="#rates-content"
+                                        hx-target="#rates-view-container"
+                                        hx-swap="outerHTML"
                                         hx-confirm="Are you sure you want to delete seasonal rate tier '<?= htmlspecialchars((string) $tier['season_name'], ENT_QUOTES, 'UTF-8') ?>'? Dates will revert to property base pricing."
                                         class="inline-flex items-center px-2.5 py-1 text-xs font-medium text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded transition cursor-pointer">
                                     Delete
