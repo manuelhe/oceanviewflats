@@ -12,6 +12,7 @@ use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlock;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 
 /**
  * Administrative controller for maintenance blocks and calendar holds.
@@ -25,7 +26,8 @@ final class CalendarBlockController
         private readonly ReservationLedgerInterface $ledger,
         private readonly ViewRenderer $viewRenderer,
         private readonly AuditLogger $auditLogger,
-        private readonly ?InboundChannelSyncServiceInterface $syncService = null
+        private readonly ?InboundChannelSyncServiceInterface $syncService = null,
+        private readonly ?ReservationRepositoryInterface $reservationRepository = null
     ) {
     }
 
@@ -55,7 +57,10 @@ final class CalendarBlockController
 
         $panelData = ChannelSyncController::buildPanelViewData(
             syncService: $this->syncService,
-            csrfToken: $csrfToken
+            csrfToken: $csrfToken,
+            notice: null,
+            ledger: $this->ledger,
+            reservationRepository: $this->reservationRepository
         );
 
         $fullHtml = $this->viewRenderer->render('calendar_blocks/index.php', [

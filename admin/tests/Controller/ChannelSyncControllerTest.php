@@ -11,9 +11,12 @@ use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Tests\Support\AdminDatabaseTestHelper;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\ChannelSyncResult;
 use OceanViewFlats\Domain\Reservation\ChannelSyncStatus;
 use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -476,6 +479,55 @@ final class ChannelSyncControllerTest extends TestCase
 
         $this->assertStringContainsString('id="channel-sync-panel"', $body);
         $this->assertStringNotContainsString('id="channel-card-container"', $body);
+    }
+
+    public function testPanelRendersDetectedExternalBookingsWithOnboardActionsAndBadges(): void
+    {
+        $status1606 = new ChannelSyncStatus(
+            propertyId: '1606',
+            status: ChannelSyncStatus::STATUS_HEALTHY,
+            lastSyncedAt: date('c'),
+            lastAttemptedAt: date('c'),
+            httpCode: 200,
+            blockedNightsCount: 4,
+            errorMessage: null
+        );
+
+        $fakeService = new FakeInboundChannelSyncService(['1606' => $status1606]);
+
+        /** @var \PHPUnit\Framework\MockObject\MockObject&ReservationLedgerInterface $ledger */
+        $ledger = $this->createMock(ReservationLedgerInterface::class);
+        $ledger->method('getChannelBlocks')
+            ->willReturnCallback(function (string $propertyId) {
+                if ($propertyId === '1606') {
+                    return [
+                        new ChannelBlock('1606', '2026-11-01', '2026-11-05', 'airbnb', 'Airbnb (Not available)')
+                    ];
+                }
+                return [];
+            });
+
+        $repo = new PdoReservationRepository($this->pdo);
+
+        $controller = new ChannelSyncController(
+            syncService: $fakeService,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $ledger,
+            reservationRepository: $repo
+        );
+
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'token_xyz'];
+        $request = new Request('GET', '/channel-sync/panel');
+
+        $response = $controller->panel($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Detected External Platform Bookings (Airbnb)', $body);
+        $this->assertStringContainsString('Onboard Guest', $body);
+        $this->assertStringContainsString('2026-11-01 &rarr; 2026-11-05', $body);
+        $this->assertStringContainsString('/reservations/new?property_id=1606&check_in=2026-11-01&check_out=2026-11-05&source=airbnb', $body);
     }
 }
 

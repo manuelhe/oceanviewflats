@@ -1,7 +1,24 @@
 <?php
 /**
  * @var string|null $errorMessage
+ * @var string|null $propertyId
+ * @var string|null $checkIn
+ * @var string|null $checkOut
+ * @var string|null $source
+ * @var string|null $channelBlockUid
+ * @var string|null $externalConfirmationCode
+ * @var string|null $guestName
+ * @var string|null $guestEmail
+ * @var string|null $guestPhone
+ * @var string|null $totalPrice
+ * @var string|null $notes
+ * @var bool|null $preMarkRegistry
+ * @var bool|null $sendConfirmationEmail
  */
+$propIdVal = $propertyId ?? '1606';
+$sourceVal = $source ?? 'manual_override';
+$isAirbnb = (strtolower($sourceVal) === 'airbnb');
+$sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
 ?>
 
 <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -16,17 +33,21 @@
             <!-- Modal Header -->
             <div class="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                        </svg>
+                    <div class="w-8 h-8 rounded-lg <?= $isAirbnb ? 'bg-rose-100 text-[#FF385C]' : 'bg-indigo-100 text-indigo-700' ?> flex items-center justify-center">
+                        <?php if ($isAirbnb): ?>
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+                        <?php else: ?>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        <?php endif; ?>
                     </div>
                     <div>
                         <h3 class="text-base font-bold text-gray-900" id="modal-title">
-                            Create Manual Reservation
+                            <?= $isAirbnb ? 'Onboard Airbnb Reservation' : 'Create Manual Reservation' ?>
                         </h3>
                         <p class="text-xs text-gray-500">
-                            Book direct stays, bank wires, or owner occupancies with payment gateway bypass.
+                            <?= $isAirbnb ? 'Convert external Airbnb channel booking into first-class reservation & dispatch guides.' : 'Book direct stays, bank wires, or owner occupancies with payment gateway bypass.' ?>
                         </p>
                     </div>
                 </div>
@@ -68,8 +89,8 @@
                                 hx-target="#quote-preview-container"
                                 hx-include="#create-reservation-form"
                                 class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="1606">Oceanview Deluxe 1606 (16th Fl)</option>
-                            <option value="1707">Oceanview Grand 1707 (17th Fl)</option>
+                            <option value="1606" <?= $propIdVal === '1606' ? 'selected' : '' ?>>Oceanview Deluxe 1606 (16th Fl)</option>
+                            <option value="1707" <?= $propIdVal === '1707' ? 'selected' : '' ?>>Oceanview Grand 1707 (17th Fl)</option>
                         </select>
                     </div>
 
@@ -80,16 +101,61 @@
                         <select name="source"
                                 id="create-source"
                                 required
+                                onchange="var ab = document.getElementById('airbnb-fields-container'); if(this.value === 'airbnb') { ab.classList.remove('hidden'); } else { ab.classList.add('hidden'); }"
                                 hx-post="/reservations/quote-preview"
                                 hx-trigger="change"
                                 hx-target="#quote-preview-container"
                                 hx-include="#create-reservation-form"
                                 class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="bank_transfer">Direct Bank Transfer / Wire</option>
-                            <option value="cash">Cash / In-Person</option>
-                            <option value="owner_stay">Owner Occupancy ($0.00)</option>
-                            <option value="manual_override">Administrative Manual Override</option>
+                            <option value="airbnb" <?= $isAirbnb ? 'selected' : '' ?>>Airbnb (External Booking)</option>
+                            <option value="bank_transfer" <?= $sourceVal === 'bank_transfer' ? 'selected' : '' ?>>Direct Bank Transfer / Wire</option>
+                            <option value="cash" <?= $sourceVal === 'cash' ? 'selected' : '' ?>>Cash / In-Person</option>
+                            <option value="owner_stay" <?= $sourceVal === 'owner_stay' ? 'selected' : '' ?>>Owner Occupancy ($0.00)</option>
+                            <option value="manual_override" <?= $sourceVal === 'manual_override' ? 'selected' : '' ?>>Administrative Manual Override</option>
                         </select>
+                    </div>
+                </div>
+
+                <!-- Airbnb Required Fields Container (ADR 0007 / Variant A) -->
+                <div id="airbnb-fields-container" class="<?= $isAirbnb ? '' : 'hidden' ?> bg-rose-50/70 border border-rose-100 rounded-xl p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-rose-900 flex items-center">
+                            <svg class="w-4 h-4 mr-1 text-[#FF385C]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+                            Airbnb Reservation Details
+                        </span>
+                        <span class="text-[10px] text-rose-600 bg-rose-100/70 px-2 py-0.5 rounded font-medium">ADR 0007 External Sync</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label for="create-airbnb-code" class="block text-2xs font-bold uppercase tracking-wider text-rose-800 mb-1">
+                                Airbnb Confirmation Code *
+                            </label>
+                            <input type="text"
+                                   name="external_confirmation_code"
+                                   id="create-airbnb-code"
+                                   value="<?= htmlspecialchars((string) ($externalConfirmationCode ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                   placeholder="e.g. HM4XYZ1234"
+                                   class="w-full text-xs font-mono uppercase bg-white border border-rose-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#FF385C]">
+                            <p class="text-[10px] text-gray-500 mt-0.5">Found in your Airbnb Host Inbox / reservation details.</p>
+                        </div>
+
+                        <div>
+                            <label for="create-channel-block-uid" class="block text-2xs font-bold uppercase tracking-wider text-rose-800 mb-1">
+                                Linked Channel Block UID
+                            </label>
+                            <input type="text"
+                                   name="channel_block_uid"
+                                   id="create-channel-block-uid"
+                                   value="<?= htmlspecialchars((string) ($channelBlockUid ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                   placeholder="Optional or auto-detected"
+                                   class="w-full text-xs font-mono bg-white border border-rose-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#FF385C]">
+                            <p class="text-[10px] text-gray-500 mt-0.5">Absorbs matching iCal block from external feed.</p>
+                        </div>
+                    </div>
+                    <div class="text-[11px] text-rose-800/80 bg-rose-100/50 p-2 rounded-lg flex items-start">
+                        <svg class="w-3.5 h-3.5 mr-1.5 text-rose-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>
+                        <span>Host Payout in COP can be recorded below (defaults to $0 COP if pending settlement). Primary guest dispatch will be generated in Airbnb chat format after creation.</span>
                     </div>
                 </div>
 
@@ -103,8 +169,9 @@
                                name="check_in"
                                id="create-check-in"
                                required
+                               value="<?= htmlspecialchars((string) ($checkIn ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                hx-post="/reservations/quote-preview"
-                               hx-trigger="change"
+                               hx-trigger="change, load"
                                hx-target="#quote-preview-container"
                                hx-include="#create-reservation-form"
                                class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -118,6 +185,7 @@
                                name="check_out"
                                id="create-check-out"
                                required
+                               value="<?= htmlspecialchars((string) ($checkOut ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                hx-post="/reservations/quote-preview"
                                hx-trigger="change"
                                hx-target="#quote-preview-container"
@@ -131,13 +199,13 @@
                     <p class="text-[11px] text-gray-400 italic">Select property and dates above to check live availability and rate quote.</p>
                 </div>
 
-                <!-- Total Price (Editable Override) -->
+                <!-- Total Price (Editable Override / Host Payout) -->
                 <div>
                     <div class="flex justify-between items-center mb-1">
                         <label for="manual-total-price" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                            Total Price (COP) *
+                            Total Price / Host Payout (COP)
                         </label>
-                        <span class="text-[10px] text-gray-400">Pre-calculated via QuoteEngine, editable</span>
+                        <span class="text-[10px] text-gray-400">Pre-calculated via QuoteEngine, editable (defaults to $0 COP for Airbnb)</span>
                     </div>
                     <div class="relative rounded-md shadow-2xs">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 text-xs font-bold">
@@ -148,7 +216,7 @@
                                min="0"
                                name="total_price"
                                id="manual-total-price"
-                               required
+                               value="<?= htmlspecialchars((string) ($totalPrice ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                placeholder="0"
                                oninput="this.dataset.autoFilled = 'false';"
                                class="w-full pl-7 pr-16 py-2 text-xs bg-gray-50 border border-gray-300 rounded-lg text-gray-900 font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -168,26 +236,31 @@
                                    name="guest_name"
                                    id="create-guest-name"
                                    required
+                                   value="<?= htmlspecialchars((string) ($guestName ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="e.g. Maria Gonzalez"
                                    class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
 
                         <div class="sm:col-span-1">
-                            <label for="create-guest-email" class="block text-xs text-gray-600 mb-1 font-medium">Email Address *</label>
+                            <label for="create-guest-email" class="block text-xs text-gray-600 mb-1 font-medium">
+                                Email Address <span class="text-gray-400 font-normal">(Optional for Airbnb)</span>
+                            </label>
                             <input type="email"
                                    name="guest_email"
                                    id="create-guest-email"
-                                   required
+                                   value="<?= htmlspecialchars((string) ($guestEmail ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="guest@example.com"
                                    class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
 
                         <div class="sm:col-span-1">
-                            <label for="create-guest-phone" class="block text-xs text-gray-600 mb-1 font-medium">Phone Number *</label>
+                            <label for="create-guest-phone" class="block text-xs text-gray-600 mb-1 font-medium">
+                                Phone Number <span class="text-gray-400 font-normal">(Optional for Airbnb)</span>
+                            </label>
                             <input type="tel"
                                    name="guest_phone"
                                    id="create-guest-phone"
-                                   required
+                                   value="<?= htmlspecialchars((string) ($guestPhone ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="+57 300 123 4567"
                                    class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         </div>
@@ -200,8 +273,8 @@
                     <textarea name="notes"
                               id="create-notes"
                               rows="2"
-                              placeholder="Wire reference number, reason for manual override, or guest requests..."
-                              class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                              placeholder="Airbnb thread link, special guest arrival notes, or instructions..."
+                              class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg p-2.5 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"><?= htmlspecialchars((string) ($notes ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
                 </div>
 
                 <!-- Operational Toggles -->
@@ -210,10 +283,11 @@
                         <input type="checkbox"
                                name="pre_mark_registry"
                                value="1"
+                               <?= !empty($preMarkRegistry) ? 'checked' : '' ?>
                                class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300">
                         <div class="text-xs">
-                            <span class="font-medium text-gray-900">Pre-mark Guest Registry as completed</span>
-                            <p class="text-[11px] text-gray-500">Check this if identity documents were already physically verified out-of-band.</p>
+                            <span class="font-medium text-gray-900">Pre-mark Guest Registry as completed (ADR 0001)</span>
+                            <p class="text-[11px] text-gray-500">Check only if guest identity was physically verified. Generates Stage 2 Access Dispatch immediately.</p>
                         </div>
                     </label>
 
@@ -221,11 +295,11 @@
                         <input type="checkbox"
                                name="send_confirmation_email"
                                value="1"
-                               checked
+                               <?= $sendEmailVal ? 'checked' : '' ?>
                                class="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4 border-gray-300">
                         <div class="text-xs">
                             <span class="font-medium text-gray-900">Send confirmation email to guest</span>
-                            <p class="text-[11px] text-gray-500">Dispatches localized confirmation email with direct link to online Guest Registry.</p>
+                            <p class="text-[11px] text-gray-500">Dispatches localized confirmation email. (For Airbnb, primary dispatch is via Airbnb messenger).</p>
                         </div>
                     </label>
                 </div>
@@ -238,14 +312,14 @@
                         Cancel
                     </button>
                     <button type="submit"
-                            class="px-5 py-2 border border-transparent rounded-lg shadow-2xs text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer flex items-center">
+                            class="px-5 py-2 border border-transparent rounded-lg shadow-2xs text-xs font-semibold text-white <?= $isAirbnb ? 'bg-[#FF385C] hover:bg-[#E00B41]' : 'bg-indigo-600 hover:bg-indigo-700' ?> transition cursor-pointer flex items-center">
                         <span class="htmx-indicator mr-2 hidden">
                             <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                         </span>
-                        Create Reservation
+                        <?= $isAirbnb ? 'Onboard & Generate Dispatch' : 'Create Reservation' ?>
                     </button>
                 </div>
 

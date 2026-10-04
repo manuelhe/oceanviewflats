@@ -42,7 +42,9 @@ final class Reservation
         public readonly ?string $doorCode = null,
         public readonly string $source = 'web',
         public readonly ?string $notes = null,
-        public readonly float $refundedAmount = 0.0
+        public readonly float $refundedAmount = 0.0,
+        public readonly ?string $externalConfirmationCode = null,
+        public readonly ?string $channelBlockUid = null
     ) {
         if ($this->reservationUid === '') {
             throw new InvalidArgumentException('Reservation UID cannot be empty');
@@ -84,7 +86,9 @@ final class Reservation
         ?string $doorCode = null,
         string $source = 'web',
         ?string $notes = null,
-        float $refundedAmount = 0.0
+        float $refundedAmount = 0.0,
+        ?string $externalConfirmationCode = null,
+        ?string $channelBlockUid = null
     ): self {
         return new self(
             reservationUid: $reservationUid,
@@ -110,7 +114,9 @@ final class Reservation
             doorCode: $doorCode,
             source: $source,
             notes: $notes,
-            refundedAmount: $refundedAmount
+            refundedAmount: $refundedAmount,
+            externalConfirmationCode: $externalConfirmationCode,
+            channelBlockUid: $channelBlockUid
         );
     }
 
@@ -193,7 +199,13 @@ final class Reservation
                 : null,
             source: (string) ($data['source'] ?? 'web'),
             notes: isset($data['notes']) ? (string) $data['notes'] : null,
-            refundedAmount: (float) ($data['refunded_amount'] ?? $data['refundedAmount'] ?? 0.0)
+            refundedAmount: (float) ($data['refunded_amount'] ?? $data['refundedAmount'] ?? 0.0),
+            externalConfirmationCode: isset($data['external_confirmation_code']) || isset($data['externalConfirmationCode'])
+                ? (string) ($data['external_confirmation_code'] ?? $data['externalConfirmationCode'])
+                : null,
+            channelBlockUid: isset($data['channel_block_uid']) || isset($data['channelBlockUid'])
+                ? (string) ($data['channel_block_uid'] ?? $data['channelBlockUid'])
+                : null
         );
     }
 
@@ -239,6 +251,22 @@ final class Reservation
     public function isVoucherHold(): bool
     {
         return $this->paymentMethodId !== null && strtolower($this->paymentMethodId) === 'efecty';
+    }
+
+    /**
+     * Identifies if this reservation originated from an external OTA platform (ADR 0007).
+     */
+    public function isExternal(): bool
+    {
+        return strtolower($this->source) === 'airbnb';
+    }
+
+    /**
+     * Identifies if this reservation specifically originated from Airbnb.
+     */
+    public function isAirbnb(): bool
+    {
+        return strtolower($this->source) === 'airbnb';
     }
 
     /**
@@ -302,7 +330,9 @@ final class Reservation
             doorCode: $this->doorCode,
             source: $this->source,
             notes: $this->notes,
-            refundedAmount: $this->refundedAmount
+            refundedAmount: $this->refundedAmount,
+            externalConfirmationCode: $this->externalConfirmationCode,
+            channelBlockUid: $this->channelBlockUid
         );
     }
 
@@ -337,7 +367,9 @@ final class Reservation
             doorCode: $doorCode ?? $this->doorCode,
             source: $this->source,
             notes: $this->notes,
-            refundedAmount: $this->refundedAmount
+            refundedAmount: $this->refundedAmount,
+            externalConfirmationCode: $this->externalConfirmationCode,
+            channelBlockUid: $this->channelBlockUid
         );
     }
 
@@ -370,7 +402,9 @@ final class Reservation
             doorCode: $doorCode,
             source: $this->source,
             notes: $this->notes,
-            refundedAmount: $this->refundedAmount
+            refundedAmount: $this->refundedAmount,
+            externalConfirmationCode: $this->externalConfirmationCode,
+            channelBlockUid: $this->channelBlockUid
         );
     }
 
@@ -409,7 +443,9 @@ final class Reservation
             doorCode: $this->doorCode,
             source: $this->source,
             notes: $notes ?? $this->notes,
-            refundedAmount: $newRefundedAmount
+            refundedAmount: $newRefundedAmount,
+            externalConfirmationCode: $this->externalConfirmationCode,
+            channelBlockUid: $this->channelBlockUid
         );
     }
 
@@ -442,7 +478,9 @@ final class Reservation
             doorCode: $this->doorCode,
             source: $this->source,
             notes: $notes,
-            refundedAmount: $this->refundedAmount
+            refundedAmount: $this->refundedAmount,
+            externalConfirmationCode: $this->externalConfirmationCode,
+            channelBlockUid: $this->channelBlockUid
         );
     }
 
@@ -474,6 +512,8 @@ final class Reservation
             'registry_completed_at' => $this->registryCompletedAt?->format('Y-m-d H:i:s'),
             'door_code' => $this->doorCode,
             'notes' => $this->notes,
+            'external_confirmation_code' => $this->externalConfirmationCode,
+            'channel_block_uid' => $this->channelBlockUid,
             'created_at' => $this->createdAt?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updatedAt?->format('Y-m-d H:i:s'),
         ];

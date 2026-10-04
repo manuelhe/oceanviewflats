@@ -885,6 +885,165 @@ final class ReservationControllerTest extends TestCase
         $this->assertNotContains('refund_issued', $actions);
     }
 
+    public function testNewReservationWithPreFillParametersRendersModalWithPrePopulatedFields(): void
+    {
+        $request = new Request('GET', '/reservations/new', query: [
+            'property_id' => '1707',
+            'check_in' => '2026-11-10',
+            'check_out' => '2026-11-15',
+            'source' => 'airbnb',
+            'external_confirmation_code' => 'HM4XYZ1234',
+            'channel_block_uid' => 'ical-abnb-999',
+        ], server: ['HTTP_HX_REQUEST' => 'true']);
+
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('Onboard Airbnb Reservation', $body);
+        $this->assertStringContainsString('value="HM4XYZ1234"', $body);
+        $this->assertStringContainsString('value="ical-abnb-999"', $body);
+        $this->assertStringContainsString('value="2026-11-10"', $body);
+        $this->assertStringContainsString('value="2026-11-15"', $body);
+        $this->assertStringContainsString('selected>Oceanview Grand 1707 (17th Fl)</option>', $body);
+    }
+
+    public function testQuotePreviewPassesAbsorbingSourceForAirbnb(): void
+    {
+        $this->ledger->expects($this->once())
+            ->method('isAvailable')
+            ->with('1707', '2026-11-10', '2026-11-15', null, 'airbnb')
+            ->willReturn(true);
+
+        $quote = new Quote(
+            propertyId: '1707',
+            checkIn: '2026-11-10',
+            checkOut: '2026-11-15',
+            nights: [],
+            nightsCount: 5,
+            accommodationTotalCop: 2000000.0,
+            cleaningFeeCop: 100000.0,
+            resortFeeCop: 50000.0,
+            totalCop: 2150000.0,
+            minimumStayRequired: 2,
+            isValid: true
+        );
+        $this->quoteEngine->method('quote')->willReturn($quote);
+
+        $request = new Request('POST', '/reservations/quote-preview', post: [
+            'property_id' => '1707',
+            'check_in' => '2026-11-10',
+            'check_out' => '2026-11-15',
+            'source' => 'airbnb',
+        ]);
+
+        $response = $this->controller->quotePreview($request);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('Airbnb booking absorbs overlapping Airbnb channel blocks', $response->getBody());
+    }
+
+    public function testCreateManualAirbnbReservationRequiresExternalConfirmationCode(): void
+    {
+        $request = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'source' => 'airbnb',
+            'guest_name' => 'Airbnb Guest',
+            'external_confirmation_code' => '',
+        ]);
+
+        $response = $this->controller->createManual($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Airbnb confirmation code is required', $response->getBody());
+    }
+
+    public function testCreateManualAirbnbReservationSuccessSavesWithResAbnbPrefixAndAbsorbsBlock(): void
+    {
+        $this->ledger->expects($this->once())
+            ->method('isAvailable')
+            ->with('1606', '2026-11-01', '2026-11-05', null, 'airbnb')
+            ->willReturn(true);
+
+        $request = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'source' => 'airbnb',
+            'external_confirmation_code' => 'HM789XYZ',
+            'channel_block_uid' => 'ical-airbnb-block-456',
+            'guest_name' => 'Sarah Connor',
+            'guest_email' => '',
+            'guest_phone' => '',
+            'total_price' => '',
+            'pre_mark_registry' => '0',
+            'send_confirmation_email' => '0',
+        ], server: ['HTTP_HX_REQUEST' => 'true']);
+
+        $response = $this->controller->createManual($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $headers = $response->getHeaders();
+        $this->assertMatchesRegularExpression('#^/reservations/res-abnb-[a-f0-9]+$#', (string) ($headers['HX-Push-Url'] ?? ''));
+
+        // Verify database entry
+        $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE external_confirmation_code = :code');
+        $stmt->execute(['code' => 'HM789XYZ']);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertNotFalse($row);
+        $this->assertStringStartsWith('res-abnb-', (string) $row['reservation_uid']);
+        $this->assertSame('1606', $row['property_id']);
+        $this->assertSame('Sarah Connor', $row['guest_name']);
+        $this->assertSame('airbnb-hm789xyz@guest.oceanviewflats.com', $row['guest_email']);
+        $this->assertSame('N/A', $row['guest_phone']);
+        $this->assertSame('airbnb', $row['source']);
+        $this->assertSame('HM789XYZ', $row['external_confirmation_code']);
+        $this->assertSame('ical-airbnb-block-456', $row['channel_block_uid']);
+        $this->assertSame(0.0, (float) $row['total_price']);
+        $this->assertSame('external_ota', $row['payment_method_id']);
+        $this->assertSame(0, (int) $row['registry_completed']);
+
+        // Verify audit log
+        $logStmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = :action AND entity_id = :uid');
+        $logStmt->execute(['action' => 'airbnb_reservation_created', 'uid' => $row['reservation_uid']]);
+        $log = $logStmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertNotFalse($log);
+
+        // Verify drawer body contains Airbnb chat dispatch Stage 1 (ADR 0001 gating)
+        $body = $response->getBody();
+        $this->assertStringContainsString('Airbnb Chat Dispatch', $body);
+        $this->assertStringContainsString('Stage 1: Registry Required', $body);
+        $this->assertStringContainsString('ADR 0001: Door PIN and Guide are locked until registry is completed', $body);
+        $this->assertStringContainsString('/registry/?code=' . $row['reservation_uid'], $body);
+    }
+
+    public function testAirbnbChatDispatchShowsStage2WhenRegistryCompleted(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, registry_completed,
+                door_code, external_confirmation_code, channel_block_uid, created_at
+            ) VALUES (
+                'res-abnb-test1234', '1707', 'Marcus Vance', 'marcus@example.com', '+1234567890',
+                '2026-11-20', '2026-11-25', 1500000.00, 'confirmed', 'airbnb', 1,
+                '0987654#', 'HM99887766', 'ical-uid-99', '2026-10-01 10:00:00'
+            )
+        ");
+
+        $response = $this->executeShow('res-abnb-test1234', isHtmx: true, hxTarget: 'drawer-container');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('Airbnb Chat Dispatch', $body);
+        $this->assertStringContainsString('Stage 2: Access Dispatched', $body);
+        $this->assertStringContainsString('0987654#', $body);
+        $this->assertStringContainsString('/guide/?code=res-abnb-test1234', $body);
+        $this->assertStringContainsString('ADR 0001: Registry complete. Door PIN and Guide are unlocked', $body);
+    }
+
     private function seedDatabase(): void
     {
         $this->pdo->exec("

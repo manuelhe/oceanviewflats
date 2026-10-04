@@ -99,6 +99,8 @@ final class MigrationRunner
               `total_price` DECIMAL(10, 2) NOT NULL,
               `refunded_amount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
               `source` VARCHAR(30) NOT NULL DEFAULT 'web',
+              `external_confirmation_code` VARCHAR(64) DEFAULT NULL,
+              `channel_block_uid` VARCHAR(128) DEFAULT NULL,
               `mercadopago_preference_id` VARCHAR(255) DEFAULT NULL,
               `mercadopago_payment_id` VARCHAR(255) DEFAULT NULL,
               `payment_status` VARCHAR(50) DEFAULT NULL,
@@ -115,7 +117,9 @@ final class MigrationRunner
               INDEX `idx_property_dates` (`property_id`, `check_in`, `check_out`),
               INDEX `idx_status` (`status`),
               INDEX `idx_registry_completed` (`registry_completed`),
-              INDEX `idx_source` (`source`)
+              INDEX `idx_source` (`source`),
+              INDEX `idx_external_code` (`external_confirmation_code`),
+              INDEX `idx_channel_block_uid` (`channel_block_uid`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
         $logs[] = "Table `reservations` verified/created.";
@@ -132,6 +136,8 @@ final class MigrationRunner
             'door_code' => "VARCHAR(20) DEFAULT NULL",
             'refunded_amount' => "DECIMAL(10, 2) NOT NULL DEFAULT 0.00",
             'source' => "VARCHAR(30) NOT NULL DEFAULT 'web'",
+            'external_confirmation_code' => "VARCHAR(64) DEFAULT NULL",
+            'channel_block_uid' => "VARCHAR(128) DEFAULT NULL",
             'notes' => "TEXT DEFAULT NULL"
         ];
 
@@ -149,6 +155,29 @@ final class MigrationRunner
             if (!$exists) {
                 $pdo->exec("ALTER TABLE `reservations` ADD COLUMN `{$col}` {$type}");
                 $logs[] = "Upgrading reservations schema: Added column `{$col}`.";
+            }
+        }
+
+        // Self-healing indexes for reservations
+        $reservationIndexes = [
+            'idx_external_code' => '(`external_confirmation_code`)',
+            'idx_channel_block_uid' => '(`channel_block_uid`)',
+        ];
+
+        foreach ($reservationIndexes as $idxName => $idxCols) {
+            $stmt = $pdo->prepare("
+                SELECT INDEX_NAME 
+                FROM INFORMATION_SCHEMA.STATISTICS 
+                WHERE TABLE_SCHEMA = :dbname 
+                  AND TABLE_NAME = 'reservations' 
+                  AND INDEX_NAME = :idx
+            ");
+            $stmt->execute(['dbname' => $dbName, 'idx' => $idxName]);
+            $exists = $stmt->fetch();
+
+            if (!$exists) {
+                $pdo->exec("ALTER TABLE `reservations` ADD INDEX `{$idxName}` {$idxCols}");
+                $logs[] = "Upgrading reservations schema: Added index `{$idxName}`.";
             }
         }
 
@@ -304,6 +333,8 @@ final class MigrationRunner
                 total_price NUMERIC NOT NULL,
                 refunded_amount NUMERIC NOT NULL DEFAULT 0.00,
                 source TEXT NOT NULL DEFAULT "web",
+                external_confirmation_code TEXT DEFAULT NULL,
+                channel_block_uid TEXT DEFAULT NULL,
                 mercadopago_preference_id TEXT DEFAULT NULL,
                 mercadopago_payment_id TEXT DEFAULT NULL,
                 payment_status TEXT DEFAULT NULL,
@@ -320,6 +351,22 @@ final class MigrationRunner
             );
         ');
         $logs[] = "Table `reservations` verified/created.";
+
+        // Self-healing columns for SQLite
+        $sqliteColumns = ['external_confirmation_code', 'channel_block_uid'];
+        $existingCols = [];
+        $colsStmt = $pdo->query("PRAGMA table_info(reservations)");
+        if ($colsStmt !== false) {
+            while ($colRow = $colsStmt->fetch(PDO::FETCH_ASSOC)) {
+                $existingCols[] = (string) ($colRow['name'] ?? '');
+            }
+        }
+        foreach ($sqliteColumns as $col) {
+            if (!in_array($col, $existingCols, true)) {
+                $pdo->exec("ALTER TABLE reservations ADD COLUMN `{$col}` TEXT DEFAULT NULL");
+                $logs[] = "Upgrading SQLite reservations: Added column `{$col}`.";
+            }
+        }
 
         $pdo->exec('
             CREATE TABLE IF NOT EXISTS payment_idempotency (

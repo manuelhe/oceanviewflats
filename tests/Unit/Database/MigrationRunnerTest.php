@@ -37,6 +37,12 @@ final class MigrationRunnerTest extends TestCase
         $this->assertContains('calendar_blocks', $tables);
         $this->assertContains('property_rates', $tables);
         $this->assertContains('reservation_refunds', $tables);
+
+        // Verify newly added columns in reservations table
+        $colsStmt = $pdo->query("PRAGMA table_info(reservations)");
+        $cols = $colsStmt !== false ? array_column($colsStmt->fetchAll(PDO::FETCH_ASSOC), 'name') : [];
+        $this->assertContains('external_confirmation_code', $cols);
+        $this->assertContains('channel_block_uid', $cols);
     }
 
     public function testMigrationsAreIdempotent(): void
@@ -52,6 +58,40 @@ final class MigrationRunnerTest extends TestCase
         // Second run must succeed with zero errors or schema conflicts
         $secondRunLogs = MigrationRunner::run($pdo, 'memory_db');
         $this->assertSame($firstRunLogs, $secondRunLogs);
+    }
+
+    public function testSelfHealsMissingColumnsOnPreexistingReservationsTable(): void
+    {
+        $pdo = new PDO('sqlite::memory:', null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+
+        // Pre-create reservations table without external_confirmation_code and channel_block_uid
+        $pdo->exec('
+            CREATE TABLE reservations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL UNIQUE,
+                property_id TEXT NOT NULL,
+                guest_name TEXT NOT NULL,
+                guest_email TEXT NOT NULL,
+                guest_phone TEXT NOT NULL,
+                check_in TEXT NOT NULL,
+                check_out TEXT NOT NULL,
+                total_price NUMERIC NOT NULL,
+                status TEXT NOT NULL DEFAULT "pending_payment"
+            );
+        ');
+
+        $logs = MigrationRunner::run($pdo, 'memory_db');
+
+        $this->assertContains('Upgrading SQLite reservations: Added column `external_confirmation_code`.', $logs);
+        $this->assertContains('Upgrading SQLite reservations: Added column `channel_block_uid`.', $logs);
+
+        $colsStmt = $pdo->query("PRAGMA table_info(reservations)");
+        $cols = $colsStmt !== false ? array_column($colsStmt->fetchAll(PDO::FETCH_ASSOC), 'name') : [];
+        $this->assertContains('external_confirmation_code', $cols);
+        $this->assertContains('channel_block_uid', $cols);
     }
 
     public function testConnectThrowsExpectedPdoExceptionForInvalidHost(): void

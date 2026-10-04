@@ -215,4 +215,92 @@
             </div>
         <?php endforeach; ?>
     </div>
+
+    <!-- Detected External Bookings & Guest Onboarding (ADR 0007 / Variant A) -->
+    <div class="mt-6 pt-5 border-t border-gray-200">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div>
+                <h4 class="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center">
+                    <svg class="w-4 h-4 mr-1.5 text-rose-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z"/></svg>
+                    Detected External Platform Bookings (Airbnb)
+                </h4>
+                <p class="text-xs text-gray-500 mt-0.5">Ephemeral blocks detected from connected iCal calendars. Onboard guests to issue Guest Registry and Access Guides.</p>
+            </div>
+            <span class="text-xs text-gray-400 font-medium"><?= count($detectedBlocks ?? []) ?> Active <?= count($detectedBlocks ?? []) === 1 ? 'Booking' : 'Bookings' ?></span>
+        </div>
+
+        <?php if (empty($detectedBlocks)): ?>
+            <div class="bg-gray-50 border border-gray-200/80 rounded-xl p-6 text-center">
+                <svg class="mx-auto h-8 w-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <p class="mt-2 text-xs text-gray-500 font-medium">No active external calendar blocks detected across connected feeds.</p>
+            </div>
+        <?php else: ?>
+            <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-2xs">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-xs">
+                        <thead class="bg-gray-50 text-gray-500 font-semibold uppercase text-2xs tracking-wider">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-left">Property</th>
+                                <th scope="col" class="px-4 py-3 text-left">Dates & Duration</th>
+                                <th scope="col" class="px-4 py-3 text-left">Source Feed</th>
+                                <th scope="col" class="px-4 py-3 text-left">Status</th>
+                                <th scope="col" class="px-4 py-3 text-right">Workflow Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 bg-white">
+                            <?php foreach ($detectedBlocks as $block): ?>
+                                <tr class="hover:bg-gray-50/80 transition">
+                                    <td class="px-4 py-3.5 whitespace-nowrap">
+                                        <div class="font-bold text-gray-900"><?= htmlspecialchars((string) $block['propertyName'], ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="text-2xs text-gray-400">Playa Salguero</div>
+                                    </td>
+                                    <td class="px-4 py-3.5 whitespace-nowrap">
+                                        <div class="font-medium text-gray-900"><?= htmlspecialchars((string) $block['startDate'], ENT_QUOTES, 'UTF-8') ?> &rarr; <?= htmlspecialchars((string) $block['endDate'], ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="text-2xs text-gray-500"><?= (int) $block['nights'] ?> <?= (int) $block['nights'] === 1 ? 'night' : 'nights' ?> stay</div>
+                                    </td>
+                                    <td class="px-4 py-3.5 whitespace-nowrap">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-2xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                            <?= htmlspecialchars(strtoupper((string) $block['source']), ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3.5 whitespace-nowrap">
+                                        <?php if (!empty($block['isOnboarded'])): ?>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                                                Onboarded (<?= htmlspecialchars((string) $block['reservationUid'], ENT_QUOTES, 'UTF-8') ?>)
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
+                                                Pending Onboarding
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-4 py-3.5 whitespace-nowrap text-right">
+                                        <?php if (!empty($block['isOnboarded'])): ?>
+                                            <button type="button"
+                                                    hx-get="/reservations/<?= urlencode((string) $block['reservationUid']) ?>"
+                                                    hx-target="#drawer-container"
+                                                    class="text-indigo-600 hover:text-indigo-800 font-semibold text-xs inline-flex items-center cursor-pointer">
+                                                <span>View Reservation</span>
+                                                <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                            </button>
+                                        <?php else: ?>
+                                            <button type="button"
+                                                    hx-get="/reservations/new?property_id=<?= urlencode((string) $block['propertyId']) ?>&check_in=<?= urlencode((string) $block['startDate']) ?>&check_out=<?= urlencode((string) $block['endDate']) ?>&source=airbnb"
+                                                    hx-target="#modal-container"
+                                                    class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#FF385C] hover:bg-[#E00B41] text-white shadow-2xs transition cursor-pointer">
+                                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                                                <span>Onboard Guest</span>
+                                            </button>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>

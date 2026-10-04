@@ -56,9 +56,9 @@ final class PdoReservationSearchAdapter implements ReservationSearchInterface
             $params[':source'] = $criteria->source;
         }
 
-        // 5. Text search on name, email, phone, or reservation_uid
+        // 5. Text search on name, email, phone, reservation_uid, or external_confirmation_code
         if ($criteria->query !== null && trim($criteria->query) !== '') {
-            $where[] = '(guest_name LIKE :search OR guest_email LIKE :search OR guest_phone LIKE :search OR reservation_uid LIKE :search)';
+            $where[] = '(guest_name LIKE :search OR guest_email LIKE :search OR guest_phone LIKE :search OR reservation_uid LIKE :search OR external_confirmation_code LIKE :search)';
             $params[':search'] = '%' . trim($criteria->query) . '%';
         }
 
