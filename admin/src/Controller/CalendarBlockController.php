@@ -41,20 +41,16 @@ final class CalendarBlockController
         $propertyId = $this->resolvePropertyId((string) $request->getQuery('property_id', 'all'));
         $filter = $this->resolveFilter((string) $request->getQuery('filter', 'upcoming'));
 
-        $blocks = $this->blockRepository->listFiltered($propertyId, $filter);
-        $csrfToken = (string) ($session['csrf_token'] ?? '');
+        $viewContainerHtml = $this->renderViewContainerHtml($propertyId, $filter, oob: false, session: $session);
 
         if ($request->isHtmx()) {
-            $tableHtml = $this->viewRenderer->renderPartial('calendar_blocks/_table.php', [
-                'blocks' => $blocks,
-                'propertyId' => $propertyId,
-                'filter' => $filter,
-                'csrfToken' => $csrfToken,
-            ]);
-
-            return Response::html($tableHtml, 200);
+            $headerActionsHtml = $this->renderHeaderActionsHtml($propertyId, $filter, oob: true);
+            return Response::html($viewContainerHtml . "\n" . $headerActionsHtml, 200);
         }
 
+        $headerActionsHtml = $this->renderHeaderActionsHtml($propertyId, $filter, oob: false);
+
+        $csrfToken = (string) ($session['csrf_token'] ?? '');
         $panelData = ChannelSyncController::buildPanelViewData(
             syncService: $this->syncService,
             csrfToken: $csrfToken,
@@ -66,7 +62,8 @@ final class CalendarBlockController
         $fullHtml = $this->viewRenderer->render('calendar_blocks/index.php', [
             'propertyId' => $propertyId,
             'filter' => $filter,
-            'blocks' => $blocks,
+            'headerActionsHtml' => $headerActionsHtml,
+            'viewContainerHtml' => $viewContainerHtml,
             'csrfToken' => $csrfToken,
             'currentUser' => $this->buildCurrentUser($session),
             'currentRoute' => '/calendar-blocks',
@@ -83,14 +80,14 @@ final class CalendarBlockController
      */
     public function newHold(Request $request, array &$session): Response
     {
-        $propertyId = $this->resolvePropertyId((string) $request->getQuery('property_id', '1606'));
-        if ($propertyId === 'all') {
-            $propertyId = '1606';
-        }
+        $rawPropertyId = (string) $request->getQuery('property_id', '1606');
+        $propertyId = $this->resolvePropertyId($rawPropertyId);
+        $selectedPropertyId = $propertyId === 'all' ? '1606' : $propertyId;
         $filter = $this->resolveFilter((string) $request->getQuery('filter', 'upcoming'));
 
         $modalHtml = $this->viewRenderer->renderPartial('calendar_blocks/_modal_form.php', [
-            'propertyId' => $propertyId,
+            'propertyId' => $selectedPropertyId,
+            'currentPropertyId' => $propertyId,
             'startDate' => '',
             'endDate' => '',
             'reason' => '',
@@ -176,6 +173,7 @@ final class CalendarBlockController
         if (!empty($errors)) {
             $modalHtml = $this->viewRenderer->renderPartial('calendar_blocks/_modal_form.php', [
                 'propertyId' => $propertyId,
+                'currentPropertyId' => (string) $request->getPost('current_property_id', $propertyId),
                 'startDate' => $startDate,
                 'endDate' => $endDate,
                 'reason' => $reason,
@@ -226,17 +224,23 @@ final class CalendarBlockController
             userAgent: (string) $request->getHeader('User-Agent', '')
         );
 
-        // 7. Response: close modal and re-render blocks container
-        $blocks = $this->blockRepository->listFiltered($propertyId, $filter);
-        $tableHtml = $this->viewRenderer->renderPartial('calendar_blocks/_table.php', [
-            'blocks' => $blocks,
-            'propertyId' => $propertyId,
-            'filter' => $filter,
-            'csrfToken' => $csrfToken,
-        ]);
+        // 7. Response: close modal and re-render blocks container & header actions
+        $viewPropertyId = $this->resolvePropertyId((string) $request->getPost('current_property_id', $propertyId));
+
+        $viewContainerHtml = $this->renderViewContainerHtml(
+            $viewPropertyId,
+            $filter,
+            oob: true,
+            session: $session
+        );
+        $headerActionsHtml = $this->renderHeaderActionsHtml(
+            $viewPropertyId,
+            $filter,
+            oob: true
+        );
 
         if ($request->isHtmx()) {
-            $responseHtml = '<div id="blocks-container" hx-swap-oob="true">' . $tableHtml . '</div>';
+            $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml;
             $responseHtml .= '<script>document.getElementById("modal-container").innerHTML = "";</script>';
 
             return new Response(
@@ -249,7 +253,7 @@ final class CalendarBlockController
             );
         }
 
-        return Response::redirect('/calendar-blocks?property_id=' . urlencode($propertyId) . '&filter=' . urlencode($filter));
+        return Response::redirect('/calendar-blocks?property_id=' . urlencode($viewPropertyId) . '&filter=' . urlencode($filter));
     }
 
     /**
@@ -299,8 +303,47 @@ final class CalendarBlockController
             userAgent: (string) $request->getHeader('User-Agent', '')
         );
 
-        // 6. Response
+        // 6. Response: re-render view container and header actions
+        $viewContainerHtml = $this->renderViewContainerHtml(
+            $propertyId,
+            $filter,
+            oob: false,
+            session: $session
+        );
+        $headerActionsHtml = $this->renderHeaderActionsHtml(
+            $propertyId,
+            $filter,
+            oob: true
+        );
+
+        if ($request->isHtmx()) {
+            return new Response(
+                statusCode: 200,
+                headers: [
+                    'Content-Type' => 'text/html; charset=UTF-8',
+                    'HX-Trigger' => 'blockReleased',
+                ],
+                body: $viewContainerHtml . "\n" . $headerActionsHtml
+            );
+        }
+
+        return Response::redirect('/calendar-blocks?property_id=' . urlencode($propertyId) . '&filter=' . urlencode($filter));
+    }
+
+    /**
+     * Renders dynamic blocks view container partial including filter pills and table.
+     *
+     * @param array<string, mixed> $session
+     */
+    private function renderViewContainerHtml(
+        string $propertyId,
+        string $filter,
+        bool $oob = false,
+        array $session = []
+    ): string {
         $blocks = $this->blockRepository->listFiltered($propertyId, $filter);
+        $csrfToken = (string) ($session['csrf_token'] ?? '');
+
         $tableHtml = $this->viewRenderer->renderPartial('calendar_blocks/_table.php', [
             'blocks' => $blocks,
             'propertyId' => $propertyId,
@@ -308,11 +351,27 @@ final class CalendarBlockController
             'csrfToken' => $csrfToken,
         ]);
 
-        if ($request->isHtmx()) {
-            return Response::html($tableHtml, 200);
-        }
+        return $this->viewRenderer->renderPartial('calendar_blocks/_blocks_view.php', [
+            'propertyId' => $propertyId,
+            'filter' => $filter,
+            'tableHtml' => $tableHtml,
+            'oob' => $oob,
+        ]);
+    }
 
-        return Response::redirect('/calendar-blocks?property_id=' . urlencode($propertyId) . '&filter=' . urlencode($filter));
+    /**
+     * Renders header actions partial containing '+ Add Maintenance Hold' button.
+     */
+    private function renderHeaderActionsHtml(
+        string $propertyId,
+        string $filter,
+        bool $oob = false
+    ): string {
+        return $this->viewRenderer->renderPartial('calendar_blocks/_header_actions.php', [
+            'propertyId' => $propertyId,
+            'filter' => $filter,
+            'oob' => $oob,
+        ]);
     }
 
     private function resolvePropertyId(string $raw): string

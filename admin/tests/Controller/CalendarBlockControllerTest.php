@@ -64,12 +64,46 @@ final class CalendarBlockControllerTest extends TestCase
         $response = $this->controller->index($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('Maintenance & Calendar Holds', $response->getBody());
-        $this->assertStringContainsString('+ Add Maintenance Hold', $response->getBody());
-        $this->assertStringContainsString('id="channel-sync-panel"', $response->getBody());
-        $this->assertStringContainsString('Inbound Channel Sync', $response->getBody());
-        $this->assertStringContainsString('Property 1606', $response->getBody());
-        $this->assertStringContainsString('Property 1707', $response->getBody());
+        $body = $response->getBody();
+
+        // 1. Header and Page Titles
+        $this->assertStringContainsString('Maintenance & Calendar Holds', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions"', $body);
+        $this->assertStringContainsString('+ Add Maintenance Hold', $body);
+        $this->assertStringContainsString('hx-get="/calendar-blocks/new?property_id=all&filter=upcoming"', $body);
+
+        // 2. Channel sync panel is decoupled and outside view container
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringContainsString('Inbound Channel Sync', $body);
+
+        // 3. Dynamic blocks view container
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('Property:', $body);
+        $this->assertStringNotContainsString('Unit:', $body);
+
+        // 4. Property Pills styling and aria-current
+        // All Properties is active
+        $this->assertMatchesRegularExpression(
+            '/All Properties\s*<\/a>/s',
+            $body
+        );
+        $this->assertStringContainsString('bg-indigo-600 text-white shadow-2xs', $body);
+        $this->assertStringContainsString('aria-current="page"', $body);
+        $this->assertStringContainsString('bg-gray-100 text-gray-700 hover:bg-gray-200', $body);
+
+        // 5. Status Pills styling and aria-current
+        // Active & Upcoming is active
+        $this->assertStringContainsString('bg-indigo-50 text-indigo-700 border border-indigo-200', $body);
+        $this->assertStringContainsString('bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200', $body);
+
+        // 6. HTMX target and push-url bindings on pills
+        $this->assertStringContainsString('hx-target="#blocks-view-container"', $body);
+        $this->assertStringContainsString('hx-swap="outerHTML"', $body);
+        $this->assertStringContainsString('hx-push-url="true"', $body);
+
+        // 7. Sibling query state preserved in default links
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=upcoming"', $body);
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=all&filter=past"', $body);
     }
 
     public function testIndexRendersChannelSyncPanelWithInjectedSyncService(): void
@@ -119,14 +153,31 @@ final class CalendarBlockControllerTest extends TestCase
         $request = new Request(
             method: 'GET',
             uri: '/calendar-blocks',
-            query: ['property_id' => '1606', 'filter' => 'upcoming'],
+            query: ['property_id' => '1606', 'filter' => 'past'],
             server: ['HTTP_HX_REQUEST' => 'true']
         );
         $response = $this->controller->index($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('No maintenance holds found', $response->getBody());
-        $this->assertStringNotContainsString('<main class=', $response->getBody());
+        $body = $response->getBody();
+
+        // Must return dynamic blocks container and OOB header actions
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions" hx-swap-oob="outerHTML"', $body);
+        $this->assertStringContainsString('hx-get="/calendar-blocks/new?property_id=1606&filter=past"', $body);
+
+        // Channel sync panel and master layout must not be present in HTMX partial
+        $this->assertStringNotContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringNotContainsString('<main class=', $body);
+
+        // Property 1606 and Past status must be visually active
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=past"', $body);
+        // Sibling links preserve state: switching Property retains filter=past
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=1707&filter=past"', $body);
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=all&filter=past"', $body);
+        // Sibling links preserve state: switching Status retains property_id=1606
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=upcoming"', $body);
+        $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=all"', $body);
     }
 
     public function testNewHoldRendersModal(): void
@@ -268,6 +319,11 @@ final class CalendarBlockControllerTest extends TestCase
         $response = $this->controller->create($request, $session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('blockSaved', $response->getHeader('HX-Trigger'));
+        $body = $response->getBody();
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('hx-swap-oob="outerHTML"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions"', $body);
+        $this->assertStringContainsString('modal-container', $body);
 
         // Verify block exists in DB
         $blocks = $this->blockRepo->getBlocks('1606', 'all');
@@ -326,6 +382,10 @@ final class CalendarBlockControllerTest extends TestCase
 
         $response = $this->controller->delete($request, $session);
         $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('blockReleased', $response->getHeader('HX-Trigger'));
+        $body = $response->getBody();
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions" hx-swap-oob="outerHTML"', $body);
 
         // Verify block deleted from DB
         $this->assertNull($this->blockRepo->findById($id));
@@ -337,6 +397,40 @@ final class CalendarBlockControllerTest extends TestCase
         $this->assertCount(1, $logs);
         $this->assertSame('calendar_block', $logs[0]['entity_type']);
         $this->assertSame((string) $id, $logs[0]['entity_id']);
+    }
+
+    public function testReleaseViaPostSucceedsAndReRendersContainers(): void
+    {
+        $futureStart = date('Y-m-d', strtotime('+2 days'));
+        $futureEnd = date('Y-m-d', strtotime('+4 days'));
+        $id = $this->blockRepo->createBlock('1707', $futureStart, $futureEnd, 'Deep clean AC', 1);
+
+        $session = [
+            'csrf_token' => 'valid_token',
+            'admin_user_id' => 1,
+            'admin_email' => 'admin@oceanviewflats.com',
+        ];
+        $request = new Request(
+            method: 'POST',
+            uri: "/calendar-blocks/{$id}/release",
+            post: [
+                'csrf_token' => 'valid_token',
+                'property_id' => '1707',
+                'filter' => 'upcoming',
+            ],
+            attributes: ['id' => $id],
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+
+        $response = $this->controller->delete($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('blockReleased', $response->getHeader('HX-Trigger'));
+        $body = $response->getBody();
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions" hx-swap-oob="outerHTML"', $body);
+        $this->assertStringContainsString('hx-get="/calendar-blocks/new?property_id=1707&filter=upcoming"', $body);
+
+        $this->assertNull($this->blockRepo->findById($id));
     }
 }
 

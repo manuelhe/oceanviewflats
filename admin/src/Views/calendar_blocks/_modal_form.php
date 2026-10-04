@@ -60,6 +60,7 @@ $filter = !empty($filter) ? $filter : 'upcoming';
                 
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="current_filter" value="<?= htmlspecialchars($filter, ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="current_property_id" value="<?= htmlspecialchars($currentPropertyId ?? $propertyId, ENT_QUOTES, 'UTF-8') ?>">
 
                 <!-- Error Alert Banner (HTTP 422) -->
                 <?php if (!empty($errors)): ?>
