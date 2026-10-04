@@ -110,9 +110,10 @@ $today = date('Y-m-d');
                                 </span>
                             <?php else: ?>
                                 <button type="button"
-                                        hx-delete="/calendar-blocks/<?= $bId ?>"
+                                        hx-post="/calendar-blocks/<?= $bId ?>/release"
                                         hx-vals='{"csrf_token": "<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>", "property_id": "<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>", "filter": "<?= htmlspecialchars($filter, ENT_QUOTES, 'UTF-8') ?>"}'
-                                        hx-target="#blocks-container"
+                                        hx-target="#blocks-view-container"
+                                        hx-swap="outerHTML"
                                         hx-confirm="Are you sure you want to release this maintenance hold? The dates will immediately become available for direct bookings and channel sync."
                                         class="text-red-600 hover:text-red-900 font-medium inline-flex items-center transition cursor-pointer">
                                     <svg class="w-4 h-4 mr-1 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

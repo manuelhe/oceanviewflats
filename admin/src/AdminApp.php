@@ -256,7 +256,8 @@ final class AdminApp
             ->get('/calendar-blocks/new', [$calendarBlockController, 'newHold'])
             ->post('/calendar-blocks', [$calendarBlockController, 'create'])
             ->delete('/calendar-blocks/{id}', [$calendarBlockController, 'delete'])
-            ->post('/calendar-blocks/{id}/delete', [$calendarBlockController, 'delete']);
+            ->post('/calendar-blocks/{id}/delete', [$calendarBlockController, 'delete'])
+            ->post('/calendar-blocks/{id}/release', [$calendarBlockController, 'delete']);
 
         return new self($router);
     }
