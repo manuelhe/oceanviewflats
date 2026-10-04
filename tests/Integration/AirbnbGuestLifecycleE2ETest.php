@@ -251,7 +251,8 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
         $this->assertStringContainsString($confirmationCode, $drawerHtml);
         $this->assertStringContainsString($channelBlockUid, $drawerHtml);
         $this->assertStringContainsString('Not Assigned', $drawerHtml);
-        $this->assertStringContainsString('https://oceanviewflats.com/registry/?code=' . $uid, $drawerHtml);
+        $this->assertStringContainsString('https://oceanviewflats.com/registry/es.html?code=' . $uid, $drawerHtml);
+        $this->assertStringContainsString('https://oceanviewflats.com/registry/index.html?code=' . $uid, $drawerHtml);
     }
 
     private function submitGuestRegistryAndAssertTransitions(
@@ -339,7 +340,8 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
         $this->assertStringContainsString('Stage 2: Access Dispatched', $drawerPostHtml);
         $this->assertStringContainsString('ADR 0001: Registry complete. Door PIN and Guide are unlocked.', $drawerPostHtml);
         $this->assertStringContainsString($doorCode, $drawerPostHtml);
-        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=' . $uid, $drawerPostHtml);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/es.html?code=' . $uid, $drawerPostHtml);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/index.html?code=' . $uid, $drawerPostHtml);
         $this->assertStringContainsString('Tu código digital de acceso para la cerradura inteligente es: ' . $doorCode, $drawerPostHtml);
         $this->assertStringContainsString('Your smart door lock access code is: ' . $doorCode, $drawerPostHtml);
     }
@@ -386,7 +388,8 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
         $drawerHtml = $this->renderDetailDrawer($reservationUid);
         $this->assertStringContainsString('Stage 2: Access Dispatched', $drawerHtml);
         $this->assertStringContainsString($doorCode, $drawerHtml);
-        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=' . $reservationUid, $drawerHtml);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/es.html?code=' . $reservationUid, $drawerHtml);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/index.html?code=' . $reservationUid, $drawerHtml);
     }
 
     /**

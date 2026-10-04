@@ -231,8 +231,8 @@ final class ReservationControllerTest extends TestCase
         $html = $this->executeRegistry('res-2')->getBody();
 
         $this->assertStringContainsString('Guest Registry Pending', $html);
-        $this->assertStringContainsString('https://oceanviewflats.com/registry/?property=1606&amp;check_in=2026-10-10&amp;check_out=2026-10-15&amp;code=res-2&amp;lang=en', $html);
-        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=res-2&amp;lang=en', $html);
+        $this->assertStringContainsString('https://oceanviewflats.com/registry/index.html?property=1606&amp;check_in=2026-10-10&amp;check_out=2026-10-15&amp;code=res-2', $html);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/index.html?code=res-2', $html);
         $this->assertStringContainsString('Copy Link', $html);
         $this->assertStringContainsString('Copy Guide Link', $html);
     }
@@ -1016,7 +1016,8 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Airbnb Chat Dispatch', $body);
         $this->assertStringContainsString('Stage 1: Registry Required', $body);
         $this->assertStringContainsString('ADR 0001: Door PIN and Guide are locked until registry is completed', $body);
-        $this->assertStringContainsString('/registry/?code=' . $row['reservation_uid'], $body);
+        $this->assertStringContainsString('/registry/es.html?code=' . $row['reservation_uid'], $body);
+        $this->assertStringContainsString('/registry/index.html?code=' . $row['reservation_uid'], $body);
     }
 
     public function testAirbnbChatDispatchShowsStage2WhenRegistryCompleted(): void
@@ -1040,7 +1041,8 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Airbnb Chat Dispatch', $body);
         $this->assertStringContainsString('Stage 2: Access Dispatched', $body);
         $this->assertStringContainsString('0987654#', $body);
-        $this->assertStringContainsString('/guide/?code=res-abnb-test1234', $body);
+        $this->assertStringContainsString('/guide/es.html?code=res-abnb-test1234', $body);
+        $this->assertStringContainsString('/guide/index.html?code=res-abnb-test1234', $body);
         $this->assertStringContainsString('ADR 0001: Registry complete. Door PIN and Guide are unlocked', $body);
     }
 

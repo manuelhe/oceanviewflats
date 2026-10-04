@@ -22,6 +22,7 @@ use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
+use OceanViewFlats\Admin\Service\PublicUrlBuilder;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
@@ -162,6 +163,9 @@ final class AdminApp
             'reservation_repository' => $reservationRepository,
         ]);
 
+        /** @var PublicUrlBuilder $urlBuilder */
+        $urlBuilder = $options['public_url_builder'] ?? new PublicUrlBuilder($publicSiteUrl);
+
         $reservationController = new ReservationController(
             repository: $reservationRepository,
             search: $reservationSearch,
@@ -174,7 +178,8 @@ final class AdminApp
             publicSiteUrl: $publicSiteUrl,
             refundClient: $refundClient,
             cancellationEmailRenderer: $cancellationEmailRenderer,
-            pdo: $pdo
+            pdo: $pdo,
+            urlBuilder: $urlBuilder
         );
 
         // 6. Rates Repository & Controller

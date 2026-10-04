@@ -10,6 +10,7 @@ use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundException;
+use OceanViewFlats\Admin\Service\PublicUrlBuilder;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
 use OceanViewFlats\Domain\Fulfillment\AdminContext;
@@ -36,6 +37,7 @@ use Throwable;
 final class ReservationController
 {
     private readonly CancellationEmailRendererInterface $cancellationEmailRenderer;
+    private readonly PublicUrlBuilder $urlBuilder;
 
     public function __construct(
         private readonly ReservationRepositoryInterface $repository,
@@ -49,9 +51,11 @@ final class ReservationController
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         private readonly ?MercadoPagoRefundClientInterface $refundClient = null,
         ?CancellationEmailRendererInterface $cancellationEmailRenderer = null,
-        private readonly ?PDO $pdo = null
+        private readonly ?PDO $pdo = null,
+        ?PublicUrlBuilder $urlBuilder = null
     ) {
         $this->cancellationEmailRenderer = $cancellationEmailRenderer ?? new CancellationEmailRenderer($this->publicSiteUrl);
+        $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->publicSiteUrl);
     }
 
     /**
@@ -113,6 +117,7 @@ final class ReservationController
             'refunds' => $dossier->refunds,
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
+            'urlBuilder' => $this->urlBuilder,
         ]);
 
         if ($request->isHtmx() && $request->getHeader('HX-Target') === 'drawer-container') {
@@ -156,6 +161,7 @@ final class ReservationController
             'reservation' => $reservation->toArray(),
             'registry' => $registry,
             'publicSiteUrl' => $this->publicSiteUrl,
+            'urlBuilder' => $this->urlBuilder,
         ]);
 
         return Response::html($modalHtml);
@@ -371,6 +377,7 @@ final class ReservationController
             'refunds' => $dossier !== null ? $dossier->refunds : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
+            'urlBuilder' => $this->urlBuilder,
         ]);
 
         if ($request->isHtmx()) {
@@ -489,6 +496,7 @@ final class ReservationController
             'refunds' => $dossier !== null ? $dossier->refunds : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
+            'urlBuilder' => $this->urlBuilder,
         ]);
 
         return new Response(
@@ -845,6 +853,7 @@ final class ReservationController
             'refunds' => $updatedDossier !== null ? $updatedDossier->refunds : [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
             'publicSiteUrl' => $this->publicSiteUrl,
+            'urlBuilder' => $this->urlBuilder,
         ]);
 
         if ($request->isHtmx()) {

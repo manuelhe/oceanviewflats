@@ -2,12 +2,17 @@
 /**
  * @var array<string, mixed> $reservation
  * @var list<array<string, mixed>> $auditLogs
- * @var list<array<string, mixed>> $refunds
+ * @var list<array<string, mixed>>|null $refunds
  * @var string $csrfToken
  * @var string $publicSiteUrl
+ * @var \OceanViewFlats\Admin\Service\PublicUrlBuilder $urlBuilder
  */
 
-$refunds = isset($refunds) && is_array($refunds) ? $refunds : [];
+$urlBuilder = (isset($urlBuilder) && $urlBuilder instanceof \OceanViewFlats\Admin\Service\PublicUrlBuilder)
+    ? $urlBuilder
+    : new \OceanViewFlats\Admin\Service\PublicUrlBuilder($publicSiteUrl);
+
+$refunds = $refunds ?? [];
 $uid = (string) ($reservation['reservation_uid'] ?? '');
 $propertyId = (string) ($reservation['property_id'] ?? '');
 $guestName = (string) ($reservation['guest_name'] ?? '');
@@ -334,7 +339,8 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                                     <?= $registryCompleted ? 'Inspect Registry &rarr;' : 'View Pending Details &rarr;' ?>
                                 </button>
                                 <?php
-                                $guideLink = rtrim($publicSiteUrl, '/') . '/guide/?code=' . urlencode($uid);
+                                $reservationLang = (string) ($reservation['lang'] ?? 'en');
+                                $guideLink = $urlBuilder->buildGuideUrl($reservationLang, $uid);
                                 ?>
                                 <button type="button"
                                         onclick="navigator.clipboard.writeText('<?= htmlspecialchars($guideLink, ENT_QUOTES, 'UTF-8') ?>').then(() => { this.innerText = 'Guide Link Copied!'; setTimeout(() => this.innerText = 'Copy Guest Guide Link', 2000); });"
@@ -364,18 +370,20 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                 <?php if ($isAirbnbReservation): ?>
                     <?php
                     $guestFirstName = explode(' ', trim($guestName))[0];
-                    $registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?code=' . urlencode($uid);
-                    $guideUrl = rtrim($publicSiteUrl, '/') . '/guide/?code=' . urlencode($uid);
+                    $registryUrlEs = $urlBuilder->buildRegistryUrl('es', ['code' => $uid]);
+                    $guideUrlEs = $urlBuilder->buildGuideUrl('es', $uid);
+                    $registryUrlEn = $urlBuilder->buildRegistryUrl('en', ['code' => $uid]);
+                    $guideUrlEn = $urlBuilder->buildGuideUrl('en', $uid);
                     $doorPin = $doorCode !== '' ? $doorCode : '(Generated upon completion)';
 
                     // Stage 1 vs Stage 2 text strings
                     $esText = $registryCompleted
-                        ? "Hola {$guestFirstName}, tu registro ha sido verificado satisfactoriamente. Tu código digital de acceso para la cerradura inteligente es: {$doorPin}. Puedes consultar la guía de llegada, red Wi-Fi y normas del apartamento en este enlace: {$guideUrl}\n\n¡Que tengas una excelente estadía en Santa Marta!"
-                        : "Hola {$guestFirstName}, ¡gracias por reservar en OceanViewFlats! Para autorizar tu ingreso en la portería del condominio en Playa Salguero y preparar tu llegada, por favor diligencia el registro obligatorio de huéspedes aquí: {$registryUrl}\n\nUna vez completado, recibirás de inmediato el código digital de la puerta y la guía completa del apartamento. ¡Quedamos muy atentos!";
+                        ? "Hola {$guestFirstName}, tu registro ha sido verificado satisfactoriamente. Tu código digital de acceso para la cerradura inteligente es: {$doorPin}. Puedes consultar la guía de llegada, red Wi-Fi y normas del apartamento en este enlace: {$guideUrlEs}\n\n¡Que tengas una excelente estadía en Santa Marta!"
+                        : "Hola {$guestFirstName}, ¡gracias por reservar en OceanViewFlats! Para autorizar tu ingreso en la portería del condominio en Playa Salguero y preparar tu llegada, por favor diligencia el registro obligatorio de huéspedes aquí: {$registryUrlEs}\n\nUna vez completado, recibirás de inmediato el código digital de la puerta y la guía completa del apartamento. ¡Quedamos muy atentos!";
 
                     $enText = $registryCompleted
-                        ? "Hello {$guestFirstName}, your guest registration is verified! Your smart door lock access code is: {$doorPin}. You can view full arrival directions, Wi-Fi details, and apartment amenities in your guest guide here: {$guideUrl}\n\nEnjoy your stay in Santa Marta!"
-                        : "Hello {$guestFirstName}, thank you for booking OceanViewFlats! To ensure security clearance at the Playa Salguero condominium reception and prepare your check-in, please complete our mandatory guest registration here: {$registryUrl}\n\nOnce completed, your temporal door code PIN and apartment arrival guide will unlock immediately. We look forward to hosting you!";
+                        ? "Hello {$guestFirstName}, your guest registration is verified! Your smart door lock access code is: {$doorPin}. You can view full arrival directions, Wi-Fi details, and apartment amenities in your guest guide here: {$guideUrlEn}\n\nEnjoy your stay in Santa Marta!"
+                        : "Hello {$guestFirstName}, thank you for booking OceanViewFlats! To ensure security clearance at the Playa Salguero condominium reception and prepare your check-in, please complete our mandatory guest registration here: {$registryUrlEn}\n\nOnce completed, your temporal door code PIN and apartment arrival guide will unlock immediately. We look forward to hosting you!";
                     ?>
                     <!-- 4.1 Airbnb Chat Dispatch Card (ADR 0007 / Variant A) -->
                     <div class="space-y-3 pt-6" id="airbnb-chat-dispatch-section">

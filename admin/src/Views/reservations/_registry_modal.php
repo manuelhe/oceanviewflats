@@ -3,7 +3,12 @@
  * @var array<string, mixed> $reservation
  * @var array<string, mixed>|null $registry
  * @var string $publicSiteUrl
+ * @var \OceanViewFlats\Admin\Service\PublicUrlBuilder $urlBuilder
  */
+
+$urlBuilder = (isset($urlBuilder) && $urlBuilder instanceof \OceanViewFlats\Admin\Service\PublicUrlBuilder)
+    ? $urlBuilder
+    : new \OceanViewFlats\Admin\Service\PublicUrlBuilder($publicSiteUrl);
 
 $uid = (string) ($reservation['reservation_uid'] ?? '');
 $propertyId = (string) ($reservation['property_id'] ?? '');
@@ -21,6 +26,9 @@ $ipAddress = (string) ($registry['ip_address'] ?? '');
 $checkIn = (string) ($reservation['check_in'] ?? '');
 $checkOut = (string) ($reservation['check_out'] ?? '');
 $lang = (string) ($reservation['lang'] ?? 'es');
+if ($lang === '') {
+    $lang = 'es';
+}
 
 $regParams = ['property' => $propertyId];
 if ($checkIn !== '') {
@@ -30,12 +38,9 @@ if ($checkOut !== '') {
     $regParams['check_out'] = $checkOut;
 }
 $regParams['code'] = $uid;
-if ($lang !== '') {
-    $regParams['lang'] = $lang;
-}
 
-$registryUrl = rtrim($publicSiteUrl, '/') . '/registry/?' . http_build_query($regParams);
-$guideUrl = rtrim($publicSiteUrl, '/') . '/guide/?' . http_build_query(['code' => $uid, 'lang' => $lang]);
+$registryUrl = $urlBuilder->buildRegistryUrl($lang, $regParams);
+$guideUrl = $urlBuilder->buildGuideUrl($lang, $uid);
 ?>
 
 <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
