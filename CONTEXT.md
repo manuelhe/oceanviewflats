@@ -215,4 +215,12 @@ _Avoid_: History, Activity Feed, Event Log, Change Trail
 The administrative UI selector used across operational interfaces (rates, calendar holds, reservations) to scope records by Property. Always labeled "Property" in administrative views in strict adherence to canonical entity language.
 _Avoid_: Unit Filter, Unit Tab, Apartment Switcher, Listing Selector
 
+**Dashboard Hub**:
+The central administrative landing view (`/`) aggregating critical real-time operational information: 7-day arrivals and departures, operational alerts, active Property rates and seasonal rate tier transitions, and scheduled calendar blocks across all managed properties.
+_Avoid_: Admin Home, Overview Page, Control Center, Portal, Landing Page
+
+**Operational Alert**:
+A high-priority actionable indicator surfaced on the Dashboard Hub, specifically highlighting either un-onboarded Channel Blocks requiring External Reservation creation, or Confirmed Reservations with upcoming arrival dates whose Guest Registry has not yet been submitted.
+_Avoid_: Warning, System Notification, Todo, Action Item
+
 
