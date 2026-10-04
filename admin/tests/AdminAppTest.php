@@ -266,6 +266,13 @@ final class AdminAppTest extends TestCase
 
         $this->assertSame(404, $response->getStatusCode());
         $this->assertStringContainsString('404 Not Found', $response->getBody());
+
+        // Verify obsolete manual booking route returns 404
+        $obsoleteRequest = new Request('GET', '/bookings/manual');
+        $obsoleteResponse = $app->handle($obsoleteRequest, $session);
+
+        $this->assertSame(404, $obsoleteResponse->getStatusCode());
+        $this->assertStringContainsString('404 Not Found', $obsoleteResponse->getBody());
     }
 
     public function testHandleReturns405WithAllowHeaderForMethodMismatch(): void
