@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prototype: Admin Dashboard Hub Layout (Ticket #118)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        airbnb: {
+                            DEFAULT: '#FF385C',
+                            light: '#FFF8F6',
+                            border: '#FCCECE'
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .toast-msg {
+            animation: toastSlide 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes toastSlide {
+            0% { opacity: 0; transform: translateY(20px); }
+            12% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
+        }
+    </style>
+</head>
+<body class="h-full text-slate-800 font-sans antialiased pb-28 flex flex-col">
+
+    <!-- Top Navigation Header (Admin Shell) -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white font-black text-sm shadow-sm">
+                    OVF
+                </div>
+                <div>
+                    <span class="text-base font-bold text-slate-900 tracking-tight">OceanViewFlats</span>
+                    <span class="ml-2 px-2 py-0.5 text-[11px] font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">UI Prototype</span>
+                </div>
+            </div>
+
+            <!-- Primary Nav -->
+            <nav class="hidden md:flex space-x-6 text-sm font-medium">
+                <a href="#" class="text-brand-600 font-semibold border-b-2 border-brand-600 pb-5 pt-5">Dashboard</a>
+                <a href="#" class="text-slate-600 hover:text-slate-900 pb-5 pt-5 transition">Reservations</a>
+                <a href="#" class="text-slate-600 hover:text-slate-900 pb-5 pt-5 transition">Calendar Blocks</a>
+                <a href="#" class="text-slate-600 hover:text-slate-900 pb-5 pt-5 transition">Rates</a>
+                <a href="#" class="text-slate-600 hover:text-slate-900 pb-5 pt-5 transition">Channel Sync</a>
+            </nav>
+
+            <div class="flex items-center space-x-3 text-xs text-slate-500">
+                <span class="hidden sm:inline">admin@oceanviewflats.com</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                    <span class="w-1.5 h-1.5 mr-1 rounded-full bg-emerald-500"></span> Live Sync
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Subheader with Property Filter & Greeting -->
+    <div class="bg-white border-b border-slate-200 py-4 shadow-xs">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                    Operational Dashboard Hub
+                    <span id="variant-header-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold border border-indigo-200">
+                        Variant A: Command Stream
+                    </span>
+                </h1>
+                <p class="text-xs text-slate-500 mt-0.5">Real-time arrivals, departures, pending guest onboardings, and rate controls.</p>
+            </div>
+
+            <!-- Canonical Property Filter Pills -->
+            <div class="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
+                <button type="button" onclick="setPropertyFilter('all')" id="btn-prop-all" 
+                    class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-xs bg-white text-slate-900 font-bold border border-slate-200">
+                    All Properties
+                </button>
+                <button type="button" onclick="setPropertyFilter('1606')" id="btn-prop-1606"
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                    Property 1606
+                </button>
+                <button type="button" onclick="setPropertyFilter('1707')" id="btn-prop-1707"
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                    Property 1707
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- VARIANT A CONTAINER: Operational Command Stream -->
+        <div id="view-variant-a" class="space-y-6">
+            <!-- Summary Metric Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-medium text-slate-500">Today's Arrivals</div>
+                        <div class="text-2xl font-black text-slate-900 mt-1" id="stat-arrivals">2</div>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">
+                        ↓
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-medium text-slate-500">Today's Departures</div>
+                        <div class="text-2xl font-black text-slate-900 mt-1" id="stat-departures">1</div>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">
+                        ↑
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-medium text-slate-500">Operational Alerts</div>
+                        <div class="text-2xl font-black text-rose-600 mt-1" id="stat-alerts">3</div>
+                    </div>
+                    <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-lg">
+                        !
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-medium text-slate-500">Channel Sync Status</div>
+                        <div class="text-xs font-bold text-emerald-600 mt-1 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 2 Feeds Ok
+                        </div>
+                    </div>
+                    <button onclick="triggerSync()" class="text-xs font-semibold px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-slate-700 transition">
+                        Sync Now
+                    </button>
+                </div>
+            </div>
+
+            <!-- Two-Column Layout (65% Schedule Stream / 35% Action Sidebar) -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Left Main Column: 7-Day Operations Stream -->
+                <div class="lg:col-span-8 space-y-6">
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-900 tracking-tight">7-Day Operations Horizon</h2>
+                                <p class="text-xs text-slate-500">Arrivals, departures, and turnover schedules for the next 7 days.</p>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-md border border-slate-200">
+                                Oct 4 – Oct 10
+                            </span>
+                        </div>
+
+                        <!-- Schedule Stream Feed -->
+                        <div class="divide-y divide-slate-100" id="schedule-stream-container">
+                            <!-- Populated dynamically via JS matching property filter -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: Operational Alerts, Rates & Maintenance Holds -->
+                <div class="lg:col-span-4 space-y-6">
+                    
+                    <!-- Operational Attention Card -->
+                    <div class="bg-white rounded-xl border border-rose-200 shadow-xs overflow-hidden">
+                        <div class="px-5 py-3.5 bg-rose-50/80 border-b border-rose-100 flex items-center justify-between">
+                            <h3 class="text-xs font-bold text-rose-900 uppercase tracking-wider flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                Operational Attention Required
+                            </h3>
+                            <span id="alerts-count-badge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-200 text-rose-800">
+                                3 items
+                            </span>
+                        </div>
+                        <div class="p-4 space-y-3" id="alerts-stream-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Property Rates Status Card -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                        <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+                            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Today's Effective Rates</h3>
+                            <a href="#" class="text-xs text-brand-600 hover:text-brand-700 font-semibold">Manage Rates →</a>
+                        </div>
+                        <div class="p-4 space-y-3" id="rates-stream-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Maintenance Blocks Card -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+                        <div class="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+                            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Upcoming Calendar Holds</h3>
+                            <a href="#" class="text-xs text-brand-600 hover:text-brand-700 font-semibold">+ Add Hold</a>
+                        </div>
+                        <div class="p-4 space-y-3" id="blocks-stream-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- VARIANT B CONTAINER: Quad Bento Hub (Equal 4-Quadrant Balance) -->
+        <div id="view-variant-b" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                <!-- Quadrant 1: Operational Attention & Missing Onboardings -->
+                <div class="bg-white rounded-2xl border border-rose-200 shadow-xs overflow-hidden flex flex-col">
+                    <div class="px-6 py-4 bg-gradient-to-r from-rose-50 to-orange-50 border-b border-rose-100 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-sm font-bold text-rose-950 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-600"></span>
+                                Urgent Operational Attention
+                            </h2>
+                            <p class="text-xs text-rose-700 mt-0.5">Missing statutory guest registries & un-onboarded OTA bookings</p>
+                        </div>
+                        <span class="text-xs font-bold px-2.5 py-1 rounded-lg bg-rose-200 text-rose-900">
+                            Action Needed
+                        </span>
+                    </div>
+                    <div class="p-5 flex-1 space-y-3 overflow-y-auto max-h-[380px] custom-scrollbar" id="quad-alerts-container">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Quadrant 2: 7-Day Operations Horizon -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">7-Day Movements Horizon</h2>
+                            <p class="text-xs text-slate-500 mt-0.5">Upcoming check-ins, check-outs, and quick turnaround alerts</p>
+                        </div>
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700">
+                            Oct 4 - Oct 10
+                        </span>
+                    </div>
+                    <div class="p-5 flex-1 divide-y divide-slate-100 overflow-y-auto max-h-[380px] custom-scrollbar" id="quad-schedule-container">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Quadrant 3: Property Rates & Seasonal Tiers -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">Nightly Rates & Active Tiers</h2>
+                            <p class="text-xs text-slate-500 mt-0.5">Current pricing in COP, active seasonal tiers, and upcoming tier shifts</p>
+                        </div>
+                        <a href="#" class="text-xs font-bold text-brand-600 hover:text-brand-700">Full Rate Engine →</a>
+                    </div>
+                    <div class="p-5 flex-1 space-y-4" id="quad-rates-container">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Quadrant 4: Calendar Blocks & Maintenance Holds -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                    <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">Maintenance Holds & Channel Status</h2>
+                            <p class="text-xs text-slate-500 mt-0.5">Physical apartment blocks and iCal synchronization freshness</p>
+                        </div>
+                        <button onclick="triggerSync()" class="text-xs font-semibold px-2.5 py-1 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg text-slate-700">
+                            Sync iCal
+                        </button>
+                    </div>
+                    <div class="p-5 flex-1 space-y-4" id="quad-blocks-container">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- VARIANT C CONTAINER: 7-Day Kanban Horizon Board -->
+        <div id="view-variant-c" class="hidden space-y-6">
+            
+            <!-- Urgent Alerts Horizontal Banner -->
+            <div class="bg-gradient-to-r from-rose-500 to-rose-600 text-white rounded-xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-bold text-base">
+                        !
+                    </div>
+                    <div>
+                        <div class="font-bold text-sm">3 Operational Items Require Attention</div>
+                        <div class="text-xs text-rose-100">Sarah Jenkins arriving today without Guest Registry; 1 Airbnb hold needs onboarding.</div>
+                    </div>
+                </div>
+                <button onclick="toggleAlertsDrawer()" class="px-3 py-1.5 bg-white text-rose-700 font-bold text-xs rounded-lg shadow-xs hover:bg-rose-50 transition self-end sm:self-auto">
+                    View Alert Details
+                </button>
+            </div>
+
+            <!-- Horizontal Kanban Board for 7 Days -->
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-bold text-slate-900">Operational Timeline by Day</h2>
+                    <span class="text-xs text-slate-500">Horizontal day-by-day flight board</span>
+                </div>
+                <div class="flex space-x-4 overflow-x-auto pb-4 custom-scrollbar" id="kanban-columns-container">
+                    <!-- Day columns rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Bottom Rates & Holds Strip -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs" id="kanban-rates-container">
+                    <!-- Populated by JS -->
+                </div>
+                <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs" id="kanban-holds-container">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Quick Action Modal: Onboard Airbnb Guest -->
+    <div id="modal-onboard" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden transform transition-all">
+            <div class="px-6 py-4 bg-airbnb-light border-b border-airbnb-border flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="text-airbnb font-bold text-lg">Airbnb</span>
+                    <h3 class="text-base font-bold text-slate-900">Onboard External Reservation</h3>
+                </div>
+                <button onclick="closeOnboardModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            <form onsubmit="handleOnboardSubmit(event)" class="p-6 space-y-4 text-xs">
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-900">
+                    <strong>ADR 0007 External Reservation:</strong> Absorbs the detected iCal channel block and initiates Stage 1 Guest Registry dispatch.
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Target Property</label>
+                        <input type="text" id="modal-prop-id" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 font-semibold">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Airbnb Confirmation Code *</label>
+                        <input type="text" id="modal-confirm-code" required placeholder="HM3ABC1234" class="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono uppercase font-bold text-slate-900">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Check-in Date</label>
+                        <input type="text" id="modal-check-in" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 font-mono">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-700 mb-1">Check-out Date</label>
+                        <input type="text" id="modal-check-out" readonly class="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 font-mono">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Primary Guest Full Name *</label>
+                    <input type="text" id="modal-guest-name" required placeholder="e.g. David Miller" class="w-full border border-slate-300 rounded-lg px-3 py-2">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-700 mb-1">Host Payout Amount (COP) *</label>
+                    <input type="number" id="modal-payout" required placeholder="1850000" class="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono">
+                </div>
+                <div class="pt-2 flex justify-end space-x-2">
+                    <button type="button" onclick="closeOnboardModal()" class="px-4 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 font-semibold">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold shadow-xs">
+                        Create Reservation & Absorb Block →
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Quick Drawer: Reservation Inspection -->
+    <div id="drawer-inspect" class="hidden fixed inset-0 z-50 overflow-hidden bg-slate-900/40 backdrop-blur-xs flex justify-end">
+        <div class="bg-white w-full max-w-md h-full shadow-2xl border-l border-slate-200 flex flex-col p-6 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-4">
+                <div>
+                    <span class="text-xs font-mono text-slate-400" id="drawer-res-uid">res-abnb-4f8a12bc</span>
+                    <h3 class="text-lg font-bold text-slate-900" id="drawer-guest-name">Sarah Jenkins</h3>
+                </div>
+                <button onclick="closeDrawer()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
+            </div>
+            <div class="space-y-4 text-xs flex-1 overflow-y-auto">
+                <div class="bg-slate-50 p-3 rounded-lg space-y-1">
+                    <div class="flex justify-between"><span class="text-slate-500">Property:</span> <strong id="drawer-prop">Property 1707</strong></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Dates:</span> <strong id="drawer-dates">Oct 4 → Oct 7 (3 nights)</strong></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Source:</span> <span id="drawer-source" class="font-bold text-rose-600">Airbnb (HM998822)</span></div>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl p-4 space-y-2">
+                    <div class="font-bold text-slate-900 text-sm">Guest Registry Status</div>
+                    <div id="drawer-registry-box" class="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg font-semibold">
+                        ⚠️ Pending Submission (Statutory Requirement)
+                    </div>
+                    <p class="text-slate-500 text-[11px]">Door access credentials remain withheld per ADR 0001 until the passenger registry is completed.</p>
+                </div>
+
+                <div class="border border-slate-200 rounded-xl p-4 space-y-2">
+                    <div class="font-bold text-slate-900 text-sm">Stage 1 Quick Actions</div>
+                    <button onclick="copyInviteSnippet()" class="w-full py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 flex items-center justify-center gap-2">
+                        📋 Copy Bilingual Registry Invitation
+                    </button>
+                    <button onclick="overrideRegistry()" class="w-full py-2 bg-slate-100 border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-200">
+                        Mark Verified Manually (Audit Logged)
+                    </button>
+                </div>
+            </div>
+            <div class="border-t border-slate-200 pt-4 flex justify-between">
+                <button onclick="closeDrawer()" class="px-4 py-2 bg-slate-100 rounded-lg text-slate-600 font-semibold">Close</button>
+                <a href="#" class="px-4 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700">Full Reservation View →</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- Floating Prototype Switcher (Required per prototype/UI.md) -->
+    <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center space-x-4 border border-slate-700 text-xs font-medium">
+        <button onclick="cycleVariant(-1)" class="p-1 text-slate-400 hover:text-white transition font-bold" title="Previous variant (Left arrow)">
+            &larr;
+        </button>
+        <div class="flex items-center space-x-2">
+            <span class="text-slate-400 font-normal">Variant:</span>
+            <span id="switcher-variant-label" class="font-bold text-amber-300">A (Command Stream)</span>
+        </div>
+        <button onclick="cycleVariant(1)" class="p-1 text-slate-400 hover:text-white transition font-bold" title="Next variant (Right arrow)">
+            &rarr;
+        </button>
+        <span class="border-l border-slate-700 pl-3 text-slate-400 text-[11px]">Use &larr; / &rarr; keys</span>
+    </div>
+
+    <!-- Interactive Prototype State & Rendering Logic -->
+    <script>
+        // Mock State Data
+        const mockData = {
+            alerts: [
+                {
+                    id: 'alert-1',
+                    type: 'incomplete_registry',
+                    severity: 'critical',
+                    propertyId: '1707',
+                    title: 'Check-in Today: Missing Guest Registry',
+                    guestName: 'Sarah Jenkins',
+                    dueDate: '2026-10-04',
+                    reservationUid: 'res-abnb-4f8a12bc',
+                    source: 'Airbnb (HM998822)',
+                    phone: '+1 415-555-0199'
+                },
+                {
+                    id: 'alert-2',
+                    type: 'incomplete_registry',
+                    severity: 'warning',
+                    propertyId: '1606',
+                    title: 'Check-in Tomorrow: Registry Not Submitted',
+                    guestName: 'Carlos Gomez',
+                    dueDate: '2026-10-05',
+                    reservationUid: 'res-man-331299ab',
+                    source: 'Manual Booking',
+                    phone: '+57 300-555-0182'
+                },
+                {
+                    id: 'alert-3',
+                    type: 'unonboarded_block',
+                    severity: 'info',
+                    propertyId: '1707',
+                    title: 'Un-onboarded Airbnb Channel Block',
+                    guestName: 'Unassigned Airbnb Guest',
+                    dueDate: '2026-10-08',
+                    channelBlockUid: 'cb-sync-8812',
+                    source: 'iCal Feed',
+                    dates: 'Oct 8 → Oct 12 (4 nights)'
+                }
+            ],
+            schedule: [
+                {
+                    date: '2026-10-04',
+                    dayLabel: 'Today (Sat, Oct 4)',
+                    events: [
+                        {
+                            type: 'check_out',
+                            propertyId: '1606',
+                            guestName: 'Robert Vance',
+                            reservationUid: 'res-dir-8812',
+                            time: '11:00 AM',
+                            status: 'Departed'
+                        },
+                        {
+                            type: 'check_in',
+                            propertyId: '1606',
+                            guestName: 'John Doe',
+                            reservationUid: 'res-dir-9821',
+                            time: '3:00 PM',
+                            status: 'Confirmed',
+                            registry: 'completed',
+                            pin: '5928',
+                            source: 'Direct'
+                        },
+                        {
+                            type: 'check_in',
+                            propertyId: '1707',
+                            guestName: 'Sarah Jenkins',
+                            reservationUid: 'res-abnb-4f8a12bc',
+                            time: '3:00 PM',
+                            status: 'Confirmed',
+                            registry: 'pending',
+                            pin: 'Withheld',
+                            source: 'Airbnb'
+                        }
+                    ],
+                    isTurnover1606: true
+                },
+                {
+                    date: '2026-10-05',
+                    dayLabel: 'Tomorrow (Sun, Oct 5)',
+                    events: [
+                        {
+                            type: 'check_in',
+                            propertyId: '1606',
+                            guestName: 'Carlos Gomez',
+                            reservationUid: 'res-man-331299ab',
+                            time: '3:00 PM',
+                            status: 'Confirmed',
+                            registry: 'pending',
+                            pin: 'Withheld',
+                            source: 'Manual'
+                        }
+                    ],
+                    isTurnover1606: false
+                },
+                {
+                    date: '2026-10-07',
+                    dayLabel: 'Tue, Oct 7',
+                    events: [
+                        {
+                            type: 'check_out',
+                            propertyId: '1707',
+                            guestName: 'Sarah Jenkins',
+                            reservationUid: 'res-abnb-4f8a12bc',
+                            time: '11:00 AM',
+                            status: 'Confirmed'
+                        }
+                    ]
+                },
+                {
+                    date: '2026-10-09',
+                    dayLabel: 'Thu, Oct 9',
+                    events: [
+                        {
+                            type: 'maintenance',
+                            propertyId: '1606',
+                            guestName: 'Maintenance Hold: AC Deep Cleaning',
+                            time: 'All Day',
+                            status: 'Scheduled'
+                        }
+                    ]
+                }
+            ],
+            rates: {
+                '1606': {
+                    currentRate: '$450,000 COP',
+                    isSeasonal: false,
+                    tierName: 'Baseline Standard',
+                    upcomingShift: 'Seasonal Tier "Cartagena Mid-Term" begins Oct 20 ($540,000 COP)'
+                },
+                '1707': {
+                    currentRate: '$520,000 COP',
+                    isSeasonal: true,
+                    tierName: 'High Season October',
+                    endDate: 'Ends Oct 15',
+                    upcomingShift: 'Reverts to Baseline ($480,000 COP) on Oct 16'
+                }
+            },
+            blocks: [
+                {
+                    propertyId: '1606',
+                    title: 'AC Filter Deep Cleaning & Touchup',
+                    dates: 'Oct 9 – Oct 10 (2 days)',
+                    author: 'Manuel H. (Admin)'
+                },
+                {
+                    propertyId: '1707',
+                    title: 'Owner Stay Hold',
+                    dates: 'Oct 28 – Nov 2 (5 days)',
+                    author: 'Owner Block'
+                }
+            ]
+        };
+
+        // Application Prototype State
+        let currentVariant = 'A';
+        let currentPropertyFilter = 'all';
+
+        const variants = ['A', 'B', 'C'];
+        const variantLabels = {
+            'A': 'A (Command Stream)',
+            'B': 'B (Quad Bento Hub)',
+            'C': 'C (Kanban Horizon Board)'
+        };
+
+        function setPropertyFilter(prop) {
+            currentPropertyFilter = prop;
+            ['all', '1606', '1707'].forEach(p => {
+                const btn = document.getElementById(`btn-prop-${p}`);
+                if (btn) {
+                    if (p === prop) {
+                        btn.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-xs bg-white text-slate-900 font-bold border border-slate-200';
+                    } else {
+                        btn.className = 'px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+                    }
+                }
+            });
+            renderAll();
+            showToast(`Filtered by Property: ${prop === 'all' ? 'All Properties' : 'Property ' + prop}`);
+        }
+
+        function cycleVariant(direction) {
+            let idx = variants.indexOf(currentVariant);
+            idx = (idx + direction + variants.length) % variants.length;
+            setVariant(variants[idx]);
+        }
+
+        function setVariant(variant) {
+            currentVariant = variant;
+            
+            // Update URL search params
+            const url = new URL(window.location.href);
+            url.searchParams.set('variant', variant);
+            window.history.replaceState({}, '', url.toString());
+
+            // Update DOM views
+            document.getElementById('view-variant-a').classList.toggle('hidden', variant !== 'A');
+            document.getElementById('view-variant-b').classList.toggle('hidden', variant !== 'B');
+            document.getElementById('view-variant-c').classList.toggle('hidden', variant !== 'C');
+
+            document.getElementById('switcher-variant-label').textContent = variantLabels[variant];
+            document.getElementById('variant-header-badge').textContent = `Variant ${variantLabels[variant]}`;
+
+            renderAll();
+        }
+
+        function filterByProperty(item) {
+            if (currentPropertyFilter === 'all') return true;
+            return item.propertyId === currentPropertyFilter;
+        }
+
+        // --- Render Functions ---
+
+        function renderAll() {
+            renderVariantA();
+            renderVariantB();
+            renderVariantC();
+        }
+
+        function renderVariantA() {
+            // Alerts Stream
+            const alertsEl = document.getElementById('alerts-stream-container');
+            const filteredAlerts = mockData.alerts.filter(filterByProperty);
+            document.getElementById('stat-alerts').textContent = filteredAlerts.length;
+            document.getElementById('alerts-count-badge').textContent = `${filteredAlerts.length} items`;
+
+            if (filteredAlerts.length === 0) {
+                alertsEl.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">No alerts for selected property.</div>`;
+            } else {
+                alertsEl.innerHTML = filteredAlerts.map(a => `
+                    <div class="p-3 rounded-lg border ${a.severity === 'critical' ? 'bg-rose-50/70 border-rose-200' : 'bg-amber-50/70 border-amber-200'} text-xs space-y-2">
+                        <div class="flex items-start justify-between gap-2">
+                            <span class="font-bold ${a.severity === 'critical' ? 'text-rose-900' : 'text-amber-900'}">${a.title}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${a.propertyId === '1606' ? 'bg-sky-100 text-sky-800' : 'bg-purple-100 text-purple-800'}">
+                                Apt ${a.propertyId}
+                            </span>
+                        </div>
+                        <div class="text-[11px] text-slate-600">
+                            <strong>${a.guestName}</strong> &bull; ${a.source || a.dates}
+                        </div>
+                        <div class="flex items-center gap-2 pt-1">
+                            ${a.type === 'incomplete_registry' ? `
+                                <button onclick="openDrawer('${a.reservationUid}', '${a.guestName}', '${a.propertyId}')" class="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 font-bold rounded shadow-xs hover:bg-slate-50 text-[11px]">
+                                    Inspect
+                                </button>
+                                <button onclick="copyInviteSnippet()" class="px-2.5 py-1 bg-indigo-600 text-white font-bold rounded shadow-xs hover:bg-indigo-700 text-[11px]">
+                                    Copy Invite
+                                </button>
+                            ` : `
+                                <button onclick="openOnboardModal('${a.propertyId}', '2026-10-08', '2026-10-12', '${a.channelBlockUid}')" class="w-full px-2.5 py-1 bg-rose-600 text-white font-bold rounded shadow-xs hover:bg-rose-700 text-[11px]">
+                                    Onboard Airbnb Guest &rarr;
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Schedule Stream
+            const scheduleEl = document.getElementById('schedule-stream-container');
+            scheduleEl.innerHTML = mockData.schedule.map(day => {
+                const dayEvents = day.events.filter(filterByProperty);
+                if (dayEvents.length === 0) return '';
+
+                return `
+                    <div class="p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold text-slate-900 uppercase tracking-wide">${day.dayLabel}</span>
+                            ${day.isTurnover1606 && (currentPropertyFilter === 'all' || currentPropertyFilter === '1606') ? `
+                                <span class="px-2 py-0.5 bg-amber-100 text-amber-900 font-bold text-[11px] rounded-full border border-amber-200">
+                                    ⚡ Same-Day Turnover (Apt 1606)
+                                </span>
+                            ` : ''}
+                        </div>
+                        <div class="space-y-2">
+                            ${dayEvents.map(e => `
+                                <div class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition shadow-2xs">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                                            e.type === 'check_in' ? 'bg-emerald-100 text-emerald-800' :
+                                            e.type === 'check_out' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-800'
+                                        }">
+                                            ${e.type === 'check_in' ? 'IN' : e.type === 'check_out' ? 'OUT' : 'HOLD'}
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-bold text-slate-900 flex items-center gap-2">
+                                                ${e.guestName}
+                                                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${e.propertyId === '1606' ? 'bg-sky-100 text-sky-800' : 'bg-purple-100 text-purple-800'}">
+                                                    Apt ${e.propertyId}
+                                                </span>
+                                            </div>
+                                            <div class="text-[11px] text-slate-500 mt-0.5">
+                                                Time: ${e.time} &bull; ${e.source ? `Source: ${e.source}` : e.status}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        ${e.registry ? `
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+                                                e.registry === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                                'bg-rose-50 text-rose-700 border border-rose-200'
+                                            }">
+                                                Registry: ${e.registry === 'completed' ? '✓ OK' : '⚠️ Missing'}
+                                            </span>
+                                        ` : ''}
+                                        ${e.pin ? `
+                                            <span class="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-mono font-bold">
+                                                PIN: ${e.pin}
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Rates Stream
+            const ratesEl = document.getElementById('rates-stream-container');
+            const propsToRender = currentPropertyFilter === 'all' ? ['1606', '1707'] : [currentPropertyFilter];
+            ratesEl.innerHTML = propsToRender.map(p => {
+                const r = mockData.rates[p];
+                return `
+                    <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/50 text-xs space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-slate-900">Property ${p}</span>
+                            <span class="font-black text-slate-900 text-sm">${r.currentRate}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="px-2 py-0.5 rounded-full ${r.isSeasonal ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-200 text-slate-700'} font-semibold">
+                                ${r.tierName}
+                            </span>
+                            <span class="text-slate-500">${r.endDate || ''}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                            ${r.upcomingShift}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Blocks Stream
+            const blocksEl = document.getElementById('blocks-stream-container');
+            const filteredBlocks = mockData.blocks.filter(filterByProperty);
+            if (filteredBlocks.length === 0) {
+                blocksEl.innerHTML = `<div class="p-3 text-xs text-slate-400 text-center">No upcoming holds for selected property.</div>`;
+            } else {
+                blocksEl.innerHTML = filteredBlocks.map(b => `
+                    <div class="p-3 rounded-lg border border-slate-200 bg-slate-50/50 text-xs space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-slate-800">${b.title}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${b.propertyId === '1606' ? 'bg-sky-100 text-sky-800' : 'bg-purple-100 text-purple-800'}">
+                                Apt ${b.propertyId}
+                            </span>
+                        </div>
+                        <div class="text-slate-500 text-[11px]">${b.dates}</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function renderVariantB() {
+            // Quad 1: Alerts
+            const qAlerts = document.getElementById('quad-alerts-container');
+            const filteredAlerts = mockData.alerts.filter(filterByProperty);
+            qAlerts.innerHTML = filteredAlerts.map(a => `
+                <div class="p-3.5 rounded-xl border ${a.severity === 'critical' ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'} text-xs space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold ${a.severity === 'critical' ? 'text-rose-950' : 'text-amber-950'}">${a.title}</span>
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-slate-800 border border-slate-200">
+                            Apt ${a.propertyId}
+                        </span>
+                    </div>
+                    <div class="text-[11px] text-slate-600">Guest: <strong>${a.guestName}</strong> &bull; Due: ${a.dueDate}</div>
+                    <div class="pt-1 flex gap-2">
+                        ${a.type === 'incomplete_registry' ? `
+                            <button onclick="openDrawer('${a.reservationUid}', '${a.guestName}', '${a.propertyId}')" class="px-3 py-1 bg-white text-slate-800 font-bold border border-slate-300 rounded shadow-xs text-[11px]">Inspect Details</button>
+                            <button onclick="copyInviteSnippet()" class="px-3 py-1 bg-indigo-600 text-white font-bold rounded shadow-xs text-[11px]">Copy Invite Link</button>
+                        ` : `
+                            <button onclick="openOnboardModal('${a.propertyId}', '2026-10-08', '2026-10-12', '${a.channelBlockUid}')" class="w-full px-3 py-1 bg-rose-600 text-white font-bold rounded shadow-xs text-[11px]">Onboard External Booking</button>
+                        `}
+                    </div>
+                </div>
+            `).join('');
+
+            // Quad 2: Schedule
+            const qSched = document.getElementById('quad-schedule-container');
+            qSched.innerHTML = mockData.schedule.map(d => {
+                const dayEvents = d.events.filter(filterByProperty);
+                if (dayEvents.length === 0) return '';
+                return `
+                    <div class="py-3 space-y-2">
+                        <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">${d.dayLabel}</div>
+                        ${dayEvents.map(e => `
+                            <div class="flex items-center justify-between text-xs p-2.5 bg-slate-50 rounded-lg">
+                                <div class="flex items-center space-x-2">
+                                    <span class="px-1.5 py-0.5 font-bold rounded text-[10px] ${e.type === 'check_in' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
+                                        ${e.type.toUpperCase()}
+                                    </span>
+                                    <span class="font-bold text-slate-800">${e.guestName}</span>
+                                    <span class="text-slate-400 font-mono text-[10px]">(Apt ${e.propertyId})</span>
+                                </div>
+                                <span class="text-slate-500 text-[11px]">${e.time}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+
+            // Quad 3: Rates
+            const qRates = document.getElementById('quad-rates-container');
+            const props = currentPropertyFilter === 'all' ? ['1606', '1707'] : [currentPropertyFilter];
+            qRates.innerHTML = props.map(p => {
+                const r = mockData.rates[p];
+                return `
+                    <div class="border border-slate-200 rounded-xl p-4 bg-slate-50/70 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-900">Apartment ${p}</span>
+                            <span class="text-lg font-black text-brand-600">${r.currentRate}</span>
+                        </div>
+                        <div class="text-xs text-slate-600">Active Tier: <strong class="text-slate-900">${r.tierName}</strong> ${r.endDate ? `(${r.endDate})` : ''}</div>
+                        <div class="text-[11px] text-slate-500 border-t border-slate-200 pt-2">${r.upcomingShift}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Quad 4: Blocks & Sync
+            const qBlocks = document.getElementById('quad-blocks-container');
+            qBlocks.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs">
+                        <span class="font-bold text-emerald-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Inbound Sync Fresh
+                        </span>
+                        <span class="text-emerald-700 text-[11px]">Synced 2 mins ago</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-xs font-bold text-slate-700 uppercase tracking-wider">Scheduled Maintenance Holds</div>
+                        ${mockData.blocks.filter(filterByProperty).map(b => `
+                            <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs flex justify-between items-center">
+                                <div>
+                                    <div class="font-bold text-slate-800">${b.title}</div>
+                                    <div class="text-slate-500 text-[11px]">${b.dates}</div>
+                                </div>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-white border border-slate-200">Apt ${b.propertyId}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderVariantC() {
+            // Kanban day columns
+            const kanbanContainer = document.getElementById('kanban-columns-container');
+            kanbanContainer.innerHTML = mockData.schedule.map(d => {
+                const dayEvents = d.events.filter(filterByProperty);
+                return `
+                    <div class="w-72 shrink-0 bg-slate-50 rounded-xl p-3 border border-slate-200 flex flex-col space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                            <span class="text-xs font-bold text-slate-900">${d.dayLabel}</span>
+                            <span class="text-[11px] font-semibold text-slate-500">${dayEvents.length} events</span>
+                        </div>
+                        <div class="space-y-2 flex-1">
+                            ${dayEvents.length === 0 ? `
+                                <div class="p-4 text-center text-xs text-slate-400">No movements</div>
+                            ` : dayEvents.map(e => `
+                                <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-2xs space-y-2 text-xs">
+                                    <div class="flex justify-between items-center">
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${e.type === 'check_in' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
+                                            ${e.type.toUpperCase()}
+                                        </span>
+                                        <span class="font-bold text-[10px] text-slate-600">Apt ${e.propertyId}</span>
+                                    </div>
+                                    <div class="font-bold text-slate-900">${e.guestName}</div>
+                                    <div class="text-[11px] text-slate-500">${e.time} &bull; ${e.source || e.status}</div>
+                                    ${e.registry ? `
+                                        <div class="pt-1 border-t border-slate-100 text-[10px] font-bold ${e.registry === 'completed' ? 'text-emerald-600' : 'text-rose-600'}">
+                                            Registry: ${e.registry === 'completed' ? 'Submitted' : 'Pending'}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Rates & Holds Strips
+            document.getElementById('kanban-rates-container').innerHTML = `
+                <div class="font-bold text-xs uppercase tracking-wider text-slate-700 mb-2">Effective Rates Overview</div>
+                <div class="flex gap-4">
+                    <div class="text-xs"><strong>Apt 1606:</strong> $450,000 COP (Base)</div>
+                    <div class="text-xs"><strong>Apt 1707:</strong> $520,000 COP (Seasonal Oct)</div>
+                </div>
+            `;
+            document.getElementById('kanban-holds-container').innerHTML = `
+                <div class="font-bold text-xs uppercase tracking-wider text-slate-700 mb-2">Active Calendar Blocks</div>
+                <div class="text-xs text-slate-600">Oct 9–10: Apt 1606 AC Deep Cleaning &bull; Oct 28–Nov 2: Apt 1707 Owner Block</div>
+            `;
+        }
+
+        // --- Modals & Drawers ---
+
+        function openOnboardModal(propId, checkIn, checkOut, blockUid) {
+            document.getElementById('modal-prop-id').value = `Property ${propId}`;
+            document.getElementById('modal-check-in').value = checkIn;
+            document.getElementById('modal-check-out').value = checkOut;
+            document.getElementById('modal-onboard').classList.remove('hidden');
+        }
+
+        function closeOnboardModal() {
+            document.getElementById('modal-onboard').classList.add('hidden');
+        }
+
+        function handleOnboardSubmit(e) {
+            e.preventDefault();
+            const code = document.getElementById('modal-confirm-code').value;
+            const guest = document.getElementById('modal-guest-name').value;
+            closeOnboardModal();
+            showToast(`Created external reservation for ${guest} (${code})!`);
+        }
+
+        function openDrawer(uid, name, prop) {
+            document.getElementById('drawer-res-uid').textContent = uid;
+            document.getElementById('drawer-guest-name').textContent = name;
+            document.getElementById('drawer-prop').textContent = `Property ${prop}`;
+            document.getElementById('drawer-inspect').classList.remove('hidden');
+        }
+
+        function closeDrawer() {
+            document.getElementById('drawer-inspect').classList.add('hidden');
+        }
+
+        function copyInviteSnippet() {
+            showToast('📋 Copied bilingual Stage 1 invitation to clipboard!');
+        }
+
+        function overrideRegistry() {
+            closeDrawer();
+            showToast('✓ Guest Registry marked verified manually (Audit Log entry created).');
+        }
+
+        function triggerSync() {
+            showToast('⚡ Inbound calendar sync completed: 2 feeds updated successfully.');
+        }
+
+        function toggleAlertsDrawer() {
+            showToast('Alerts detail toggled');
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'toast-msg bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 pointer-events-auto';
+            el.innerHTML = `<span>${msg}</span>`;
+            container.appendChild(el);
+            setTimeout(() => {
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }, 3000);
+        }
+
+        // Keyboard listener for cycling variants
+        window.addEventListener('keydown', (e) => {
+            const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement.isContentEditable) {
+                return;
+            }
+            if (e.key === 'ArrowRight') {
+                cycleVariant(1);
+            } else if (e.key === 'ArrowLeft') {
+                cycleVariant(-1);
+            } else if (e.key === 'Escape') {
+                closeOnboardModal();
+                closeDrawer();
+            }
+        });
+
+        // Initialize from URL params or default to Variant A
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const v = params.get('variant') || 'A';
+            const p = params.get('property_id') || 'all';
+            currentPropertyFilter = p;
+            setVariant(v);
+        });
+    </script>
+</body>
+</html>
