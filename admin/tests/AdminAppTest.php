@@ -183,9 +183,10 @@ final class AdminAppTest extends TestCase
             ['DELETE', '/rates/42'],
             ['DELETE', '/calendar-blocks/42'],
             ['POST', '/calendar-blocks/42/delete'],
+            ['POST', '/calendar-blocks/42/release'],
         ];
 
-        $this->assertCount(27, $expectedRoutes);
+        $this->assertCount(28, $expectedRoutes);
 
         foreach ($expectedRoutes as [$method, $path]) {
             $session = ['admin_user_id' => 1];

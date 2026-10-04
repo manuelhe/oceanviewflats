@@ -79,10 +79,43 @@ final class RateControllerTest extends TestCase
         $body = $response->getBody();
 
         $this->assertStringContainsString('Seasonal Pricing & Rates', $body);
-        $this->assertStringContainsString('Apartment 1606', $body);
-        $this->assertStringContainsString('Apartment 1707', $body);
+        $this->assertStringContainsString('Property:', $body);
+        $this->assertStringNotContainsString('Unit:', $body);
+        $this->assertStringContainsString('id="rates-view-container"', $body);
+        $this->assertStringContainsString('id="rates-header-actions"', $body);
         $this->assertStringContainsString('id="rates-content"', $body);
         $this->assertStringContainsString('id="modal-container"', $body);
+
+        // Active/inactive property pills
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-indigo-600 text-white shadow-2xs[^"]*"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*class="[^"]*bg-gray-100 text-gray-700 hover:bg-gray-200[^"]*"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertDoesNotMatchRegularExpression('/<a[^>]*aria-current="page"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+
+        // Active/inactive year pills
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-gray-900 text-white font-semibold[^"]*"[^>]*>\s*2026\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*class="[^"]*bg-gray-100 text-gray-600 hover:bg-gray-200[^"]*"[^>]*>\s*2025\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*class="[^"]*bg-gray-100 text-gray-600 hover:bg-gray-200[^"]*"[^>]*>\s*2027\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*2026\s*<\/a>/s', $body);
+
+        // HTMX attributes on pills
+        $this->assertStringContainsString('hx-target="#rates-view-container"', $body);
+        $this->assertStringContainsString('hx-swap="outerHTML"', $body);
+        $this->assertStringContainsString('hx-push-url="true"', $body);
+
+        // Sibling filter URL state retention
+        $this->assertStringContainsString('href="/rates?property_id=1707&year=2026"', $body);
+        $this->assertStringContainsString('href="/rates?property_id=1606&year=2025"', $body);
+        $this->assertStringContainsString('href="/rates?property_id=1606&year=2027"', $body);
+
+        // Outer container attributes
+        $this->assertStringContainsString('hx-get="/rates?property_id=1606&year=2026"', $body);
+        $this->assertStringContainsString('hx-trigger="rateUpdated from:body"', $body);
+
+        // Header actions synchronization
+        $this->assertStringContainsString('/rates/new?property_id=1606&year=2026', $body);
+        $this->assertStringContainsString('"property_id": "1606", "year": 2026', $body);
     }
 
     public function testIndexRendersPartialForHtmxRequest(): void
@@ -90,7 +123,7 @@ final class RateControllerTest extends TestCase
         $request = new Request(
             'GET',
             '/rates',
-            query: ['property_id' => '1707', 'year' => '2026'],
+            query: ['property_id' => '1707', 'year' => '2027'],
             server: ['HTTP_HX_REQUEST' => 'true']
         );
         $response = $this->controller->index($request, $this->session);
@@ -102,9 +135,54 @@ final class RateControllerTest extends TestCase
         $this->assertStringNotContainsString('<!DOCTYPE html>', $body);
         $this->assertStringNotContainsString('<body', $body);
 
+        // Should contain rates-view-container and OOB rates-header-actions
+        $this->assertStringContainsString('id="rates-view-container"', $body);
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $body);
+
+        // Property 1707 active, Property 1606 inactive
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-indigo-600 text-white shadow-2xs[^"]*"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*class="[^"]*bg-gray-100 text-gray-700 hover:bg-gray-200[^"]*"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+
+        // Year 2027 active
+        $this->assertMatchesRegularExpression('/<a[^>]*aria-current="page"[^>]*class="[^"]*bg-gray-900 text-white font-semibold[^"]*"[^>]*>\s*2027\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*2027\s*<\/a>/s', $body);
+
+        // Sibling filter URL state retention
+        $this->assertStringContainsString('href="/rates?property_id=1606&year=2027"', $body);
+        $this->assertStringContainsString('href="/rates?property_id=1707&year=2026"', $body);
+
+        // Header actions synchronization for 1707 and 2027
+        $this->assertStringContainsString('/rates/new?property_id=1707&year=2027', $body);
+        $this->assertStringContainsString('"property_id": "1707", "year": 2027', $body);
+
         // Should contain timeline and table
         $this->assertStringContainsString('Seasonal Timeline & Coverage', $body);
         $this->assertStringContainsString('Configured Seasonal Tiers', $body);
+    }
+
+    public function testIndexRendersFullPageWhenHtmxTargetIsBody(): void
+    {
+        $request = new Request(
+            'GET',
+            '/rates',
+            query: ['property_id' => '1606', 'year' => '2026'],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => 'body',
+            ]
+        );
+        $response = $this->controller->index($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Must render the full layout shell rather than partials
+        $this->assertStringContainsString('<!DOCTYPE html>', $body);
+        $this->assertStringContainsString('<body', $body);
+        $this->assertStringContainsString('Seasonal Pricing & Rates', $body);
+        $this->assertStringContainsString('id="rates-view-container"', $body);
     }
 
     public function testNewTierRendersCreationModal(): void
@@ -229,7 +307,9 @@ final class RateControllerTest extends TestCase
         $response = $this->controller->create($request, $this->session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
-        $this->assertStringContainsString('hx-swap-oob="true"', $response->getBody());
+        $this->assertStringContainsString('id="rates-view-container" hx-swap-oob="outerHTML"', $response->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $response->getBody());
+        $this->assertStringContainsString('<div id="modal-container" hx-swap-oob="innerHTML"></div>', $response->getBody());
         $this->assertStringContainsString('Semana Santa', $response->getBody());
 
         // Verify tier in database
@@ -298,6 +378,10 @@ final class RateControllerTest extends TestCase
         $response = $this->controller->update($request, $this->session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container" hx-swap-oob="outerHTML"', $response->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $response->getBody());
+        $this->assertStringContainsString('<div id="modal-container" hx-swap-oob="innerHTML"></div>', $response->getBody());
+        $this->assertStringContainsString('May Promo Extended', $response->getBody());
 
         $updated = $this->rateRepository->findRateById($id);
         $this->assertNotNull($updated);
@@ -310,6 +394,40 @@ final class RateControllerTest extends TestCase
         $log = $stmt->fetch();
         $this->assertNotFalse($log);
         $this->assertSame((string) $id, $log['entity_id']);
+    }
+
+    public function testRateUpdatedSubsequentGetRetainsFlashMessage(): void
+    {
+        $createRequest = new Request('POST', '/rates', post: [
+            'property_id' => '1606',
+            'season_name' => 'High Summer',
+            'start_date' => '2026-07-01',
+            'end_date' => '2026-08-15',
+            'price_per_night' => '500000',
+            'min_stay' => '3',
+            'year' => '2026',
+        ]);
+
+        $createResponse = $this->controller->create($createRequest, $this->session);
+        $this->assertSame(200, $createResponse->getStatusCode());
+        $this->assertArrayHasKey('rate_flash', $this->session);
+        $this->assertSame("Seasonal tier 'High Summer' created successfully.", $this->session['rate_flash']['message']);
+
+        // Subsequent GET /rates (triggered by HTMX rateUpdated from:body)
+        $subsequentRequest = new Request(
+            'GET',
+            '/rates',
+            query: ['property_id' => '1606', 'year' => '2026'],
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+        $subsequentResponse = $this->controller->index($subsequentRequest, $this->session);
+        $this->assertSame(200, $subsequentResponse->getStatusCode());
+        $body = $subsequentResponse->getBody();
+
+        // Flash message should be displayed in the re-fetched view container
+        $this->assertStringContainsString("Seasonal tier &#039;High Summer&#039; created successfully.", $body);
+        // And the session flash message should be consumed (unset)
+        $this->assertArrayNotHasKey('rate_flash', $this->session);
     }
 
     public function testDeleteRemovesTierAndRecordsAuditLog(): void
@@ -333,6 +451,8 @@ final class RateControllerTest extends TestCase
         $response = $this->controller->delete($request, $this->session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container"', $response->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $response->getBody());
         $this->assertStringContainsString('deleted successfully', $response->getBody());
 
         // Verify removed
@@ -358,6 +478,8 @@ final class RateControllerTest extends TestCase
         $response = $this->controller->seedFromCsv($request, $this->session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('rateUpdated', $response->getHeader('HX-Trigger'));
+        $this->assertStringContainsString('id="rates-view-container"', $response->getBody());
+        $this->assertStringContainsString('id="rates-header-actions" hx-swap-oob="outerHTML"', $response->getBody());
         $this->assertStringContainsString('Successfully imported 3 seasonal rate tiers from prices.csv', $response->getBody());
 
         // Verify tiers were imported

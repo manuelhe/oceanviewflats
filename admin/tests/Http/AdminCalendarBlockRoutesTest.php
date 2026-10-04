@@ -63,7 +63,73 @@ final class AdminCalendarBlockRoutesTest extends TestCase
         $response = $this->app->handle($request, $session);
 
         $this->assertSame(200, $response->getStatusCode());
-        $this->assertStringContainsString('Maintenance & Calendar Holds', $response->getBody());
+        $body = $response->getBody();
+        $this->assertStringContainsString('Maintenance & Calendar Holds', $body);
+        $this->assertStringContainsString('Property:', $body);
+        $this->assertStringNotContainsString('Unit:', $body);
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions"', $body);
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
+        $this->assertStringContainsString('bg-indigo-600 text-white shadow-2xs', $body);
+        $this->assertStringContainsString('aria-current="page"', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*All Properties\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Active & Upcoming\s*<\/a>/s', $body);
+    }
+
+    public function testAuthenticatedHtmxAccessRendersPartialAndHeaderActionsOob(): void
+    {
+        $session = [
+            'admin_user_id' => 1,
+            'admin_email' => 'admin@oceanviewflats.com',
+            'csrf_token' => 'route_test_csrf',
+        ];
+        $request = new Request(
+            method: 'GET',
+            uri: '/calendar-blocks',
+            query: ['property_id' => '1707', 'filter' => 'past'],
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+        $response = $this->app->handle($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions" hx-swap-oob="outerHTML"', $body);
+        $this->assertStringContainsString('hx-get="/calendar-blocks/new?property_id=1707&filter=past"', $body);
+        $this->assertStringNotContainsString('id="channel-sync-panel"', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Concluded \(Past\)\s*<\/a>/s', $body);
+    }
+
+    public function testHtmxGetCalendarBlocksWithBodyTargetReturnsFullLayoutShell(): void
+    {
+        $session = [
+            'admin_user_id' => 1,
+            'admin_email' => 'admin@oceanviewflats.com',
+            'csrf_token' => 'route_test_csrf',
+        ];
+        $request = new Request(
+            method: 'GET',
+            uri: '/calendar-blocks',
+            query: ['property_id' => '1606', 'filter' => 'upcoming'],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => 'body',
+            ]
+        );
+        $response = $this->app->handle($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Must contain full layout shell
+        $this->assertStringContainsString('<!DOCTYPE html>', $body);
+        $this->assertStringContainsString('<body', $body);
+        $this->assertStringContainsString('Maintenance & Calendar Holds', $body);
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="channel-sync-panel"', $body);
     }
 
     public function testGetNewHoldModalReturns200(): void
@@ -126,6 +192,12 @@ final class AdminCalendarBlockRoutesTest extends TestCase
         $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('blockSaved', $response->getHeader('HX-Trigger'));
+        $body = $response->getBody();
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('hx-swap-oob="outerHTML"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions"', $body);
+        $this->assertStringContainsString('<div id="modal-container" hx-swap-oob="innerHTML"></div>', $body);
+        $this->assertStringNotContainsString('<script>', $body);
 
         $blocks = $this->blockRepo->getBlocks('1606', 'all');
         $this->assertCount(1, $blocks);
@@ -190,6 +262,37 @@ final class AdminCalendarBlockRoutesTest extends TestCase
 
         $response = $this->app->handle($request, $session);
         $this->assertSame(200, $response->getStatusCode());
+        $this->assertNull($this->blockRepo->findById($id));
+    }
+
+    public function testPostReleaseRouteRemovesBlockAndReturnsHtmxResponse(): void
+    {
+        $futureStart = date('Y-m-d', strtotime('+4 days'));
+        $futureEnd = date('Y-m-d', strtotime('+8 days'));
+        $id = $this->blockRepo->createBlock('1606', $futureStart, $futureEnd, 'HVAC filter swap', 1);
+
+        $session = [
+            'admin_user_id' => 1,
+            'csrf_token' => 'route_test_csrf',
+        ];
+        $request = new Request(
+            method: 'POST',
+            uri: "/calendar-blocks/{$id}/release",
+            post: [
+                'csrf_token' => 'route_test_csrf',
+                'property_id' => '1606',
+                'filter' => 'upcoming',
+            ],
+            server: ['HTTP_HX_REQUEST' => 'true']
+        );
+
+        $response = $this->app->handle($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('blockReleased', $response->getHeader('HX-Trigger'));
+        $body = $response->getBody();
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
+        $this->assertStringContainsString('id="calendar-blocks-header-actions" hx-swap-oob="outerHTML"', $body);
+        $this->assertStringContainsString('hx-get="/calendar-blocks/new?property_id=1606&filter=upcoming"', $body);
         $this->assertNull($this->blockRepo->findById($id));
     }
 

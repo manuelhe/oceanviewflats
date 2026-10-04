@@ -211,4 +211,8 @@ _Avoid_: Staff, Employee, Operator, Superuser
 An immutable administrative record capturing operational actions (such as door PIN overrides, cancellations, refunds, or rate updates), attributing the change to a specific Admin User with timestamps and payload diffs.
 _Avoid_: History, Activity Feed, Event Log, Change Trail
 
+**Property Filter**:
+The administrative UI selector used across operational interfaces (rates, calendar holds, reservations) to scope records by Property. Always labeled "Property" in administrative views in strict adherence to canonical entity language.
+_Avoid_: Unit Filter, Unit Tab, Apartment Switcher, Listing Selector
+
 
