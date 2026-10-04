@@ -45,7 +45,10 @@ final class DashboardControllerTest extends TestCase
 
         // Check dashboard UI sections
         $this->assertStringContainsString('Reservations & Calendar', $body);
-        $this->assertStringContainsString('+ Manual Booking', $body);
+        $this->assertStringContainsString('+ New Reservation', $body);
+        $this->assertStringContainsString('href="/reservations/new"', $body);
+        $this->assertStringNotContainsString('+ Manual Booking', $body);
+        $this->assertStringNotContainsString('/bookings/manual', $body);
         $this->assertStringContainsString('Channel Feeds Active', $body);
         $this->assertStringContainsString('id="channel-card-container"', $body);
         $this->assertStringContainsString('Sync Now', $body);

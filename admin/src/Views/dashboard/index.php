@@ -16,8 +16,8 @@
                 </p>
             </div>
             <div class="mt-4 flex md:mt-0 md:ml-4 space-x-3">
-                <a href="/bookings/manual" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    + Manual Booking
+                <a href="/reservations/new" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    + New Reservation
                 </a>
             </div>
         </div>
