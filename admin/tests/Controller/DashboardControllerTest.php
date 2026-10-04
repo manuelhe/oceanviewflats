@@ -43,9 +43,22 @@ final class DashboardControllerTest extends TestCase
         $this->assertStringContainsString('manager', $body);
         $this->assertStringContainsString('Sign Out', $body);
 
+        // Check canonical resource collection links in layout navigation bar
+        $this->assertStringContainsString('href="/"', $body);
+        $this->assertStringContainsString('Dashboard', $body);
+        $this->assertStringContainsString('href="/reservations"', $body);
+        $this->assertStringContainsString('Reservations', $body);
+        $this->assertStringContainsString('href="/rates"', $body);
+        $this->assertStringContainsString('Rates', $body);
+        $this->assertStringContainsString('href="/calendar-blocks"', $body);
+        $this->assertStringContainsString('Calendar Blocks', $body);
+
         // Check dashboard UI sections
         $this->assertStringContainsString('Reservations & Calendar', $body);
-        $this->assertStringContainsString('+ Manual Booking', $body);
+        $this->assertStringContainsString('+ New Reservation', $body);
+        $this->assertStringContainsString('href="/reservations/new"', $body);
+        $this->assertStringNotContainsString('+ Manual Booking', $body);
+        $this->assertStringNotContainsString('/bookings/manual', $body);
         $this->assertStringContainsString('Channel Feeds Active', $body);
         $this->assertStringContainsString('id="channel-card-container"', $body);
         $this->assertStringContainsString('Sync Now', $body);
