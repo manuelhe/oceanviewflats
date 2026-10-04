@@ -146,4 +146,22 @@ final class AdminCalendarBlockRepositoryTest extends TestCase
         // Deleting non-existent block returns false
         $this->assertFalse($this->repository->deleteBlock($id));
     }
+
+    public function testGetUpcomingBlocks(): void
+    {
+        $now = new DateTimeImmutable('2026-10-01');
+
+        $this->repository->createBlock('1606', '2026-09-28', '2026-10-03', 'Active Block', 1);
+        $this->repository->createBlock('1707', '2026-10-05', '2026-10-08', 'Upcoming 1707', 1);
+        $this->repository->createBlock('1606', '2026-10-25', '2026-10-28', 'Distant Block', 1);
+
+        $blocks = $this->repository->getUpcomingBlocks('all', 14, $now);
+        $this->assertCount(2, $blocks);
+        $this->assertSame('Active Block', $blocks[0]->reason);
+        $this->assertSame('Upcoming 1707', $blocks[1]->reason);
+
+        $blocks1707 = $this->repository->getUpcomingBlocks('1707', 14, $now);
+        $this->assertCount(1, $blocks1707);
+        $this->assertSame('Upcoming 1707', $blocks1707[0]->reason);
+    }
 }

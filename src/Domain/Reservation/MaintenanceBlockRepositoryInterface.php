@@ -25,4 +25,11 @@ interface MaintenanceBlockRepositoryInterface extends MaintenanceBlockSourceInte
      * @return list<MaintenanceBlock>
      */
     public function listFiltered(string $propertyId = 'all', string $filter = 'upcoming', ?DateTimeImmutable $now = null): array;
+
+    /**
+     * Retrieves active or upcoming maintenance blocks within a lookahead window.
+     *
+     * @return list<MaintenanceBlock>
+     */
+    public function getUpcomingBlocks(string $propertyId = 'all', int $lookaheadDays = 14, ?DateTimeImmutable $now = null): array;
 }

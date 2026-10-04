@@ -6,6 +6,7 @@ namespace OceanViewFlats\Domain\Quote;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
+use OceanViewFlats\Domain\Reservation\Dashboard\PropertyRateStatus;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -374,6 +375,69 @@ class PdoRateRepository implements RateRepositoryInterface
         } catch (Throwable) {
             return false;
         }
+    }
+
+    public function getPropertyRateStatus(string $propertyId, ?DateTimeImmutable $now = null): PropertyRateStatus
+    {
+        $today = ($now ?? new DateTimeImmutable('today'))->format('Y-m-d');
+        $tiers = $this->getTiersForProperty($propertyId);
+        usort($tiers, static fn(RateTier $a, RateTier $b): int => strcmp($a->startDate, $b->startDate));
+
+        $activeTier = null;
+        foreach ($tiers as $tier) {
+            if ($tier->startDate <= $today && $tier->endDate >= $today) {
+                $activeTier = $tier;
+                break;
+            }
+        }
+
+        $defaultRate = $this->ratesConfig->getDefaultNightlyRate($propertyId);
+
+        if ($activeTier !== null) {
+            $currentNightlyRate = $activeTier->nightlyRateCop;
+            $isSeasonalTierActive = true;
+            $activeTierName = $activeTier->seasonName;
+            $activeTierEndDate = $activeTier->endDate;
+        } else {
+            $currentNightlyRate = $defaultRate;
+            $isSeasonalTierActive = false;
+            $activeTierName = 'Baseline Rate';
+            $activeTierEndDate = null;
+        }
+
+        $nextTier = null;
+        foreach ($tiers as $tier) {
+            if ($tier->startDate > $today) {
+                if ($nextTier === null || $tier->startDate < $nextTier->startDate) {
+                    $nextTier = $tier;
+                }
+            }
+        }
+
+        if ($nextTier !== null) {
+            $nextTierRate = $nextTier->nightlyRateCop;
+            $nextTierName = $nextTier->seasonName;
+            $nextTierStartDate = $nextTier->startDate;
+        } elseif ($activeTier !== null) {
+            $nextTierRate = $defaultRate;
+            $nextTierName = 'Baseline Rate';
+            $nextTierStartDate = (new DateTimeImmutable($activeTier->endDate))->modify('+1 day')->format('Y-m-d');
+        } else {
+            $nextTierRate = null;
+            $nextTierName = null;
+            $nextTierStartDate = null;
+        }
+
+        return new PropertyRateStatus(
+            propertyId: $propertyId,
+            currentNightlyRate: $currentNightlyRate,
+            isSeasonalTierActive: $isSeasonalTierActive,
+            activeTierName: $activeTierName,
+            activeTierEndDate: $activeTierEndDate,
+            nextTierRate: $nextTierRate,
+            nextTierName: $nextTierName,
+            nextTierStartDate: $nextTierStartDate
+        );
     }
 
     /**

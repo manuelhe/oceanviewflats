@@ -165,4 +165,32 @@ class InMemoryMaintenanceBlockRepository extends InMemoryMaintenanceBlockSource 
 
         return $results;
     }
+
+    /**
+     * @return list<MaintenanceBlock>
+     */
+    public function getUpcomingBlocks(
+        string $propertyId = 'all',
+        int $lookaheadDays = 14,
+        ?DateTimeImmutable $now = null
+    ): array {
+        $today = ($now ?? new DateTimeImmutable('today'))->format('Y-m-d');
+        $maxDate = ($now ?? new DateTimeImmutable('today'))->modify("+{$lookaheadDays} days")->format('Y-m-d');
+
+        $results = [];
+
+        foreach ($this->blocksById as $block) {
+            if ($propertyId !== 'all' && $block->propertyId !== $propertyId) {
+                continue;
+            }
+
+            if ($block->endDate >= $today && $block->startDate <= $maxDate) {
+                $results[] = $block;
+            }
+        }
+
+        usort($results, static fn(MaintenanceBlock $a, MaintenanceBlock $b): int => strcmp($a->startDate, $b->startDate));
+
+        return $results;
+    }
 }

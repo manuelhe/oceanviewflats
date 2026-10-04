@@ -233,6 +233,50 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
     }
 
     /**
+     * @return list<MaintenanceBlock>
+     */
+    public function getUpcomingBlocks(
+        string $propertyId = 'all',
+        int $lookaheadDays = 14,
+        ?DateTimeImmutable $now = null
+    ): array {
+        $today = ($now ?? new DateTimeImmutable('today'))->format('Y-m-d');
+        $maxDate = ($now ?? new DateTimeImmutable('today'))->modify("+{$lookaheadDays} days")->format('Y-m-d');
+
+        $baseSql = '
+            FROM calendar_blocks cb
+            LEFT JOIN admin_users u ON cb.created_by = u.id
+            WHERE cb.end_date >= :today
+              AND cb.start_date <= :max_date
+        ';
+        $params = [
+            'today' => $today,
+            'max_date' => $maxDate,
+        ];
+
+        if ($propertyId !== 'all') {
+            $baseSql .= ' AND cb.property_id = :property_id';
+            $params['property_id'] = $propertyId;
+        }
+
+        $baseSql .= ' ORDER BY cb.start_date ASC';
+
+        $sql = 'SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at, u.name AS created_by_name ' . $baseSql;
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $blocks = [];
+        foreach ($rows as $row) {
+            $blocks[] = $this->hydrateRow($row);
+        }
+
+        return $blocks;
+    }
+
+    /**
      * @param array<string, mixed> $row
      */
     protected function hydrateRow(array $row): MaintenanceBlock

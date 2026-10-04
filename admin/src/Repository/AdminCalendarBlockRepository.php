@@ -97,6 +97,17 @@ class AdminCalendarBlockRepository implements MaintenanceBlockRepositoryInterfac
     }
 
     /**
+     * @return list<MaintenanceBlock>
+     */
+    public function getUpcomingBlocks(
+        string $propertyId = 'all',
+        int $lookaheadDays = 14,
+        ?DateTimeImmutable $now = null
+    ): array {
+        return $this->pdoRepo->getUpcomingBlocks($propertyId, $lookaheadDays, $now);
+    }
+
+    /**
      * Creates a new maintenance block record.
      */
     public function createBlock(

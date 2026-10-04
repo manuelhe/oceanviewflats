@@ -8,6 +8,7 @@ use OceanViewFlats\Domain\Quote\PdoRateRepository;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
 use OceanViewFlats\Domain\Quote\RateTier;
+use OceanViewFlats\Domain\Reservation\Dashboard\PropertyRateStatus;
 use PDO;
 
 /**
@@ -185,5 +186,22 @@ class AdminRateRepository implements RateRepositoryInterface
     public function seedFromCsv(string $csvFilePath, ?int $createdBy = null): int
     {
         return $this->inner->seedFromCsv($csvFilePath, $createdBy);
+    }
+
+    public function getPropertyRateStatus(string $propertyId, ?\DateTimeImmutable $now = null): PropertyRateStatus
+    {
+        if (method_exists($this->inner, 'getPropertyRateStatus')) {
+            /** @var PropertyRateStatus */
+            return $this->inner->getPropertyRateStatus($propertyId, $now);
+        }
+
+        $defaultRate = $this->ratesConfig->getDefaultNightlyRate($propertyId);
+        return new PropertyRateStatus(
+            propertyId: $propertyId,
+            currentNightlyRate: $defaultRate,
+            isSeasonalTierActive: false,
+            activeTierName: 'Baseline Rate',
+            activeTierEndDate: null
+        );
     }
 }

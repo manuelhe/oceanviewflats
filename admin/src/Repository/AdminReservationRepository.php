@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Repository;
 
+use DateTimeImmutable;
+use OceanViewFlats\Domain\Reservation\ChannelBlock;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
+use OceanViewFlats\Domain\Reservation\Dashboard\MovementType;
+use OceanViewFlats\Domain\Reservation\Dashboard\OperationalAlert;
+use OceanViewFlats\Domain\Reservation\Dashboard\OperationsEvent;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
@@ -198,6 +205,301 @@ final class AdminReservationRepository
 
         $this->repository->save($cancelled);
         return true;
+    }
+
+    /**
+     * Fetches upcoming arrivals, departures, and active stays for the specified date window.
+     * Detects same-day turnovers for identical properties.
+     *
+     * @param string $propertyId 'all' | '1606' | '1707'
+     * @return list<OperationsEvent>
+     */
+    public function getOperationalSchedule(
+        string $propertyId,
+        string $startDate,
+        string $endDate
+    ): array {
+        $sql = '
+            SELECT reservation_uid, property_id, guest_name, guest_phone, check_in, check_out,
+                   status, registry_completed, door_code, source, external_confirmation_code
+            FROM reservations
+            WHERE status IN ("confirmed", "pending_payment")
+              AND (
+                  (check_in >= :start_date AND check_in <= :end_date)
+                  OR (check_out >= :start_date AND check_out <= :end_date)
+              )
+        ';
+        $params = [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+
+        if ($propertyId !== 'all') {
+            $sql .= ' AND property_id = :property_id';
+            $params['property_id'] = $propertyId;
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        /** @var array<string, array<string, array<string, mixed>>> $departuresByDateAndProp */
+        $departuresByDateAndProp = [];
+        /** @var list<OperationsEvent> $events */
+        $events = [];
+
+        foreach ($rows as $row) {
+            $checkOut = (string) $row['check_out'];
+            $prop = (string) $row['property_id'];
+            if ($checkOut >= $startDate && $checkOut <= $endDate) {
+                $departuresByDateAndProp[$checkOut][$prop] = $row;
+                $events[] = new OperationsEvent(
+                    date: $checkOut,
+                    movementType: MovementType::CHECK_OUT,
+                    propertyId: $prop,
+                    reservationUid: (string) $row['reservation_uid'],
+                    guestName: (string) $row['guest_name'],
+                    guestPhone: isset($row['guest_phone']) && $row['guest_phone'] !== '' ? (string) $row['guest_phone'] : null,
+                    status: (string) $row['status'],
+                    registryCompleted: ((int) ($row['registry_completed'] ?? 0)) === 1,
+                    doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null,
+                    source: (string) ($row['source'] ?? 'web'),
+                    externalConfirmationCode: isset($row['external_confirmation_code']) && $row['external_confirmation_code'] !== '' ? (string) $row['external_confirmation_code'] : null
+                );
+            }
+        }
+
+        foreach ($rows as $row) {
+            $checkIn = (string) $row['check_in'];
+            $prop = (string) $row['property_id'];
+            if ($checkIn >= $startDate && $checkIn <= $endDate) {
+                $hasTurnover = isset($departuresByDateAndProp[$checkIn][$prop]);
+                $depRow = $hasTurnover ? $departuresByDateAndProp[$checkIn][$prop] : null;
+
+                $events[] = new OperationsEvent(
+                    date: $checkIn,
+                    movementType: $hasTurnover ? MovementType::TURNOVER : MovementType::CHECK_IN,
+                    propertyId: $prop,
+                    reservationUid: (string) $row['reservation_uid'],
+                    guestName: (string) $row['guest_name'],
+                    guestPhone: isset($row['guest_phone']) && $row['guest_phone'] !== '' ? (string) $row['guest_phone'] : null,
+                    status: (string) $row['status'],
+                    registryCompleted: ((int) ($row['registry_completed'] ?? 0)) === 1,
+                    doorCode: isset($row['door_code']) && $row['door_code'] !== '' ? (string) $row['door_code'] : null,
+                    source: (string) ($row['source'] ?? 'web'),
+                    externalConfirmationCode: isset($row['external_confirmation_code']) && $row['external_confirmation_code'] !== '' ? (string) $row['external_confirmation_code'] : null,
+                    departingReservationUid: $depRow !== null ? (string) $depRow['reservation_uid'] : null,
+                    departingGuestName: $depRow !== null ? (string) $depRow['guest_name'] : null
+                );
+            }
+        }
+
+        usort($events, static function (OperationsEvent $a, OperationsEvent $b): int {
+            if ($a->date !== $b->date) {
+                return strcmp($a->date, $b->date);
+            }
+            $orderA = $a->movementType === MovementType::CHECK_OUT ? 0 : 1;
+            $orderB = $b->movementType === MovementType::CHECK_OUT ? 0 : 1;
+            if ($orderA !== $orderB) {
+                return $orderA <=> $orderB;
+            }
+            return strcmp($a->propertyId, $b->propertyId);
+        });
+
+        return $events;
+    }
+
+    /**
+     * Fetches confirmed reservations with imminent check-in dates whose Guest Registry is incomplete.
+     *
+     * @param string $propertyId 'all' | '1606' | '1707'
+     * @return list<OperationalAlert>
+     */
+    public function getIncompleteRegistryAlerts(
+        string $propertyId = 'all',
+        int $lookaheadDays = 3,
+        ?DateTimeImmutable $now = null
+    ): array {
+        $today = ($now ?? new DateTimeImmutable('today'))->format('Y-m-d');
+        $tomorrow = ($now ?? new DateTimeImmutable('today'))->modify('+1 day')->format('Y-m-d');
+        $maxDate = ($now ?? new DateTimeImmutable('today'))->modify("+{$lookaheadDays} days")->format('Y-m-d');
+
+        $sql = '
+            SELECT reservation_uid, property_id, guest_name, guest_phone, check_in, check_out,
+                   source, external_confirmation_code
+            FROM reservations
+            WHERE status = "confirmed"
+              AND (registry_completed = 0 OR registry_completed IS NULL)
+              AND (
+                  (check_in >= :today AND check_in <= :max_date)
+                  OR (check_in < :today AND check_out > :today)
+              )
+        ';
+        $params = [
+            'today' => $today,
+            'max_date' => $maxDate,
+        ];
+
+        if ($propertyId !== 'all') {
+            $sql .= ' AND property_id = :property_id';
+            $params['property_id'] = $propertyId;
+        }
+
+        $sql .= ' ORDER BY check_in ASC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $alerts = [];
+        foreach ($rows as $row) {
+            $checkIn = (string) $row['check_in'];
+            $uid = (string) $row['reservation_uid'];
+            $prop = (string) $row['property_id'];
+            $guest = (string) $row['guest_name'];
+
+            if ($checkIn <= $today) {
+                $severity = AlertSeverity::CRITICAL;
+                $title = $checkIn === $today
+                    ? "Check-in Today: Missing Guest Registry ({$guest})"
+                    : "In-House Guest: Missing Guest Registry ({$guest})";
+                $description = "Apartment {$prop} check-in on {$checkIn} has no statutory guest identification registered. Door access credentials remain withheld.";
+            } elseif ($checkIn === $tomorrow) {
+                $severity = AlertSeverity::WARNING;
+                $title = "Check-in Tomorrow: Guest Registry Required ({$guest})";
+                $description = "Apartment {$prop} arrival tomorrow ({$checkIn}). Send registration link before door credentials are generated.";
+            } else {
+                $severity = AlertSeverity::INFO;
+                $title = "Upcoming Arrival: Guest Registry Pending ({$guest})";
+                $description = "Apartment {$prop} check-in on {$checkIn}. Advance registration pending.";
+            }
+
+            $alerts[] = new OperationalAlert(
+                id: 'registry_' . $uid,
+                type: AlertType::INCOMPLETE_GUEST_REGISTRY,
+                severity: $severity,
+                propertyId: $prop,
+                title: $title,
+                description: $description,
+                dueDate: $checkIn,
+                reservationUid: $uid,
+                guestName: $guest,
+                source: (string) ($row['source'] ?? 'web'),
+                actionPayload: [
+                    'guest_phone' => isset($row['guest_phone']) && $row['guest_phone'] !== '' ? (string) $row['guest_phone'] : null,
+                    'external_code' => isset($row['external_confirmation_code']) && $row['external_confirmation_code'] !== '' ? (string) $row['external_confirmation_code'] : null,
+                    'check_in' => $checkIn,
+                    'check_out' => (string) $row['check_out'],
+                ]
+            );
+        }
+
+        return $alerts;
+    }
+
+    /**
+     * Resolves un-onboarded external channel blocks from iCal sync feeds into OperationalAlerts.
+     *
+     * @param list<ChannelBlock> $channelBlocks
+     * @param string $propertyId 'all' | '1606' | '1707'
+     * @return list<OperationalAlert>
+     */
+    public function getUnonboardedChannelBlockAlerts(
+        array $channelBlocks,
+        string $propertyId = 'all',
+        ?DateTimeImmutable $now = null
+    ): array {
+        $today = ($now ?? new DateTimeImmutable('today'))->format('Y-m-d');
+        $warningLimit = ($now ?? new DateTimeImmutable('today'))->modify('+2 days')->format('Y-m-d');
+
+        $alerts = [];
+        foreach ($channelBlocks as $block) {
+            if ($block->endDate <= $today) {
+                continue;
+            }
+            if ($propertyId !== 'all' && $block->propertyId !== $propertyId) {
+                continue;
+            }
+
+            $blockIdentifier = md5("{$block->propertyId}_{$block->startDate}_{$block->endDate}_{$block->source}");
+
+            $stmt = $this->pdo->prepare('
+                SELECT reservation_uid, guest_name
+                FROM reservations
+                WHERE property_id = :prop
+                  AND status != "cancelled"
+                  AND (
+                      channel_block_uid = :block_uid
+                      OR (check_in = :start_date AND check_out = :end_date)
+                      OR (check_in < :end_date AND check_out > :start_date AND source = :source)
+                  )
+                LIMIT 1
+            ');
+            $stmt->execute([
+                'prop' => $block->propertyId,
+                'block_uid' => $blockIdentifier,
+                'start_date' => $block->startDate,
+                'end_date' => $block->endDate,
+                'source' => $block->source,
+            ]);
+            $matched = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($matched !== false) {
+                continue;
+            }
+
+            $isUrgent = $block->startDate <= $warningLimit;
+            $severity = $isUrgent ? AlertSeverity::WARNING : AlertSeverity::INFO;
+            $sourceLabel = ucfirst($block->source);
+
+            $alerts[] = new OperationalAlert(
+                id: 'channel_block_' . $blockIdentifier,
+                type: AlertType::UNONBOARDED_CHANNEL_BLOCK,
+                severity: $severity,
+                propertyId: $block->propertyId,
+                title: "Un-onboarded {$sourceLabel} Booking (Apt {$block->propertyId})",
+                description: "External {$sourceLabel} hold from {$block->startDate} to {$block->endDate} has no guest profile or reservation record.",
+                dueDate: $block->startDate,
+                channelBlockUid: $blockIdentifier,
+                source: $block->source,
+                actionPayload: [
+                    'start_date' => $block->startDate,
+                    'end_date' => $block->endDate,
+                    'summary' => $block->summary,
+                    'property_id' => $block->propertyId,
+                    'channel_block_uid' => $blockIdentifier,
+                ]
+            );
+        }
+
+        usort($alerts, static fn(OperationalAlert $a, OperationalAlert $b): int => strcmp($a->dueDate, $b->dueDate));
+
+        return $alerts;
+    }
+
+    public function getActiveStaysCount(string $propertyId = 'all', ?DateTimeImmutable $now = null): int
+    {
+        $today = ($now ?? new DateTimeImmutable('today'))->format('Y-m-d');
+        $sql = '
+            SELECT COUNT(*)
+            FROM reservations
+            WHERE status = "confirmed"
+              AND check_in <= :today
+              AND check_out > :today
+        ';
+        $params = ['today' => $today];
+
+        if ($propertyId !== 'all') {
+            $sql .= ' AND property_id = :property_id';
+            $params['property_id'] = $propertyId;
+        }
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return (int) $stmt->fetchColumn();
     }
 
     public function getPdo(): PDO

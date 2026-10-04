@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Admin\Tests\Repository;
 
+use DateTimeImmutable;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use OceanViewFlats\Domain\Reservation\ChannelBlock;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
+use OceanViewFlats\Domain\Reservation\Dashboard\MovementType;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -459,6 +464,156 @@ final class AdminReservationRepositoryTest extends TestCase
         );
 
         $this->assertFalse($result);
+    }
+
+    public function testGetOperationalScheduleReturnsArrivalsDeparturesAndDetectsTurnover(): void
+    {
+        // Apt 1606: Alice departs 2026-10-05, and Dave checks in 2026-10-05 (TURNOVER!)
+        // Apt 1707: Eva departs 2026-10-06
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, registry_completed, door_code
+            ) VALUES
+            ('res-alice', '1606', 'Alice Wonder', 'alice@test.com', '+573001', '2026-10-01', '2026-10-05', 100, 'confirmed', 'web', 1, '1111#'),
+            ('res-dave', '1606', 'Dave Miller', 'dave@test.com', '+573002', '2026-10-05', '2026-10-09', 100, 'confirmed', 'airbnb', 0, NULL),
+            ('res-eva', '1707', 'Eva Green', 'eva@test.com', '+573003', '2026-10-02', '2026-10-06', 100, 'confirmed', 'web', 1, '2222#');
+        ");
+
+        $events = $this->repository->getOperationalSchedule('all', '2026-10-05', '2026-10-06');
+
+        $this->assertCount(3, $events);
+
+        // First event on 2026-10-05: Alice departure
+        $aliceOut = $events[0];
+        $this->assertSame('2026-10-05', $aliceOut->date);
+        $this->assertSame(MovementType::CHECK_OUT, $aliceOut->movementType);
+        $this->assertSame('res-alice', $aliceOut->reservationUid);
+
+        // Second event on 2026-10-05: Dave turnover (same day check-in at Apt 1606)
+        $daveIn = $events[1];
+        $this->assertSame('2026-10-05', $daveIn->date);
+        $this->assertSame(MovementType::TURNOVER, $daveIn->movementType);
+        $this->assertSame('res-dave', $daveIn->reservationUid);
+        $this->assertSame('res-alice', $daveIn->departingReservationUid);
+        $this->assertSame('Alice Wonder', $daveIn->departingGuestName);
+
+        // Third event on 2026-10-06: Eva checkout
+        $evaOut = $events[2];
+        $this->assertSame('2026-10-06', $evaOut->date);
+        $this->assertSame(MovementType::CHECK_OUT, $evaOut->movementType);
+        $this->assertSame('res-eva', $evaOut->reservationUid);
+
+        // Test property filter '1707'
+        $filtered1707 = $this->repository->getOperationalSchedule('1707', '2026-10-05', '2026-10-06');
+        $this->assertCount(1, $filtered1707);
+        $this->assertSame('res-eva', $filtered1707[0]->reservationUid);
+    }
+
+    public function testGetIncompleteRegistryAlertsCategorizesSeverityByProximity(): void
+    {
+        $now = new DateTimeImmutable('2026-10-10');
+
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, registry_completed
+            ) VALUES
+            ('res-today', '1606', 'Today Guest', 'today@test.com', '+573001', '2026-10-10', '2026-10-14', 100, 'confirmed', 0),
+            ('res-tomorrow', '1707', 'Tomorrow Guest', 'tomo@test.com', '+573002', '2026-10-11', '2026-10-15', 100, 'confirmed', 0),
+            ('res-future', '1606', 'Future Guest', 'fut@test.com', '+573003', '2026-10-13', '2026-10-16', 100, 'confirmed', 0),
+            ('res-completed', '1606', 'Done Guest', 'done@test.com', '+573004', '2026-10-10', '2026-10-14', 100, 'confirmed', 1),
+            ('res-far', '1606', 'Far Guest', 'far@test.com', '+573005', '2026-10-25', '2026-10-28', 100, 'confirmed', 0);
+        ");
+
+        $alerts = $this->repository->getIncompleteRegistryAlerts('all', 3, $now);
+
+        // Expected 3 alerts: today, tomorrow, and future within 3 days. Completed and far (>3 days) excluded.
+        $this->assertCount(3, $alerts);
+
+        $this->assertSame('registry_res-today', $alerts[0]->id);
+        $this->assertSame(AlertSeverity::CRITICAL, $alerts[0]->severity);
+        $this->assertSame(AlertType::INCOMPLETE_GUEST_REGISTRY, $alerts[0]->type);
+
+        $this->assertSame('registry_res-tomorrow', $alerts[1]->id);
+        $this->assertSame(AlertSeverity::WARNING, $alerts[1]->severity);
+
+        $this->assertSame('registry_res-future', $alerts[2]->id);
+        $this->assertSame(AlertSeverity::INFO, $alerts[2]->severity);
+
+        // Test property filter '1707'
+        $alerts1707 = $this->repository->getIncompleteRegistryAlerts('1707', 3, $now);
+        $this->assertCount(1, $alerts1707);
+        $this->assertSame('registry_res-tomorrow', $alerts1707[0]->id);
+    }
+
+    public function testGetUnonboardedChannelBlockAlertsDetectsUnmatchedBlocks(): void
+    {
+        $now = new DateTimeImmutable('2026-10-10');
+
+        // Existing reservation matching block 1
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source
+            ) VALUES
+            ('res-matched', '1606', 'Matched Airbnb', 'airbnb@test.com', '+573001', '2026-10-15', '2026-10-18', 100, 'confirmed', 'airbnb');
+        ");
+
+        $matchedBlock = new ChannelBlock(
+            propertyId: '1606',
+            startDate: '2026-10-15',
+            endDate: '2026-10-18',
+            source: 'airbnb'
+        );
+
+        $urgentUnmatched = new ChannelBlock(
+            propertyId: '1707',
+            startDate: '2026-10-11',
+            endDate: '2026-10-14',
+            source: 'airbnb'
+        );
+
+        $futureUnmatched = new ChannelBlock(
+            propertyId: '1606',
+            startDate: '2026-10-22',
+            endDate: '2026-10-25',
+            source: 'airbnb'
+        );
+
+        $alerts = $this->repository->getUnonboardedChannelBlockAlerts([$matchedBlock, $urgentUnmatched, $futureUnmatched], 'all', $now);
+
+        // Only urgentUnmatched and futureUnmatched should generate alerts
+        $this->assertCount(2, $alerts);
+
+        // First should be urgent (starts tomorrow -> WARNING)
+        $this->assertSame('1707', $alerts[0]->propertyId);
+        $this->assertSame(AlertSeverity::WARNING, $alerts[0]->severity);
+        $this->assertSame(AlertType::UNONBOARDED_CHANNEL_BLOCK, $alerts[0]->type);
+
+        // Second should be future (starts in 12 days -> INFO)
+        $this->assertSame('1606', $alerts[1]->propertyId);
+        $this->assertSame(AlertSeverity::INFO, $alerts[1]->severity);
+    }
+
+    public function testGetActiveStaysCount(): void
+    {
+        $now = new DateTimeImmutable('2026-10-10');
+
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status
+            ) VALUES
+            ('res-active-1', '1606', 'Guest 1', 'g1@test.com', '+573001', '2026-10-08', '2026-10-12', 100, 'confirmed'),
+            ('res-active-2', '1707', 'Guest 2', 'g2@test.com', '+573002', '2026-10-10', '2026-10-15', 100, 'confirmed'),
+            ('res-departed', '1606', 'Guest 3', 'g3@test.com', '+573003', '2026-10-05', '2026-10-10', 100, 'confirmed'),
+            ('res-future', '1606', 'Guest 4', 'g4@test.com', '+573004', '2026-10-12', '2026-10-15', 100, 'confirmed');
+        ");
+
+        $this->assertSame(2, $this->repository->getActiveStaysCount('all', $now));
+        $this->assertSame(1, $this->repository->getActiveStaysCount('1606', $now));
+        $this->assertSame(1, $this->repository->getActiveStaysCount('1707', $now));
     }
 
     private function seedSampleReservations(): void

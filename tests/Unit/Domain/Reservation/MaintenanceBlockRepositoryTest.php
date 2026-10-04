@@ -305,4 +305,33 @@ final class MaintenanceBlockRepositoryTest extends TestCase
         $this->assertCount(1, $blocks1707);
         $this->assertSame('Block C', $blocks1707[0]->reason);
     }
+
+    /**
+     * @dataProvider repositoryProvider
+     * @param callable(PDO): MaintenanceBlockRepositoryInterface $factory
+     */
+    public function testGetUpcomingBlocks(callable $factory): void
+    {
+        $repo = $factory($this->pdo);
+        $now = new DateTimeImmutable('2026-11-01');
+
+        $repo->save(new MaintenanceBlock('1606', '2026-10-25', '2026-11-03', 'Current Block', createdBy: 1));
+        $repo->save(new MaintenanceBlock('1707', '2026-11-05', '2026-11-08', 'Upcoming Block 1', createdBy: 1));
+        $repo->save(new MaintenanceBlock('1606', '2026-11-12', '2026-11-14', 'Upcoming Block 2', createdBy: 1));
+        $repo->save(new MaintenanceBlock('1606', '2026-11-25', '2026-11-28', 'Distant Block', createdBy: 1));
+        $repo->save(new MaintenanceBlock('1606', '2026-10-10', '2026-10-15', 'Past Block', createdBy: 1));
+
+        // 14-day lookahead from 2026-11-01 -> end_date >= 2026-11-01 AND start_date <= 2026-11-15
+        $allUpcoming = $repo->getUpcomingBlocks('all', 14, $now);
+        $this->assertCount(3, $allUpcoming);
+        $this->assertSame('Current Block', $allUpcoming[0]->reason);
+        $this->assertSame('Upcoming Block 1', $allUpcoming[1]->reason);
+        $this->assertSame('Upcoming Block 2', $allUpcoming[2]->reason);
+
+        // Filtered by property 1606
+        $prop1606Upcoming = $repo->getUpcomingBlocks('1606', 14, $now);
+        $this->assertCount(2, $prop1606Upcoming);
+        $this->assertSame('Current Block', $prop1606Upcoming[0]->reason);
+        $this->assertSame('Upcoming Block 2', $prop1606Upcoming[1]->reason);
+    }
 }

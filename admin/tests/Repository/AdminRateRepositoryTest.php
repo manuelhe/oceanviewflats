@@ -226,4 +226,25 @@ final class AdminRateRepositoryTest extends TestCase
         $gaps = $this->repository->detectGaps('1606', 2026);
         $this->assertEmpty($gaps);
     }
+
+    public function testPropertyRateStatus(): void
+    {
+        $this->repository->createRate([
+            'property_id' => '1707',
+            'start_date' => '2026-06-01',
+            'end_date' => '2026-08-31',
+            'season_name' => 'Mid Year Peak',
+            'price_per_night' => 520000.0,
+            'min_stay' => 3,
+        ]);
+
+        $status = $this->repository->getPropertyRateStatus('1707', new \DateTimeImmutable('2026-07-01'));
+        $this->assertSame(520000.0, $status->currentNightlyRate);
+        $this->assertTrue($status->isSeasonalTierActive);
+        $this->assertSame('Mid Year Peak', $status->activeTierName);
+        $this->assertSame('2026-08-31', $status->activeTierEndDate);
+        $this->assertSame(450000.0, $status->nextTierRate);
+        $this->assertSame('Baseline Rate', $status->nextTierName);
+        $this->assertSame('2026-09-01', $status->nextTierStartDate);
+    }
 }

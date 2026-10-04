@@ -301,4 +301,36 @@ final class RateRepositoryTest extends TestCase
         $this->assertSame(5, $quote->nightsCount);
         $this->assertSame(3000000.0, $quote->accommodationTotalCop);
     }
+
+    public function testPropertyRateStatusActiveSeasonalTierAndRevert(): void
+    {
+        $pdo = $this->createSqlitePdo();
+        $pdo->exec("
+            INSERT INTO property_rates (property_id, start_date, end_date, season_name, price_per_night, min_stay)
+            VALUES ('1606', '2026-06-01', '2026-08-31', 'Summer High Season', 500000, 3),
+                   ('1606', '2026-12-15', '2027-01-15', 'Holiday Season', 650000, 4)
+        ");
+
+        $repo = new PdoRateRepository($pdo);
+
+        // Case 1: Today is in Summer High Season (2026-07-15)
+        $statusActive = $repo->getPropertyRateStatus('1606', new \DateTimeImmutable('2026-07-15'));
+        $this->assertSame(500000.0, $statusActive->currentNightlyRate);
+        $this->assertTrue($statusActive->isSeasonalTierActive);
+        $this->assertSame('Summer High Season', $statusActive->activeTierName);
+        $this->assertSame('2026-08-31', $statusActive->activeTierEndDate);
+        $this->assertSame(650000.0, $statusActive->nextTierRate);
+        $this->assertSame('Holiday Season', $statusActive->nextTierName);
+        $this->assertSame('2026-12-15', $statusActive->nextTierStartDate);
+
+        // Case 2: Today is in baseline gap (2026-10-01)
+        $statusBaseline = $repo->getPropertyRateStatus('1606', new \DateTimeImmutable('2026-10-01'));
+        $this->assertSame(350000.0, $statusBaseline->currentNightlyRate); // default baseline for 1606
+        $this->assertFalse($statusBaseline->isSeasonalTierActive);
+        $this->assertSame('Baseline Rate', $statusBaseline->activeTierName);
+        $this->assertNull($statusBaseline->activeTierEndDate);
+        $this->assertSame(650000.0, $statusBaseline->nextTierRate);
+        $this->assertSame('Holiday Season', $statusBaseline->nextTierName);
+        $this->assertSame('2026-12-15', $statusBaseline->nextTierStartDate);
+    }
 }
