@@ -101,7 +101,15 @@ final class CalendarBlockControllerTest extends TestCase
         $this->assertStringContainsString('hx-swap="outerHTML"', $body);
         $this->assertStringContainsString('hx-push-url="true"', $body);
 
-        // 7. Sibling query state preserved in default links
+        // 7. ARIA roles on pills
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*All Properties\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1707\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Active & Upcoming\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Concluded \(Past\)\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*All History\s*<\/a>/s', $body);
+
+        // 8. Sibling query state preserved in default links
         $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=upcoming"', $body);
         $this->assertStringContainsString('href="/calendar-blocks?property_id=all&filter=past"', $body);
     }
@@ -178,6 +186,34 @@ final class CalendarBlockControllerTest extends TestCase
         // Sibling links preserve state: switching Status retains property_id=1606
         $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=upcoming"', $body);
         $this->assertStringContainsString('href="/calendar-blocks?property_id=1606&filter=all"', $body);
+
+        // Filter pills have role="button"
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Apartment 1606\s*<\/a>/s', $body);
+        $this->assertMatchesRegularExpression('/<a[^>]*role="button"[^>]*>\s*Concluded \(Past\)\s*<\/a>/s', $body);
+    }
+
+    public function testIndexRendersFullPageWhenHtmxTargetIsBody(): void
+    {
+        $session = ['csrf_token' => 'test_token', 'admin_user_id' => 1];
+        $request = new Request(
+            method: 'GET',
+            uri: '/calendar-blocks',
+            query: ['property_id' => '1606', 'filter' => 'upcoming'],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => 'body',
+            ]
+        );
+        $response = $this->controller->index($request, $session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Must render full layout shell rather than partials
+        $this->assertStringContainsString('<!DOCTYPE html>', $body);
+        $this->assertStringContainsString('<body', $body);
+        $this->assertStringContainsString('Maintenance & Calendar Holds', $body);
+        $this->assertStringContainsString('id="blocks-view-container"', $body);
     }
 
     public function testNewHoldRendersModal(): void
@@ -323,7 +359,8 @@ final class CalendarBlockControllerTest extends TestCase
         $this->assertStringContainsString('id="blocks-view-container"', $body);
         $this->assertStringContainsString('hx-swap-oob="outerHTML"', $body);
         $this->assertStringContainsString('id="calendar-blocks-header-actions"', $body);
-        $this->assertStringContainsString('modal-container', $body);
+        $this->assertStringContainsString('<div id="modal-container" hx-swap-oob="innerHTML"></div>', $body);
+        $this->assertStringNotContainsString('<script>', $body);
 
         // Verify block exists in DB
         $blocks = $this->blockRepo->getBlocks('1606', 'all');

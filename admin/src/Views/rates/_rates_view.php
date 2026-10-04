@@ -18,10 +18,10 @@ $years = [$year - 1, $year, $year + 1];
      hx-trigger="rateUpdated from:body"
      hx-swap="outerHTML">
 
-    <!-- Navigation & Filter Bar (Property Tabs & Year Selector) -->
+    <!-- Navigation & Filter Bar (Property Filter & Year Selector) -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         
-        <!-- Property Tabs -->
+        <!-- Property Filter -->
         <div class="flex items-center space-x-2">
             <span class="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">Property:</span>
             <a href="/rates?property_id=1606&year=<?= $year ?>"
@@ -29,6 +29,7 @@ $years = [$year - 1, $year, $year + 1];
                hx-target="#rates-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $propertyId === '1606' ? 'aria-current="page" ' : '' ?>class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $propertyId === '1606' ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' ?>">
                 Apartment 1606
             </a>
@@ -37,6 +38,7 @@ $years = [$year - 1, $year, $year + 1];
                hx-target="#rates-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $propertyId === '1707' ? 'aria-current="page" ' : '' ?>class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $propertyId === '1707' ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' ?>">
                 Apartment 1707
             </a>
@@ -51,6 +53,7 @@ $years = [$year - 1, $year, $year + 1];
                    hx-target="#rates-view-container"
                    hx-swap="outerHTML"
                    hx-push-url="true"
+                   role="button"
                    <?= $y === $year ? 'aria-current="page" ' : '' ?>class="px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer <?= $y === $year ? 'bg-gray-900 text-white font-semibold' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' ?>">
                     <?= $y ?>
                 </a>

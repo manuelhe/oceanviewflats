@@ -43,7 +43,7 @@ final class RateController
 
         $viewContainerHtml = $this->renderViewContainerHtml($propertyId, $year, session: $session);
 
-        if ($request->isHtmx()) {
+        if ($request->isHtmx() && $request->getHeader('HX-Target') !== 'body') {
             $headerActionsHtml = $this->renderHeaderActionsHtml($propertyId, $year, oob: true, session: $session);
             return Response::html($viewContainerHtml . "\n" . $headerActionsHtml, 200);
         }
@@ -185,11 +185,15 @@ final class RateController
         );
 
         // 5. Response: close modal and emit trigger for HTMX update
+        $flashMessage = "Seasonal tier '{$seasonName}' created successfully.";
+        $flashType = 'success';
+        $session['rate_flash'] = ['message' => $flashMessage, 'type' => $flashType];
+
         $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
-            flashMessage: "Seasonal tier '{$seasonName}' created successfully.",
-            flashType: 'success',
+            flashMessage: $flashMessage,
+            flashType: $flashType,
             oob: true,
             session: $session
         );
@@ -200,7 +204,7 @@ final class RateController
             session: $session
         );
 
-        $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml;
+        $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml . "\n" . '<div id="modal-container" hx-swap-oob="innerHTML"></div>';
 
         return new Response(
             statusCode: 200,
@@ -344,11 +348,15 @@ final class RateController
         );
 
         // 5. Response: close modal and emit trigger for HTMX update
+        $flashMessage = "Seasonal tier '{$seasonName}' updated successfully.";
+        $flashType = 'success';
+        $session['rate_flash'] = ['message' => $flashMessage, 'type' => $flashType];
+
         $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
-            flashMessage: "Seasonal tier '{$seasonName}' updated successfully.",
-            flashType: 'success',
+            flashMessage: $flashMessage,
+            flashType: $flashType,
             oob: true,
             session: $session
         );
@@ -359,7 +367,7 @@ final class RateController
             session: $session
         );
 
-        $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml;
+        $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml . "\n" . '<div id="modal-container" hx-swap-oob="innerHTML"></div>';
 
         return new Response(
             statusCode: 200,
@@ -406,11 +414,15 @@ final class RateController
         $this->rateRepository->delete($id);
 
         // 3. Re-render View Container & Header Actions
+        $flashMessage = "Seasonal tier '{$existing['season_name']}' deleted successfully. Dates will use property base pricing.";
+        $flashType = 'success';
+        $session['rate_flash'] = ['message' => $flashMessage, 'type' => $flashType];
+
         $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
             $year,
-            flashMessage: "Seasonal tier '{$existing['season_name']}' deleted successfully. Dates will use property base pricing.",
-            flashType: 'success',
+            flashMessage: $flashMessage,
+            flashType: $flashType,
             oob: false,
             session: $session
         );
@@ -473,6 +485,8 @@ final class RateController
             $flashMessage = "CSV seeding failed: {$e->getMessage()}";
             $flashType = 'error';
         }
+
+        $session['rate_flash'] = ['message' => $flashMessage, 'type' => $flashType];
 
         $viewContainerHtml = $this->renderViewContainerHtml(
             $propertyId,
@@ -621,8 +635,14 @@ final class RateController
         ?string $flashMessage = null,
         ?string $flashType = null,
         bool $oob = false,
-        array $session = []
+        array &$session = []
     ): string {
+        if ($flashMessage === null && isset($session['rate_flash']) && is_array($session['rate_flash'])) {
+            $flashMessage = (string) ($session['rate_flash']['message'] ?? '');
+            $flashType = (string) ($session['rate_flash']['type'] ?? 'success');
+            unset($session['rate_flash']);
+        }
+
         $contentHtml = $this->renderContentHtml(
             $propertyId,
             $year,

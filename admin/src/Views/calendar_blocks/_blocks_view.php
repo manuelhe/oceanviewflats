@@ -23,6 +23,7 @@ $oob = $oob ?? false;
                hx-target="#blocks-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $propertyId === 'all' ? 'aria-current="page" ' : '' ?>class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $propertyId === 'all' ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' ?>">
                 All Properties
             </a>
@@ -31,6 +32,7 @@ $oob = $oob ?? false;
                hx-target="#blocks-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $propertyId === '1606' ? 'aria-current="page" ' : '' ?>class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $propertyId === '1606' ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' ?>">
                 Apartment 1606
             </a>
@@ -39,6 +41,7 @@ $oob = $oob ?? false;
                hx-target="#blocks-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $propertyId === '1707' ? 'aria-current="page" ' : '' ?>class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $propertyId === '1707' ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-gray-100 text-gray-700 hover:bg-gray-200' ?>">
                 Apartment 1707
             </a>
@@ -52,6 +55,7 @@ $oob = $oob ?? false;
                hx-target="#blocks-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $filter === 'upcoming' ? 'aria-current="page" ' : '' ?>class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $filter === 'upcoming' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200' ?>">
                 Active & Upcoming
             </a>
@@ -60,6 +64,7 @@ $oob = $oob ?? false;
                hx-target="#blocks-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $filter === 'past' ? 'aria-current="page" ' : '' ?>class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $filter === 'past' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200' ?>">
                 Concluded (Past)
             </a>
@@ -68,6 +73,7 @@ $oob = $oob ?? false;
                hx-target="#blocks-view-container"
                hx-swap="outerHTML"
                hx-push-url="true"
+               role="button"
                <?= $filter === 'all' ? 'aria-current="page" ' : '' ?>class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer <?= $filter === 'all' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200' ?>">
                 All History
             </a>

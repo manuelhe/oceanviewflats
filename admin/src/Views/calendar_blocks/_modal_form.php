@@ -92,7 +92,7 @@ $filter = !empty($filter) ? $filter : 'upcoming';
                 <!-- Property Selection -->
                 <div>
                     <label for="block-property-id" class="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1">
-                        Property Unit *
+                        Property *
                     </label>
                     <select id="block-property-id" name="property_id" required
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">

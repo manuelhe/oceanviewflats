@@ -43,7 +43,7 @@ final class CalendarBlockController
 
         $viewContainerHtml = $this->renderViewContainerHtml($propertyId, $filter, oob: false, session: $session);
 
-        if ($request->isHtmx()) {
+        if ($request->isHtmx() && $request->getHeader('HX-Target') !== 'body') {
             $headerActionsHtml = $this->renderHeaderActionsHtml($propertyId, $filter, oob: true);
             return Response::html($viewContainerHtml . "\n" . $headerActionsHtml, 200);
         }
@@ -240,8 +240,7 @@ final class CalendarBlockController
         );
 
         if ($request->isHtmx()) {
-            $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml;
-            $responseHtml .= '<script>document.getElementById("modal-container").innerHTML = "";</script>';
+            $responseHtml = $viewContainerHtml . "\n" . $headerActionsHtml . "\n" . '<div id="modal-container" hx-swap-oob="innerHTML"></div>';
 
             return new Response(
                 statusCode: 200,
