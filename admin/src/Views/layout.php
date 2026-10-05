@@ -30,8 +30,8 @@
         }
 
         #global-progress-bar.loading,
-        .htmx-request #global-progress-bar {
-            background-image: linear-gradient(90deg, #4f46e5 0%, #818cf8 50%, #4f46e5 100%);
+        body.htmx-request #global-progress-bar {
+            background-image: linear-gradient(90deg, var(--color-indigo-600, #4f46e5) 0%, var(--color-indigo-400, #818cf8) 50%, var(--color-indigo-600, #4f46e5) 100%);
             background-size: 200% 100%;
             animation: progress-shimmer 1.5s infinite linear;
         }
@@ -51,8 +51,8 @@
 </head>
 <body class="min-h-full flex flex-col font-sans text-gray-900 antialiased" hx-headers='{"HX-CSRF-Token": "<?= htmlspecialchars($effectiveCsrfToken, ENT_QUOTES, 'UTF-8') ?>"}'>
 
-<div id="global-progress-bar" class="fixed top-0 left-0 h-1 bg-indigo-600 z-50 pointer-events-none transition-all duration-300 ease-out opacity-0" style="width: 0%;" role="status" aria-live="polite" aria-label="Loading"></div>
-<div id="global-alert-container" class="fixed top-4 right-4 z-50 pointer-events-none space-y-2" role="alert" aria-live="assertive"></div>
+<div id="global-progress-bar" class="fixed top-0 left-0 w-full h-1 bg-indigo-600 z-50 pointer-events-none transition-all duration-300 ease-out opacity-0" style="width: 0%;" role="status" aria-live="polite" aria-label="Loading"></div>
+<div id="global-alert-container" class="fixed top-4 right-4 z-50 pointer-events-none space-y-2" role="alert" aria-live="assertive" data-msg-error="Network or server error occurred. Please try again." data-msg-dismiss="Dismiss alert"></div>
 
 <?php if (!empty($currentUser)): ?>
 <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
@@ -133,22 +133,30 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
     }
 });
 
-// Global debounced HTMX async loading indicator (#global-progress-bar)
+// Unified HTMX async loading indicator, button mutation locking, and error resiliency
 (function() {
     var activeRequests = 0;
     var debounceTimer = null;
     var trickleTimers = [];
     var resetTimer = null;
+    var errorHoldTimer = null;
+    var errorResetTimer = null;
+    var lockedElements = [];
+
+    // --- Progress Bar & Alert Helpers ---
+    function getProgressBar() {
+        return document.getElementById('global-progress-bar');
+    }
+
+    function getAlertContainer() {
+        return document.getElementById('global-alert-container');
+    }
 
     function clearTrickleTimers() {
         for (var i = 0; i < trickleTimers.length; i++) {
             clearTimeout(trickleTimers[i]);
         }
         trickleTimers = [];
-    }
-
-    function getProgressBar() {
-        return document.getElementById('global-progress-bar');
     }
 
     function showProgressBar() {
@@ -203,193 +211,8 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
         }, 250);
     }
 
-    // HTMX lifecycle listeners with 150ms debounce and activeRequests counter
-    document.body.addEventListener('htmx:beforeRequest', function() {
-        activeRequests++;
-
-        if (activeRequests === 1) {
-            if (resetTimer) {
-                clearTimeout(resetTimer);
-                resetTimer = null;
-            }
-            // 150ms debounce threshold to prevent flashing on fast requests (<150ms)
-            debounceTimer = setTimeout(function() {
-                if (activeRequests > 0) {
-                    showProgressBar();
-                }
-            }, 150);
-        }
-    });
-
-    document.body.addEventListener('htmx:afterRequest', function() {
-        activeRequests = Math.max(0, activeRequests - 1);
-
-        if (activeRequests === 0) {
-            if (debounceTimer) {
-                clearTimeout(debounceTimer);
-                debounceTimer = null;
-            }
-            var bar = getProgressBar();
-            if (bar && (!bar.classList.contains('opacity-0') || parseFloat(bar.style.width || '0') > 0)) {
-                finishProgressBar();
-            }
-        }
-    });
-})();
-
-// Immediate button-level mutation locking and double-submit protection (#124)
-(function() {
-    var lockedElements = [];
-
-    function lockTarget(el) {
-        if (!el) return;
-        el.classList.add('htmx-request');
-        el.setAttribute('aria-disabled', 'true');
-        el.setAttribute('data-mutation-locked', 'true');
-        if (lockedElements.indexOf(el) === -1) {
-            lockedElements.push(el);
-        }
-    }
-
-    function unlockTarget(el) {
-        if (!el) return;
-        el.classList.remove('htmx-request');
-        el.removeAttribute('aria-disabled');
-        el.removeAttribute('data-mutation-locked');
-    }
-
-    function unlockAll() {
-        for (var i = 0; i < lockedElements.length; i++) {
-            unlockTarget(lockedElements[i]);
-        }
-        lockedElements = [];
-        var lingering = document.querySelectorAll('[data-mutation-locked="true"]');
-        for (var j = 0; j < lingering.length; j++) {
-            unlockTarget(lingering[j]);
-        }
-    }
-    window.unlockAllMutations = unlockAll;
-
-    function isMutatingVerb(verb) {
-        if (!verb) return false;
-        var v = String(verb).toLowerCase();
-        return v === 'post' || v === 'delete' || v === 'put';
-    }
-
-    function isMutatingRequest(detail) {
-        if (!detail) return false;
-        if (detail.requestConfig && isMutatingVerb(detail.requestConfig.verb)) {
-            return true;
-        }
-        var elt = detail.elt;
-        if (elt) {
-            if (elt.tagName === 'FORM') {
-                var method = (elt.getAttribute('method') || '').toLowerCase();
-                if (method === 'post' || method === 'delete' || method === 'put') {
-                    return true;
-                }
-            }
-            if (elt.hasAttribute && (elt.hasAttribute('hx-post') || elt.hasAttribute('hx-delete') || elt.hasAttribute('hx-put'))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    function lockMutatingTriggers(elt) {
-        if (!elt) return;
-        if (elt.tagName === 'FORM') {
-            lockTarget(elt);
-            var submits = elt.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])');
-            for (var i = 0; i < submits.length; i++) {
-                lockTarget(submits[i]);
-            }
-        } else {
-            lockTarget(elt);
-            if (elt.querySelectorAll) {
-                var insideSubmits = elt.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])');
-                for (var j = 0; j < insideSubmits.length; j++) {
-                    lockTarget(insideSubmits[j]);
-                }
-            }
-        }
-    }
-
-    function unlockMutatingTriggers(elt) {
-        if (!elt) {
-            unlockAll();
-            return;
-        }
-        unlockTarget(elt);
-        if (elt.querySelectorAll) {
-            var submits = elt.querySelectorAll('[data-mutation-locked="true"], button[type="submit"], input[type="submit"], button:not([type])');
-            for (var i = 0; i < submits.length; i++) {
-                unlockTarget(submits[i]);
-                var idx = lockedElements.indexOf(submits[i]);
-                if (idx !== -1) {
-                    lockedElements.splice(idx, 1);
-                }
-            }
-        }
-        var selfIdx = lockedElements.indexOf(elt);
-        if (selfIdx !== -1) {
-            lockedElements.splice(selfIdx, 1);
-        }
-    }
-
-    // Intercept click and submit events to provide 0ms locking before network latency
-    document.body.addEventListener('click', function(evt) {
-        var btn = evt.target && evt.target.closest('button, [type="submit"], a[hx-post], a[hx-delete], a[hx-put]');
-        if (!btn) return;
-        if (btn.hasAttribute('hx-confirm')) return;
-        var isMutating = btn.hasAttribute('hx-post') || btn.hasAttribute('hx-delete') || btn.hasAttribute('hx-put');
-        if (!isMutating && (btn.type === 'submit' || btn.getAttribute('type') === 'submit') && btn.form) {
-            var m = (btn.form.getAttribute('method') || '').toLowerCase();
-            isMutating = m === 'post' || m === 'delete' || m === 'put' || btn.form.hasAttribute('hx-post') || btn.form.hasAttribute('hx-delete') || btn.form.hasAttribute('hx-put');
-        }
-        if (isMutating) {
-            lockTarget(btn);
-        }
-    });
-
-    document.body.addEventListener('submit', function(evt) {
-        var form = evt.target;
-        if (!form || form.tagName !== 'FORM') return;
-        var m = (form.getAttribute('method') || '').toLowerCase();
-        if (m === 'post' || m === 'delete' || m === 'put' || form.hasAttribute('hx-post') || form.hasAttribute('hx-delete') || form.hasAttribute('hx-put')) {
-            lockMutatingTriggers(form);
-        }
-    });
-
-    // Hook into HTMX lifecycle for mutating requests (POST, DELETE, PUT, or form submits)
-    document.body.addEventListener('htmx:beforeRequest', function(evt) {
-        if (isMutatingRequest(evt.detail)) {
-            lockMutatingTriggers(evt.detail && evt.detail.elt);
-        }
-    });
-
-    document.body.addEventListener('htmx:afterRequest', function(evt) {
-        unlockMutatingTriggers(evt.detail && evt.detail.elt);
-    });
-
-    document.body.addEventListener('htmx:sendError', function(evt) {
-        unlockMutatingTriggers(evt.detail && evt.detail.elt);
-        unlockAll();
-    });
-
-    document.body.addEventListener('htmx:responseError', function(evt) {
-        unlockMutatingTriggers(evt.detail && evt.detail.elt);
-        unlockAll();
-    });
-})();
-
-// Asynchronous error resiliency: red bar flash and floating alert banner (#125)
-(function() {
-    var errorHoldTimer = null;
-    var errorResetTimer = null;
-
     function flashErrorProgressBar() {
-        var bar = document.getElementById('global-progress-bar');
+        var bar = getProgressBar();
         if (!bar) return;
 
         if (errorHoldTimer) {
@@ -401,6 +224,7 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
             errorResetTimer = null;
         }
 
+        clearTrickleTimers();
         bar.classList.remove('loading');
         bar.classList.remove('bg-indigo-600');
         bar.classList.add('bg-rose-500');
@@ -420,21 +244,27 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
         }, 1200);
     }
 
-    function showFloatingAlert(message) {
-        var container = document.getElementById('global-alert-container');
+    // --- Floating Alert Helpers (reads localized strings from DOM attributes) ---
+    function showFloatingAlert(customMessage) {
+        var container = getAlertContainer();
         if (!container) return;
+
+        var defaultMsg = container.getAttribute('data-msg-error') || '';
+        var dismissMsg = container.getAttribute('data-msg-dismiss') || '';
+        var messageText = customMessage || defaultMsg;
 
         var toast = document.createElement('div');
         toast.className = 'bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm p-3.5 rounded-lg shadow-lg flex items-center justify-between space-x-3 pointer-events-auto transition-opacity duration-300';
 
         var content = document.createElement('div');
         content.className = 'flex items-center space-x-2.5';
-        content.innerHTML = '<svg class="w-4 h-4 text-rose-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg><span>' + (message || 'Network or server error occurred. Please try again.') + '</span>';
+        content.innerHTML = '<svg class="w-4 h-4 text-rose-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg><span></span>';
+        content.querySelector('span').textContent = messageText;
 
         var closeBtn = document.createElement('button');
         closeBtn.type = 'button';
         closeBtn.className = 'text-rose-500 hover:text-rose-700 p-1 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400';
-        closeBtn.setAttribute('aria-label', 'Dismiss alert');
+        closeBtn.setAttribute('aria-label', dismissMsg);
         closeBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
 
         var dismissTimer = null;
@@ -460,35 +290,209 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
         dismissTimer = setTimeout(dismissToast, 4000);
     }
 
+    // --- Mutation Locking Helpers ---
+    function lockTarget(el) {
+        if (!el) return;
+        el.classList.add('htmx-request');
+        el.setAttribute('aria-disabled', 'true');
+        el.setAttribute('data-mutation-locked', 'true');
+        if (lockedElements.indexOf(el) === -1) {
+            lockedElements.push(el);
+        }
+    }
+
+    function unlockTarget(el) {
+        if (!el) return;
+        el.classList.remove('htmx-request');
+        el.removeAttribute('aria-disabled');
+        el.removeAttribute('data-mutation-locked');
+    }
+
+    // Unified internal button unlocking helper used across all settle/error handlers
     function unlockAllButtons() {
-        if (typeof window.unlockAllMutations === 'function') {
-            window.unlockAllMutations();
+        for (var i = 0; i < lockedElements.length; i++) {
+            unlockTarget(lockedElements[i]);
         }
+        lockedElements = [];
         var lingering = document.querySelectorAll('[data-mutation-locked="true"], .htmx-request:is(button, [type="submit"], a)');
-        for (var i = 0; i < lingering.length; i++) {
-            lingering[i].classList.remove('htmx-request');
-            lingering[i].removeAttribute('aria-disabled');
-            lingering[i].removeAttribute('data-mutation-locked');
+        for (var j = 0; j < lingering.length; j++) {
+            unlockTarget(lingering[j]);
         }
+    }
+
+    function isMutatingVerb(verb) {
+        if (!verb) return false;
+        var v = String(verb).toLowerCase();
+        return v === 'post' || v === 'delete' || v === 'put';
+    }
+
+    // Unified mutating request detection helper
+    function isMutatingElement(el) {
+        if (!el) return false;
+        if (el.hasAttribute && (el.hasAttribute('hx-post') || el.hasAttribute('hx-delete') || el.hasAttribute('hx-put'))) {
+            return true;
+        }
+        if (el.tagName === 'FORM') {
+            var m = (el.getAttribute('method') || '').toLowerCase();
+            return isMutatingVerb(m) || el.hasAttribute('hx-post') || el.hasAttribute('hx-delete') || el.hasAttribute('hx-put');
+        }
+        if ((el.type === 'submit' || el.getAttribute('type') === 'submit') && el.form) {
+            return isMutatingElement(el.form);
+        }
+        return false;
+    }
+
+    function isMutatingRequest(detail) {
+        if (!detail) return false;
+        if (detail.requestConfig && isMutatingVerb(detail.requestConfig.verb)) {
+            return true;
+        }
+        return isMutatingElement(detail.elt);
+    }
+
+    function lockMutatingTriggers(elt) {
+        if (!elt) return;
+        if (elt.tagName === 'FORM') {
+            lockTarget(elt);
+            var submits = elt.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type]), [hx-post], [hx-delete], [hx-put]');
+            for (var i = 0; i < submits.length; i++) {
+                lockTarget(submits[i]);
+            }
+        } else {
+            lockTarget(elt);
+            if (elt.form) {
+                lockTarget(elt.form);
+                var siblingSubmits = elt.form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type]), [hx-post], [hx-delete], [hx-put]');
+                for (var k = 0; k < siblingSubmits.length; k++) {
+                    lockTarget(siblingSubmits[k]);
+                }
+            }
+            if (elt.querySelectorAll) {
+                var insideSubmits = elt.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type]), [hx-post], [hx-delete], [hx-put]');
+                for (var j = 0; j < insideSubmits.length; j++) {
+                    lockTarget(insideSubmits[j]);
+                }
+            }
+        }
+    }
+
+    function unlockMutatingTriggers(elt) {
+        if (!elt) {
+            unlockAllButtons();
+            return;
+        }
+        unlockTarget(elt);
+        if (elt.form) {
+            unlockTarget(elt.form);
+            var siblingSubmits = elt.form.querySelectorAll('[data-mutation-locked="true"], button[type="submit"], input[type="submit"], button:not([type])');
+            for (var k = 0; k < siblingSubmits.length; k++) {
+                unlockTarget(siblingSubmits[k]);
+                var sIdx = lockedElements.indexOf(siblingSubmits[k]);
+                if (sIdx !== -1) lockedElements.splice(sIdx, 1);
+            }
+        }
+        if (elt.querySelectorAll) {
+            var submits = elt.querySelectorAll('[data-mutation-locked="true"], button[type="submit"], input[type="submit"], button:not([type])');
+            for (var i = 0; i < submits.length; i++) {
+                unlockTarget(submits[i]);
+                var idx = lockedElements.indexOf(submits[i]);
+                if (idx !== -1) {
+                    lockedElements.splice(idx, 1);
+                }
+            }
+        }
+        var selfIdx = lockedElements.indexOf(elt);
+        if (selfIdx !== -1) {
+            lockedElements.splice(selfIdx, 1);
+        }
+    }
+
+    // --- Active Request Tracking Helper ---
+    function decrementActiveRequests(evt) {
+        if (evt && evt.detail) {
+            if (evt.detail._activeCounted) return false;
+            evt.detail._activeCounted = true;
+        }
+        activeRequests = Math.max(0, activeRequests - 1);
+        if (activeRequests === 0) {
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+            }
+            var bar = getProgressBar();
+            if (bar && (!bar.classList.contains('opacity-0') || parseFloat(bar.style.width || '0') > 0)) {
+                finishProgressBar();
+            }
+        }
+        return true;
     }
 
     function handleAsyncError() {
         flashErrorProgressBar();
-        showFloatingAlert('Network or server error occurred. Please try again.');
+        showFloatingAlert();
         unlockAllButtons();
     }
 
-    // Detect HTTP status >= 500 on response error
-    document.body.addEventListener('htmx:responseError', function(evt) {
-        var status = evt.detail && evt.detail.xhr ? evt.detail.xhr.status : 0;
-        if (status >= 500 || status === 0) {
-            handleAsyncError();
+    // Intercept click and submit events to provide 0ms locking before network latency
+    document.body.addEventListener('click', function(evt) {
+        var btn = evt.target && evt.target.closest('button, [type="submit"], a[hx-post], a[hx-delete], a[hx-put]');
+        if (!btn) return;
+        if (btn.hasAttribute('hx-confirm') || (btn.form && btn.form.hasAttribute('hx-confirm'))) return;
+        if (isMutatingElement(btn)) {
+            lockTarget(btn);
         }
     });
 
-    // Detect network drop/timeout on send error
-    document.body.addEventListener('htmx:sendError', function() {
+    document.body.addEventListener('submit', function(evt) {
+        var form = evt.target;
+        if (form && form.tagName === 'FORM' && isMutatingElement(form)) {
+            lockMutatingTriggers(form);
+        }
+    });
+
+    // Centralized HTMX lifecycle event listeners
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        activeRequests++;
+
+        if (activeRequests === 1) {
+            if (resetTimer) {
+                clearTimeout(resetTimer);
+                resetTimer = null;
+            }
+            // 150ms debounce threshold to prevent flashing on fast requests (<150ms)
+            debounceTimer = setTimeout(function() {
+                if (activeRequests > 0) {
+                    showProgressBar();
+                }
+            }, 150);
+        }
+
+        // Lock mutating triggers, ensuring buttons with hx-confirm are locked upon confirmation / htmx:beforeRequest
+        if (isMutatingRequest(evt.detail)) {
+            lockMutatingTriggers(evt.detail && evt.detail.elt);
+        }
+    });
+
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        decrementActiveRequests(evt);
+        unlockMutatingTriggers(evt.detail && evt.detail.elt);
+    });
+
+    // Network drop/timeout: decrement activeRequests and trigger error resiliency
+    document.body.addEventListener('htmx:sendError', function(evt) {
+        decrementActiveRequests(evt);
         handleAsyncError();
+    });
+
+    // Server error (HTTP >= 500 or status 0): decrement activeRequests and trigger error resiliency
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        decrementActiveRequests(evt);
+        var status = evt.detail && evt.detail.xhr ? evt.detail.xhr.status : 0;
+        if (status >= 500 || status === 0) {
+            handleAsyncError();
+        } else {
+            unlockAllButtons();
+        }
     });
 })();
 

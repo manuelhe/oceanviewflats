@@ -84,7 +84,8 @@ final class AdminLayoutAsyncIndicatorTest extends TestCase
         $this->assertStringContainsString('aria-label="Loading"', $html);
 
         // 3. Tailwind styling and initial state
-        $this->assertStringContainsString('fixed top-0 left-0 h-1 bg-indigo-600 z-50 pointer-events-none transition-all duration-300 ease-out opacity-0', $html);
+        $this->assertStringContainsString('fixed top-0 left-0 w-full h-1 bg-indigo-600 z-50 pointer-events-none transition-all duration-300 ease-out opacity-0', $html);
+        $this->assertStringContainsString('w-full', $html);
         $this->assertStringContainsString('style="width: 0%;"', $html);
     }
 
@@ -125,10 +126,12 @@ final class AdminLayoutAsyncIndicatorTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
         $html = $response->getBody();
 
-        // 1. Shimmer animation keyframes
+        // 1. Shimmer animation keyframes, reachable selector, and theme variables
         $this->assertStringContainsString('@keyframes progress-shimmer', $html);
         $this->assertStringContainsString('#global-progress-bar.loading', $html);
-        $this->assertStringContainsString('.htmx-request #global-progress-bar', $html);
+        $this->assertStringContainsString('body.htmx-request #global-progress-bar', $html);
+        $this->assertStringContainsString('var(--color-indigo-600, #4f46e5)', $html);
+        $this->assertStringContainsString('var(--color-indigo-400, #818cf8)', $html);
 
         // 2. Reduced motion media query
         $this->assertStringContainsString('@media (prefers-reduced-motion: reduce)', $html);
@@ -202,9 +205,11 @@ final class AdminLayoutAsyncIndicatorTest extends TestCase
         // 1. Alert container element existence and ID
         $this->assertStringContainsString('id="global-alert-container"', $html);
 
-        // 2. Accessibility attributes
+        // 2. Accessibility and localization attributes
         $this->assertStringContainsString('role="alert"', $html);
         $this->assertStringContainsString('aria-live="assertive"', $html);
+        $this->assertStringContainsString('data-msg-error="Network or server error occurred. Please try again."', $html);
+        $this->assertStringContainsString('data-msg-dismiss="Dismiss alert"', $html);
 
         // 3. Tailwind positioning and layout classes
         $this->assertStringContainsString('fixed top-4 right-4 z-50 pointer-events-none space-y-2', $html);
@@ -223,27 +228,32 @@ final class AdminLayoutAsyncIndicatorTest extends TestCase
         $this->assertStringContainsString('htmx:responseError', $html);
         $this->assertStringContainsString('htmx:sendError', $html);
 
-        // 2. HTTP 500+ / network error detection
+        // 2. Error handling clears/decrements activeRequests counter
+        $this->assertStringContainsString('decrementActiveRequests', $html);
+
+        // 3. HTTP 500+ / network error detection
         $this->assertStringContainsString('status >= 500', $html);
 
-        // 3. Progress bar rose error flash and duration
+        // 4. Progress bar rose error flash and duration
         $this->assertStringContainsString('bg-rose-500', $html);
         $this->assertStringContainsString('bg-indigo-600', $html);
         $this->assertStringContainsString('1200', $html);
 
-        // 4. Floating alert toast creation and Tailwind rose tokens
+        // 5. Floating alert toast creation, localization data-msg reading, and Tailwind rose tokens
         $this->assertStringContainsString('global-alert-container', $html);
         $this->assertStringContainsString('bg-rose-50', $html);
         $this->assertStringContainsString('border-rose-200', $html);
         $this->assertStringContainsString('text-rose-800', $html);
+        $this->assertStringContainsString('data-msg-error', $html);
+        $this->assertStringContainsString('data-msg-dismiss', $html);
         $this->assertStringContainsString('Network or server error occurred. Please try again.', $html);
 
-        // 5. Toast auto-dismiss duration (4000ms) and manual close button
+        // 6. Toast auto-dismiss duration (4000ms) and manual close button
         $this->assertStringContainsString('4000', $html);
         $this->assertStringContainsString('Dismiss alert', $html);
 
-        // 6. Mutation lock release on error for user retry
-        $this->assertStringContainsString('unlockAll', $html);
+        // 7. Mutation lock release on error for user retry
+        $this->assertStringContainsString('unlockAllButtons', $html);
     }
 
     #[DataProvider('authenticatedRoutesProvider')]
