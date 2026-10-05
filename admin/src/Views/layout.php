@@ -15,9 +15,30 @@
     <style>
         .htmx-indicator { display: none; }
         .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline-flex; }
+
+        @keyframes progress-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        #global-progress-bar.loading,
+        .htmx-request #global-progress-bar {
+            background-image: linear-gradient(90deg, #4f46e5 0%, #818cf8 50%, #4f46e5 100%);
+            background-size: 200% 100%;
+            animation: progress-shimmer 1.5s infinite linear;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #global-progress-bar {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
     </style>
 </head>
 <body class="min-h-full flex flex-col font-sans text-gray-900 antialiased" hx-headers='{"HX-CSRF-Token": "<?= htmlspecialchars($effectiveCsrfToken, ENT_QUOTES, 'UTF-8') ?>"}'>
+
+<div id="global-progress-bar" class="fixed top-0 left-0 h-1 bg-indigo-600 z-50 pointer-events-none transition-all duration-300 ease-out opacity-0" style="width: 0%;" role="status" aria-live="polite" aria-label="Loading"></div>
 
 <?php if (!empty($currentUser)): ?>
 <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
@@ -97,6 +118,110 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
         evt.detail.isError = false;
     }
 });
+
+// Global debounced HTMX async loading indicator (#global-progress-bar)
+(function() {
+    var activeRequests = 0;
+    var debounceTimer = null;
+    var trickleTimers = [];
+    var resetTimer = null;
+
+    function clearTrickleTimers() {
+        for (var i = 0; i < trickleTimers.length; i++) {
+            clearTimeout(trickleTimers[i]);
+        }
+        trickleTimers = [];
+    }
+
+    function getProgressBar() {
+        return document.getElementById('global-progress-bar');
+    }
+
+    function showProgressBar() {
+        var bar = getProgressBar();
+        if (!bar) return;
+
+        if (resetTimer) {
+            clearTimeout(resetTimer);
+            resetTimer = null;
+        }
+        clearTrickleTimers();
+
+        bar.classList.add('loading');
+        bar.classList.remove('opacity-0');
+        bar.style.width = '25%';
+
+        // Advance progress smoothly while requests remain active (>150ms)
+        trickleTimers.push(setTimeout(function() {
+            if (activeRequests > 0) {
+                bar.style.width = '60%';
+            }
+        }, 250));
+
+        trickleTimers.push(setTimeout(function() {
+            if (activeRequests > 0) {
+                bar.style.width = '85%';
+            }
+        }, 600));
+    }
+
+    function finishProgressBar() {
+        var bar = getProgressBar();
+        if (!bar) return;
+
+        clearTrickleTimers();
+
+        // Advance to 100%
+        bar.style.width = '100%';
+
+        // Fade out after completion transition
+        resetTimer = setTimeout(function() {
+            if (activeRequests > 0) return;
+            bar.classList.add('opacity-0');
+
+            // Reset width to 0% after fade transition completes
+            resetTimer = setTimeout(function() {
+                if (activeRequests > 0) return;
+                bar.style.width = '0%';
+                bar.classList.remove('loading');
+                resetTimer = null;
+            }, 300);
+        }, 250);
+    }
+
+    // HTMX lifecycle listeners with 150ms debounce and activeRequests counter
+    document.body.addEventListener('htmx:beforeRequest', function() {
+        activeRequests++;
+
+        if (activeRequests === 1) {
+            if (resetTimer) {
+                clearTimeout(resetTimer);
+                resetTimer = null;
+            }
+            // 150ms debounce threshold to prevent flashing on fast requests (<150ms)
+            debounceTimer = setTimeout(function() {
+                if (activeRequests > 0) {
+                    showProgressBar();
+                }
+            }, 150);
+        }
+    });
+
+    document.body.addEventListener('htmx:afterRequest', function() {
+        activeRequests = Math.max(0, activeRequests - 1);
+
+        if (activeRequests === 0) {
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+                debounceTimer = null;
+            }
+            var bar = getProgressBar();
+            if (bar && (!bar.classList.contains('opacity-0') || parseFloat(bar.style.width || '0') > 0)) {
+                finishProgressBar();
+            }
+        }
+    });
+})();
 
 window.closeReservationDrawer = window.closeReservationDrawer || function() {
     var container = document.getElementById('drawer-container');
