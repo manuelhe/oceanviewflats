@@ -36,6 +36,11 @@
             animation: progress-shimmer 1.5s infinite linear;
         }
 
+        #global-progress-bar.bg-rose-500 {
+            background-image: none !important;
+            animation: none !important;
+        }
+
         @media (prefers-reduced-motion: reduce) {
             #global-progress-bar {
                 transition: none !important;
@@ -47,6 +52,7 @@
 <body class="min-h-full flex flex-col font-sans text-gray-900 antialiased" hx-headers='{"HX-CSRF-Token": "<?= htmlspecialchars($effectiveCsrfToken, ENT_QUOTES, 'UTF-8') ?>"}'>
 
 <div id="global-progress-bar" class="fixed top-0 left-0 h-1 bg-indigo-600 z-50 pointer-events-none transition-all duration-300 ease-out opacity-0" style="width: 0%;" role="status" aria-live="polite" aria-label="Loading"></div>
+<div id="global-alert-container" class="fixed top-4 right-4 z-50 pointer-events-none space-y-2" role="alert" aria-live="assertive"></div>
 
 <?php if (!empty($currentUser)): ?>
 <header class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
@@ -147,7 +153,7 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
 
     function showProgressBar() {
         var bar = getProgressBar();
-        if (!bar) return;
+        if (!bar || bar.classList.contains('bg-rose-500')) return;
 
         if (resetTimer) {
             clearTimeout(resetTimer);
@@ -161,13 +167,13 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
 
         // Advance progress smoothly while requests remain active (>150ms)
         trickleTimers.push(setTimeout(function() {
-            if (activeRequests > 0) {
+            if (activeRequests > 0 && !bar.classList.contains('bg-rose-500')) {
                 bar.style.width = '60%';
             }
         }, 250));
 
         trickleTimers.push(setTimeout(function() {
-            if (activeRequests > 0) {
+            if (activeRequests > 0 && !bar.classList.contains('bg-rose-500')) {
                 bar.style.width = '85%';
             }
         }, 600));
@@ -175,7 +181,7 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
 
     function finishProgressBar() {
         var bar = getProgressBar();
-        if (!bar) return;
+        if (!bar || bar.classList.contains('bg-rose-500')) return;
 
         clearTrickleTimers();
 
@@ -184,12 +190,12 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
 
         // Fade out after completion transition
         resetTimer = setTimeout(function() {
-            if (activeRequests > 0) return;
+            if (activeRequests > 0 || bar.classList.contains('bg-rose-500')) return;
             bar.classList.add('opacity-0');
 
             // Reset width to 0% after fade transition completes
             resetTimer = setTimeout(function() {
-                if (activeRequests > 0) return;
+                if (activeRequests > 0 || bar.classList.contains('bg-rose-500')) return;
                 bar.style.width = '0%';
                 bar.classList.remove('loading');
                 resetTimer = null;
@@ -262,6 +268,7 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
             unlockTarget(lingering[j]);
         }
     }
+    window.unlockAllMutations = unlockAll;
 
     function isMutatingVerb(verb) {
         if (!verb) return false;
@@ -367,10 +374,121 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
 
     document.body.addEventListener('htmx:sendError', function(evt) {
         unlockMutatingTriggers(evt.detail && evt.detail.elt);
+        unlockAll();
     });
 
     document.body.addEventListener('htmx:responseError', function(evt) {
         unlockMutatingTriggers(evt.detail && evt.detail.elt);
+        unlockAll();
+    });
+})();
+
+// Asynchronous error resiliency: red bar flash and floating alert banner (#125)
+(function() {
+    var errorHoldTimer = null;
+    var errorResetTimer = null;
+
+    function flashErrorProgressBar() {
+        var bar = document.getElementById('global-progress-bar');
+        if (!bar) return;
+
+        if (errorHoldTimer) {
+            clearTimeout(errorHoldTimer);
+            errorHoldTimer = null;
+        }
+        if (errorResetTimer) {
+            clearTimeout(errorResetTimer);
+            errorResetTimer = null;
+        }
+
+        bar.classList.remove('loading');
+        bar.classList.remove('bg-indigo-600');
+        bar.classList.add('bg-rose-500');
+        bar.classList.remove('opacity-0');
+        bar.style.width = '100%';
+
+        // Hold for ~1.2s, then fade out and reset color back to bg-indigo-600 and width to 0%
+        errorHoldTimer = setTimeout(function() {
+            bar.classList.add('opacity-0');
+            errorResetTimer = setTimeout(function() {
+                bar.style.width = '0%';
+                bar.classList.remove('bg-rose-500');
+                bar.classList.add('bg-indigo-600');
+                errorHoldTimer = null;
+                errorResetTimer = null;
+            }, 300);
+        }, 1200);
+    }
+
+    function showFloatingAlert(message) {
+        var container = document.getElementById('global-alert-container');
+        if (!container) return;
+
+        var toast = document.createElement('div');
+        toast.className = 'bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm p-3.5 rounded-lg shadow-lg flex items-center justify-between space-x-3 pointer-events-auto transition-opacity duration-300';
+
+        var content = document.createElement('div');
+        content.className = 'flex items-center space-x-2.5';
+        content.innerHTML = '<svg class="w-4 h-4 text-rose-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg><span>' + (message || 'Network or server error occurred. Please try again.') + '</span>';
+
+        var closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'text-rose-500 hover:text-rose-700 p-1 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-400';
+        closeBtn.setAttribute('aria-label', 'Dismiss alert');
+        closeBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+
+        var dismissTimer = null;
+        function dismissToast() {
+            if (dismissTimer) {
+                clearTimeout(dismissTimer);
+                dismissTimer = null;
+            }
+            toast.classList.add('opacity-0');
+            setTimeout(function() {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }
+
+        closeBtn.addEventListener('click', dismissToast);
+        toast.appendChild(content);
+        toast.appendChild(closeBtn);
+        container.appendChild(toast);
+
+        // Automatically fades out and dismisses after 4000ms
+        dismissTimer = setTimeout(dismissToast, 4000);
+    }
+
+    function unlockAllButtons() {
+        if (typeof window.unlockAllMutations === 'function') {
+            window.unlockAllMutations();
+        }
+        var lingering = document.querySelectorAll('[data-mutation-locked="true"], .htmx-request:is(button, [type="submit"], a)');
+        for (var i = 0; i < lingering.length; i++) {
+            lingering[i].classList.remove('htmx-request');
+            lingering[i].removeAttribute('aria-disabled');
+            lingering[i].removeAttribute('data-mutation-locked');
+        }
+    }
+
+    function handleAsyncError() {
+        flashErrorProgressBar();
+        showFloatingAlert('Network or server error occurred. Please try again.');
+        unlockAllButtons();
+    }
+
+    // Detect HTTP status >= 500 on response error
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        var status = evt.detail && evt.detail.xhr ? evt.detail.xhr.status : 0;
+        if (status >= 500 || status === 0) {
+            handleAsyncError();
+        }
+    });
+
+    // Detect network drop/timeout on send error
+    document.body.addEventListener('htmx:sendError', function() {
+        handleAsyncError();
     });
 })();
 

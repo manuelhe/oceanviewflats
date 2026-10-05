@@ -12,9 +12,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Integration test suite for Ticket #123 & Ticket #124:
+ * Integration test suite for Ticket #123, Ticket #124 & Ticket #125:
  * - Global Animated Top Progress Bar with Debounced HTMX Request Counter (#123).
  * - Immediate Button-Level Mutation Locking and Double-Submit Protection (#124).
+ * - Asynchronous Error Resiliency (Red Bar Flash & Floating Alert Banner) (#125).
  *
  * Verifies that all primary administrative authenticated pages render:
  * 1. Pinned top progress bar (#global-progress-bar) with Tailwind classes and ARIA attributes.
@@ -24,6 +25,9 @@ use PHPUnit\Framework\TestCase;
  *    with an activeRequests counter, 150ms debounce threshold, and width transitions.
  * 5. Button-level mutation locking CSS rules for in-flight requests.
  * 6. Client-side mutating request detection (POST, DELETE, PUT) and trigger lock/unlock lifecycle hooks.
+ * 7. Global alert container (#global-alert-container) with role="alert" and aria-live="assertive".
+ * 8. Asynchronous error resilience script handling htmx:responseError and htmx:sendError,
+ *    flashing bg-rose-500, displaying floating toast alert, and releasing mutation locks.
  */
 final class AdminLayoutAsyncIndicatorTest extends TestCase
 {
@@ -184,6 +188,62 @@ final class AdminLayoutAsyncIndicatorTest extends TestCase
         $this->assertStringContainsString('data-mutation-locked', $html);
         $this->assertStringContainsString('lockMutatingTriggers', $html);
         $this->assertStringContainsString('unlockMutatingTriggers', $html);
+    }
+
+    #[DataProvider('authenticatedRoutesProvider')]
+    public function testAuthenticatedRoutesRenderGlobalAlertContainer(string $route): void
+    {
+        $request = new Request('GET', $route);
+        $response = $this->app->handle($request, $this->authenticatedSession);
+
+        $this->assertSame(200, $response->getStatusCode(), "Expected HTTP 200 for authenticated GET {$route}");
+        $html = $response->getBody();
+
+        // 1. Alert container element existence and ID
+        $this->assertStringContainsString('id="global-alert-container"', $html);
+
+        // 2. Accessibility attributes
+        $this->assertStringContainsString('role="alert"', $html);
+        $this->assertStringContainsString('aria-live="assertive"', $html);
+
+        // 3. Tailwind positioning and layout classes
+        $this->assertStringContainsString('fixed top-4 right-4 z-50 pointer-events-none space-y-2', $html);
+    }
+
+    #[DataProvider('authenticatedRoutesProvider')]
+    public function testAuthenticatedRoutesIncludeErrorResilienceLifecycleScript(string $route): void
+    {
+        $request = new Request('GET', $route);
+        $response = $this->app->handle($request, $this->authenticatedSession);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $html = $response->getBody();
+
+        // 1. HTMX error event handlers
+        $this->assertStringContainsString('htmx:responseError', $html);
+        $this->assertStringContainsString('htmx:sendError', $html);
+
+        // 2. HTTP 500+ / network error detection
+        $this->assertStringContainsString('status >= 500', $html);
+
+        // 3. Progress bar rose error flash and duration
+        $this->assertStringContainsString('bg-rose-500', $html);
+        $this->assertStringContainsString('bg-indigo-600', $html);
+        $this->assertStringContainsString('1200', $html);
+
+        // 4. Floating alert toast creation and Tailwind rose tokens
+        $this->assertStringContainsString('global-alert-container', $html);
+        $this->assertStringContainsString('bg-rose-50', $html);
+        $this->assertStringContainsString('border-rose-200', $html);
+        $this->assertStringContainsString('text-rose-800', $html);
+        $this->assertStringContainsString('Network or server error occurred. Please try again.', $html);
+
+        // 5. Toast auto-dismiss duration (4000ms) and manual close button
+        $this->assertStringContainsString('4000', $html);
+        $this->assertStringContainsString('Dismiss alert', $html);
+
+        // 6. Mutation lock release on error for user retry
+        $this->assertStringContainsString('unlockAll', $html);
     }
 
     #[DataProvider('authenticatedRoutesProvider')]
