@@ -225,13 +225,15 @@ final class AdminReservationRepository
             FROM reservations
             WHERE status IN ("confirmed", "pending_payment")
               AND (
-                  (check_in >= :start_date AND check_in <= :end_date)
-                  OR (check_out >= :start_date AND check_out <= :end_date)
+                  (check_in >= :ci_start AND check_in <= :ci_end)
+                  OR (check_out >= :co_start AND check_out <= :co_end)
               )
         ';
         $params = [
-            'start_date' => $startDate,
-            'end_date' => $endDate,
+            'ci_start' => $startDate,
+            'ci_end' => $endDate,
+            'co_start' => $startDate,
+            'co_end' => $endDate,
         ];
 
         if ($propertyId !== 'all') {
@@ -332,13 +334,15 @@ final class AdminReservationRepository
             WHERE status = "confirmed"
               AND (registry_completed = 0 OR registry_completed IS NULL)
               AND (
-                  (check_in >= :today AND check_in <= :max_date)
-                  OR (check_in < :today AND check_out > :today)
+                  (check_in >= :today_start AND check_in <= :max_date)
+                  OR (check_in < :today_past AND check_out > :today_active)
               )
         ';
         $params = [
-            'today' => $today,
+            'today_start' => $today,
             'max_date' => $maxDate,
+            'today_past' => $today,
+            'today_active' => $today,
         ];
 
         if ($propertyId !== 'all') {
@@ -432,16 +436,18 @@ final class AdminReservationRepository
                   AND status != "cancelled"
                   AND (
                       channel_block_uid = :block_uid
-                      OR (check_in = :start_date AND check_out = :end_date)
-                      OR (check_in < :end_date AND check_out > :start_date AND source = :source)
+                      OR (check_in = :exact_start AND check_out = :exact_end)
+                      OR (check_in < :overlap_end AND check_out > :overlap_start AND source = :source)
                   )
                 LIMIT 1
             ');
             $stmt->execute([
                 'prop' => $block->propertyId,
                 'block_uid' => $blockIdentifier,
-                'start_date' => $block->startDate,
-                'end_date' => $block->endDate,
+                'exact_start' => $block->startDate,
+                'exact_end' => $block->endDate,
+                'overlap_end' => $block->endDate,
+                'overlap_start' => $block->startDate,
                 'source' => $block->source,
             ]);
             $matched = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -486,10 +492,13 @@ final class AdminReservationRepository
             SELECT COUNT(*)
             FROM reservations
             WHERE status = "confirmed"
-              AND check_in <= :today
-              AND check_out > :today
+              AND check_in <= :today_in
+              AND check_out > :today_out
         ';
-        $params = ['today' => $today];
+        $params = [
+            'today_in' => $today,
+            'today_out' => $today,
+        ];
 
         if ($propertyId !== 'all') {
             $sql .= ' AND property_id = :property_id';
