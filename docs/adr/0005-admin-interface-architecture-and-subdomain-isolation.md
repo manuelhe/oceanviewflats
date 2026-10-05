@@ -66,6 +66,40 @@ Deployments are strictly segregated across two independent GitHub Actions workfl
   - **CLI / Cron Provisioner**: `scripts/create-admin-user.php` and `scripts/migrate.php` allow zero-web execution.
   - **Secure Web Setup Utility**: `admin/public/setup.php` allows zero-SSH bootstrapping for restricted cPanel environments, protected by pre-shared token authorization (`OVF_SETUP_TOKEN`, `OVF_ADMIN_SESSION_SECRET`, or `DB_PASS`) and permanent auto-lockout (returns HTTP 403 once an administrator user exists).
 
+### 5. Client-Side Async Feedback & HTMX Request Lifecycle (Dual-Layer Loading Bar & Mutation Locking)
+
+#### Problem Context
+Administrative workflows involve frequent asynchronous HTMX operations (filters, navigation, quote previews, mutations) needing clear operator feedback and double-click prevention. In the absence of structured async feedback:
+1. Fast sub-150ms requests suffer visual flickering if spinners flash abruptly into view.
+2. Slower operations leave operators uncertain if their click registered, prompting impatient double-clicks that risk duplicate transactions or race conditions.
+3. Network disconnects or backend 5xx failures leave buttons in a disabled or ambiguous limbo state without actionable guidance.
+
+#### Architecture
+We implement a zero-dependency, dual-layer feedback and error-resilient request lifecycle integrated directly into `admin/src/Views/layout.php`:
+
+1. **Global Top Progress Bar (`#global-progress-bar`)**:
+   - Pinned to the top of the viewport (`fixed top-0 left-0 h-1 bg-indigo-600 z-50`).
+   - Managed by an `activeRequests` counter to smoothly coordinate concurrent operations.
+   - Enforces a **150ms debounce threshold** on request initiation to prevent UI flicker on fast sub-150ms operations. Operations extending beyond 150ms smoothly advance through incremental trickle phases (25% -> 60% -> 85% -> 100%) with an animated linear shimmer.
+   - Complies with web accessibility standards via `role="status"`, `aria-live="polite"`, `aria-label="Loading"`, and `@media (prefers-reduced-motion: reduce)` animation bypasses.
+
+2. **Immediate 0ms Mutation Lock on Buttons/Submits**:
+   - Intercepts mutating verbs (`POST`, `DELETE`, `PUT`) and form submits instantly at the event level (0ms latency prior to network transport).
+   - Eliminates duplicate submissions and race conditions by dynamically applying `pointer-events: none !important; opacity: 0.75; cursor: wait;` and `aria-disabled="true"` to trigger buttons and submits.
+   - Automatically releases lock states upon request completion (`htmx:afterRequest`), response error (`htmx:responseError`), or network transport failure (`htmx:sendError`).
+
+3. **Asynchronous Error Resiliency (Red Bar Flash & Floating Alert Banner)**:
+   - **Rose Progress Bar Flash**: On 5xx server responses (`evt.detail.xhr.status >= 500`) or network drop/timeouts (`htmx:sendError`), the progress bar swaps from `bg-indigo-600` to `bg-rose-500`, animates to 100% width, holds for ~1.2s, and gracefully fades out before resetting color back to `bg-indigo-600` and width to 0%.
+   - **Floating Alert Toast**: Injects an assertive toast notification (`role="alert"`, `aria-live="assertive"`) into `#global-alert-container` (`fixed top-4 right-4 z-50 pointer-events-none space-y-2`) styled with Tailwind rose tokens (`bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm p-3.5 rounded-lg shadow-lg flex items-center justify-between space-x-3 pointer-events-auto transition-opacity duration-300`).
+   - Displays clear operator guidance: *"Network or server error occurred. Please try again."*
+   - Includes an accessible manual close button (`Dismiss alert`) and an automated 4000ms fade-out dismissal.
+   - **Automatic Button Unlocking**: Cleanses all mutation locks and re-enables buttons across the DOM on error events so the operator can retry immediately.
+
+#### Compliance with Repository Development Rules
+- **Theme Abstractions & Design Tokens**: Uses standard Tailwind CSS palette tokens (`indigo-600`, `rose-500`, `rose-50`, `rose-200`, `rose-800`) without hardcoded ad-hoc CSS hex values in application markup.
+- **Client-Side Interactivity Standards**: 100% vanilla JavaScript with zero heavy external spinner or toast libraries, maintaining pristine PageSpeed and minimal bundle footprint.
+- **Accessibility (a11y)**: Strict adherence to ARIA standards (`role="status"`, `role="alert"`, `aria-live="assertive"`, `aria-disabled="true"`).
+
 ## Consequences
 
 ### Positive
@@ -74,6 +108,9 @@ Deployments are strictly segregated across two independent GitHub Actions workfl
 - **Zero Business Logic Divergence**: Public booking endpoints and admin PMS tools execute identical domain models (`QuoteEngine`, `ReservationLedger`).
 - **Auditability**: Complete operational traceability across all administrative state changes.
 - **Hosting Portability**: Works reliably across cPanel shared hosting with or without SSH/terminal access.
+- **Operator Confidence & Zero Flicker**: Fast operations execute without distracting spinner flickers, while longer requests provide steady, debounced visual progress.
+- **Double-Submit Immunity**: Immediate 0ms button-level mutation locking eliminates duplicate database writes and race conditions during payment settlements or ledger updates.
+- **Resilient Error Recovery**: Instant rose bar flash on 5xx or network errors, paired with non-blocking floating alerts and automatic button unlocking, ensures operators are informed and can immediately retry.
 
 ### Neutral / Operational Trade-offs
 - cPanel subdomain creation requires explicit configuration to avoid defaulting to `public_html/admin`.
