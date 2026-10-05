@@ -12,8 +12,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Integration test suite for Ticket #123:
- * Global Animated Top Progress Bar with Debounced HTMX Request Counter.
+ * Integration test suite for Ticket #123 & Ticket #124:
+ * - Global Animated Top Progress Bar with Debounced HTMX Request Counter (#123).
+ * - Immediate Button-Level Mutation Locking and Double-Submit Protection (#124).
  *
  * Verifies that all primary administrative authenticated pages render:
  * 1. Pinned top progress bar (#global-progress-bar) with Tailwind classes and ARIA attributes.
@@ -21,6 +22,8 @@ use PHPUnit\Framework\TestCase;
  * 3. Preserved explicit .htmx-indicator rules.
  * 4. Client-side HTMX lifecycle script handling htmx:beforeRequest and htmx:afterRequest
  *    with an activeRequests counter, 150ms debounce threshold, and width transitions.
+ * 5. Button-level mutation locking CSS rules for in-flight requests.
+ * 6. Client-side mutating request detection (POST, DELETE, PUT) and trigger lock/unlock lifecycle hooks.
  */
 final class AdminLayoutAsyncIndicatorTest extends TestCase
 {
@@ -130,6 +133,57 @@ final class AdminLayoutAsyncIndicatorTest extends TestCase
         // 3. Preserved existing .htmx-indicator rules
         $this->assertStringContainsString('.htmx-indicator { display: none; }', $html);
         $this->assertStringContainsString('.htmx-request .htmx-indicator', $html);
+    }
+
+    #[DataProvider('authenticatedRoutesProvider')]
+    public function testAuthenticatedRoutesIncludeButtonMutationLockStyles(string $route): void
+    {
+        $request = new Request('GET', $route);
+        $response = $this->app->handle($request, $this->authenticatedSession);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $html = $response->getBody();
+
+        // 1. Selector targeting mutation buttons and submit controls
+        $this->assertStringContainsString('.htmx-request:is(button, [type="submit"], a[hx-post], a[hx-delete], a[hx-put])', $html);
+        $this->assertStringContainsString('form.htmx-request button[type="submit"]', $html);
+        $this->assertStringContainsString('form.htmx-request input[type="submit"]', $html);
+
+        // 2. Button mutation lock styling rules
+        $this->assertStringContainsString('pointer-events: none !important;', $html);
+        $this->assertStringContainsString('opacity: 0.75 !important;', $html);
+        $this->assertStringContainsString('cursor: wait !important;', $html);
+    }
+
+    #[DataProvider('authenticatedRoutesProvider')]
+    public function testAuthenticatedRoutesIncludeMutationLockingLifecycleScript(string $route): void
+    {
+        $request = new Request('GET', $route);
+        $response = $this->app->handle($request, $this->authenticatedSession);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $html = $response->getBody();
+
+        // 1. Mutating HTTP verb detection (POST, DELETE, PUT)
+        $this->assertStringContainsString('isMutatingVerb', $html);
+        $this->assertStringContainsString('post', $html);
+        $this->assertStringContainsString('delete', $html);
+        $this->assertStringContainsString('put', $html);
+
+        // 2. HTMX lifecycle hooks and error handlers for locking/unlocking
+        $this->assertStringContainsString('htmx:beforeRequest', $html);
+        $this->assertStringContainsString('htmx:afterRequest', $html);
+        $this->assertStringContainsString('htmx:sendError', $html);
+        $this->assertStringContainsString('htmx:responseError', $html);
+
+        // 3. Trigger locking and unlocking logic
+        $this->assertStringContainsString('requestConfig', $html);
+        $this->assertStringContainsString('verb', $html);
+        $this->assertStringContainsString('button[type="submit"]', $html);
+        $this->assertStringContainsString('input[type="submit"]', $html);
+        $this->assertStringContainsString('data-mutation-locked', $html);
+        $this->assertStringContainsString('lockMutatingTriggers', $html);
+        $this->assertStringContainsString('unlockMutatingTriggers', $html);
     }
 
     #[DataProvider('authenticatedRoutesProvider')]

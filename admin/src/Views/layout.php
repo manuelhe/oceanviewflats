@@ -16,6 +16,14 @@
         .htmx-indicator { display: none; }
         .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline-flex; }
 
+        .htmx-request:is(button, [type="submit"], a[hx-post], a[hx-delete], a[hx-put]),
+        form.htmx-request button[type="submit"],
+        form.htmx-request input[type="submit"] {
+            pointer-events: none !important;
+            opacity: 0.75 !important;
+            cursor: wait !important;
+        }
+
         @keyframes progress-shimmer {
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
@@ -220,6 +228,149 @@ document.body.addEventListener('htmx:beforeSwap', function(evt) {
                 finishProgressBar();
             }
         }
+    });
+})();
+
+// Immediate button-level mutation locking and double-submit protection (#124)
+(function() {
+    var lockedElements = [];
+
+    function lockTarget(el) {
+        if (!el) return;
+        el.classList.add('htmx-request');
+        el.setAttribute('aria-disabled', 'true');
+        el.setAttribute('data-mutation-locked', 'true');
+        if (lockedElements.indexOf(el) === -1) {
+            lockedElements.push(el);
+        }
+    }
+
+    function unlockTarget(el) {
+        if (!el) return;
+        el.classList.remove('htmx-request');
+        el.removeAttribute('aria-disabled');
+        el.removeAttribute('data-mutation-locked');
+    }
+
+    function unlockAll() {
+        for (var i = 0; i < lockedElements.length; i++) {
+            unlockTarget(lockedElements[i]);
+        }
+        lockedElements = [];
+        var lingering = document.querySelectorAll('[data-mutation-locked="true"]');
+        for (var j = 0; j < lingering.length; j++) {
+            unlockTarget(lingering[j]);
+        }
+    }
+
+    function isMutatingVerb(verb) {
+        if (!verb) return false;
+        var v = String(verb).toLowerCase();
+        return v === 'post' || v === 'delete' || v === 'put';
+    }
+
+    function isMutatingRequest(detail) {
+        if (!detail) return false;
+        if (detail.requestConfig && isMutatingVerb(detail.requestConfig.verb)) {
+            return true;
+        }
+        var elt = detail.elt;
+        if (elt) {
+            if (elt.tagName === 'FORM') {
+                var method = (elt.getAttribute('method') || '').toLowerCase();
+                if (method === 'post' || method === 'delete' || method === 'put') {
+                    return true;
+                }
+            }
+            if (elt.hasAttribute && (elt.hasAttribute('hx-post') || elt.hasAttribute('hx-delete') || elt.hasAttribute('hx-put'))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function lockMutatingTriggers(elt) {
+        if (!elt) return;
+        if (elt.tagName === 'FORM') {
+            lockTarget(elt);
+            var submits = elt.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])');
+            for (var i = 0; i < submits.length; i++) {
+                lockTarget(submits[i]);
+            }
+        } else {
+            lockTarget(elt);
+            if (elt.querySelectorAll) {
+                var insideSubmits = elt.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])');
+                for (var j = 0; j < insideSubmits.length; j++) {
+                    lockTarget(insideSubmits[j]);
+                }
+            }
+        }
+    }
+
+    function unlockMutatingTriggers(elt) {
+        if (!elt) {
+            unlockAll();
+            return;
+        }
+        unlockTarget(elt);
+        if (elt.querySelectorAll) {
+            var submits = elt.querySelectorAll('[data-mutation-locked="true"], button[type="submit"], input[type="submit"], button:not([type])');
+            for (var i = 0; i < submits.length; i++) {
+                unlockTarget(submits[i]);
+                var idx = lockedElements.indexOf(submits[i]);
+                if (idx !== -1) {
+                    lockedElements.splice(idx, 1);
+                }
+            }
+        }
+        var selfIdx = lockedElements.indexOf(elt);
+        if (selfIdx !== -1) {
+            lockedElements.splice(selfIdx, 1);
+        }
+    }
+
+    // Intercept click and submit events to provide 0ms locking before network latency
+    document.body.addEventListener('click', function(evt) {
+        var btn = evt.target && evt.target.closest('button, [type="submit"], a[hx-post], a[hx-delete], a[hx-put]');
+        if (!btn) return;
+        if (btn.hasAttribute('hx-confirm')) return;
+        var isMutating = btn.hasAttribute('hx-post') || btn.hasAttribute('hx-delete') || btn.hasAttribute('hx-put');
+        if (!isMutating && (btn.type === 'submit' || btn.getAttribute('type') === 'submit') && btn.form) {
+            var m = (btn.form.getAttribute('method') || '').toLowerCase();
+            isMutating = m === 'post' || m === 'delete' || m === 'put' || btn.form.hasAttribute('hx-post') || btn.form.hasAttribute('hx-delete') || btn.form.hasAttribute('hx-put');
+        }
+        if (isMutating) {
+            lockTarget(btn);
+        }
+    });
+
+    document.body.addEventListener('submit', function(evt) {
+        var form = evt.target;
+        if (!form || form.tagName !== 'FORM') return;
+        var m = (form.getAttribute('method') || '').toLowerCase();
+        if (m === 'post' || m === 'delete' || m === 'put' || form.hasAttribute('hx-post') || form.hasAttribute('hx-delete') || form.hasAttribute('hx-put')) {
+            lockMutatingTriggers(form);
+        }
+    });
+
+    // Hook into HTMX lifecycle for mutating requests (POST, DELETE, PUT, or form submits)
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+        if (isMutatingRequest(evt.detail)) {
+            lockMutatingTriggers(evt.detail && evt.detail.elt);
+        }
+    });
+
+    document.body.addEventListener('htmx:afterRequest', function(evt) {
+        unlockMutatingTriggers(evt.detail && evt.detail.elt);
+    });
+
+    document.body.addEventListener('htmx:sendError', function(evt) {
+        unlockMutatingTriggers(evt.detail && evt.detail.elt);
+    });
+
+    document.body.addEventListener('htmx:responseError', function(evt) {
+        unlockMutatingTriggers(evt.detail && evt.detail.elt);
     });
 })();
 
