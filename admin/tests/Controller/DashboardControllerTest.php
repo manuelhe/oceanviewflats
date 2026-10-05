@@ -8,6 +8,15 @@ use OceanViewFlats\Admin\Controller\DashboardController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Http\Response;
 use OceanViewFlats\Admin\Views\ViewRenderer;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
+use OceanViewFlats\Domain\Reservation\Dashboard\DashboardHubViewData;
+use OceanViewFlats\Domain\Reservation\Dashboard\DashboardQueryServiceInterface;
+use OceanViewFlats\Domain\Reservation\Dashboard\MovementType;
+use OceanViewFlats\Domain\Reservation\Dashboard\OperationalAlert;
+use OceanViewFlats\Domain\Reservation\Dashboard\OperationsEvent;
+use OceanViewFlats\Domain\Reservation\Dashboard\PropertyRateStatus;
+use OceanViewFlats\Domain\Reservation\MaintenanceBlock;
 use PHPUnit\Framework\TestCase;
 
 final class DashboardControllerTest extends TestCase
@@ -116,5 +125,330 @@ final class DashboardControllerTest extends TestCase
         $this->assertStringContainsString('422', $body);
         $this->assertStringContainsString('shouldSwap', $body);
     }
-}
 
+    public function testIndexRendersOperationalHubWidgetsAndData(): void
+    {
+        $today = date('Y-m-d');
+        $hubData = $this->createSampleHubData($today);
+
+        $queryService = $this->createMock(DashboardQueryServiceInterface::class);
+        $queryService->expects($this->once())
+            ->method('getDashboardHubData')
+            ->with('all')
+            ->willReturn($hubData);
+
+        $controller = new DashboardController(
+            viewRenderer: $this->viewRenderer,
+            syncService: null,
+            dashboardQueryService: $queryService
+        );
+
+        $session = ['admin_user_id' => 1, 'admin_user_name' => 'Operator Bob'];
+        $request = new Request('GET', '/');
+
+        $response = $controller->index($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Check master container anchors
+        $this->assertStringContainsString('id="dashboard-hub-content"', $body);
+        $this->assertStringContainsString('id="modal-container"', $body);
+        $this->assertStringContainsString('id="drawer-container"', $body);
+
+        // Check property filter pills with HTMX targets and accessibility roles
+        $this->assertStringContainsString('role="button"', $body);
+        $this->assertStringContainsString('hx-target="#dashboard-hub-content"', $body);
+        $this->assertStringContainsString('hx-swap="outerHTML"', $body);
+        $this->assertStringContainsString('All Properties', $body);
+        $this->assertStringContainsString('Apartment 1606', $body);
+        $this->assertStringContainsString('Apartment 1707', $body);
+        $this->assertStringContainsString('aria-current="page"', $body);
+
+        // Check operational metric cards
+        $this->assertStringContainsString("Today's Arrivals", $body);
+        $this->assertStringContainsString("Today's Departures", $body);
+        $this->assertStringContainsString('In-House Stays', $body);
+        $this->assertStringContainsString('Operational Alerts', $body);
+
+        // Check schedule horizon and turnover alert
+        $this->assertStringContainsString('7-Day Operations Horizon', $body);
+        $this->assertStringContainsString('Same-Day Turnover (Apartment 1606)', $body);
+        $this->assertStringContainsString('Bob Builder', $body);
+        $this->assertStringContainsString('Charlie Brown', $body);
+        $this->assertStringContainsString('David Copperfield', $body);
+
+        // Check alerts card
+        $this->assertStringContainsString('Operational Attention', $body);
+        $this->assertStringContainsString('Guest Registration Incomplete', $body);
+        $this->assertStringContainsString('Un-onboarded Airbnb Hold', $body);
+        $this->assertStringContainsString('Copy Invite', $body);
+        $this->assertStringContainsString('Onboard Airbnb Guest', $body);
+
+        // Check rates and blocks
+        $this->assertStringContainsString("Today's Effective Rates", $body);
+        $this->assertStringContainsString('Seasonal: High Season', $body);
+        $this->assertStringContainsString('Upcoming Calendar Holds', $body);
+        $this->assertStringContainsString('Deep AC Maintenance', $body);
+        $this->assertStringContainsString('+ Add Hold', $body);
+    }
+
+    public function testHubReturnsPartialWhenRequestedViaHtmx(): void
+    {
+        $today = date('Y-m-d');
+        $hubData = $this->createSampleHubData($today);
+
+        $queryService = $this->createMock(DashboardQueryServiceInterface::class);
+        $queryService->expects($this->once())
+            ->method('getDashboardHubData')
+            ->with('1606')
+            ->willReturn($hubData);
+
+        $controller = new DashboardController(
+            viewRenderer: $this->viewRenderer,
+            syncService: null,
+            dashboardQueryService: $queryService
+        );
+
+        $session = ['admin_user_id' => 1];
+        $request = new Request(
+            method: 'GET',
+            uri: '/dashboard/hub',
+            query: ['property_id' => '1606'],
+            post: [],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => 'dashboard-hub-content',
+            ]
+        );
+
+        $response = $controller->hub($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Must contain the hub content container
+        $this->assertStringContainsString('id="dashboard-hub-content"', $body);
+        // Must NOT contain the full master layout elements
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $body);
+        $this->assertStringNotContainsString('Welcome back', $body);
+        $this->assertStringNotContainsString('Sign Out', $body);
+
+        // Apartment 1606 filter pill must be active with aria-current="page"
+        $this->assertMatchesRegularExpression('/aria-current="page"[^>]*>[\s\n]*Apartment 1606/s', $body);
+    }
+
+    public function testHubRendersFullLayoutWhenDirectBrowserNavigationOrTargetIsBody(): void
+    {
+        $today = date('Y-m-d');
+        $hubData = $this->createSampleHubData($today);
+
+        $queryService = $this->createMock(DashboardQueryServiceInterface::class);
+        $queryService->expects($this->exactly(2))
+            ->method('getDashboardHubData')
+            ->with('all')
+            ->willReturn($hubData);
+
+        $controller = new DashboardController(
+            viewRenderer: $this->viewRenderer,
+            syncService: null,
+            dashboardQueryService: $queryService
+        );
+
+        $session = ['admin_user_id' => 1, 'admin_user_name' => 'Direct Navigator'];
+
+        // Case 1: Non-HTMX direct browser navigation
+        $directRequest = new Request('GET', '/dashboard/hub');
+        $response1 = $controller->hub($directRequest, $session);
+        $this->assertSame(200, $response1->getStatusCode());
+        $this->assertStringContainsString('Welcome back, Direct Navigator', $response1->getBody());
+        $this->assertStringContainsString('<!DOCTYPE html>', $response1->getBody());
+
+        // Case 2: HTMX request explicitly targeting body
+        $bodyTargetRequest = new Request(
+            method: 'GET',
+            uri: '/dashboard/hub',
+            query: [],
+            post: [],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => 'body',
+            ]
+        );
+        $response2 = $controller->hub($bodyTargetRequest, $session);
+        $this->assertSame(200, $response2->getStatusCode());
+        $this->assertStringContainsString('Welcome back, Direct Navigator', $response2->getBody());
+        $this->assertStringContainsString('<!DOCTYPE html>', $response2->getBody());
+    }
+
+    public function testIndexReturnsPartialWhenHtmxTargetIsHubContent(): void
+    {
+        $today = date('Y-m-d');
+        $hubData = $this->createSampleHubData($today);
+
+        $queryService = $this->createMock(DashboardQueryServiceInterface::class);
+        $queryService->expects($this->once())
+            ->method('getDashboardHubData')
+            ->with('1707')
+            ->willReturn($hubData);
+
+        $controller = new DashboardController(
+            viewRenderer: $this->viewRenderer,
+            syncService: null,
+            dashboardQueryService: $queryService
+        );
+
+        $session = ['admin_user_id' => 1];
+        $request = new Request(
+            method: 'GET',
+            uri: '/',
+            query: ['property_id' => '1707'],
+            post: [],
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_TARGET' => '#dashboard-hub-content',
+            ]
+        );
+
+        $response = $controller->index($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Must return the partial without layout shell
+        $this->assertStringContainsString('id="dashboard-hub-content"', $body);
+        $this->assertStringNotContainsString('<!DOCTYPE html>', $body);
+        $this->assertStringNotContainsString('Welcome back', $body);
+    }
+
+    public function testFilterScopingFallsBackToAllForInvalidProperty(): void
+    {
+        $queryService = $this->createMock(DashboardQueryServiceInterface::class);
+        $queryService->expects($this->once())
+            ->method('getDashboardHubData')
+            ->with('all')
+            ->willReturn($this->createSampleHubData(date('Y-m-d')));
+
+        $controller = new DashboardController(
+            viewRenderer: $this->viewRenderer,
+            syncService: null,
+            dashboardQueryService: $queryService
+        );
+
+        $session = ['admin_user_id' => 1];
+        $request = new Request('GET', '/', query: ['property_id' => 'malicious_property']);
+
+        $response = $controller->index($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    private function createSampleHubData(string $today): DashboardHubViewData
+    {
+        return new DashboardHubViewData(
+            selectedPropertyFilter: 'all',
+            alerts: [
+                new OperationalAlert(
+                    id: 'alert_reg_1',
+                    type: AlertType::INCOMPLETE_GUEST_REGISTRY,
+                    severity: AlertSeverity::CRITICAL,
+                    propertyId: '1606',
+                    title: 'Guest Registration Incomplete: Check-in Today',
+                    description: 'Arrival is scheduled for today but guest details are missing.',
+                    dueDate: $today,
+                    reservationUid: 'res_test_123',
+                    channelBlockUid: null,
+                    guestName: 'Alice Springs',
+                    actionPayload: [
+                        'registryUrl' => 'https://oceanviewflats.com/guest/register/tok_123',
+                    ]
+                ),
+                new OperationalAlert(
+                    id: 'alert_ical_1',
+                    type: AlertType::UNONBOARDED_CHANNEL_BLOCK,
+                    severity: AlertSeverity::WARNING,
+                    propertyId: '1707',
+                    title: 'Un-onboarded Airbnb Hold: Oct 10 - Oct 14',
+                    description: 'External iCal hold detected without reservation.',
+                    dueDate: '2026-10-10',
+                    reservationUid: null,
+                    channelBlockUid: 'ical_airbnb_999',
+                    guestName: null,
+                    actionPayload: [
+                        'startDate' => '2026-10-10',
+                        'endDate' => '2026-10-14',
+                        'source' => 'airbnb',
+                    ]
+                ),
+            ],
+            scheduleByDate: [
+                $today => [
+                    new OperationsEvent(
+                        date: $today,
+                        movementType: MovementType::TURNOVER,
+                        propertyId: '1606',
+                        reservationUid: 'res_in_1606',
+                        guestName: 'Bob Builder',
+                        guestPhone: '+573001234567',
+                        status: 'confirmed',
+                        registryCompleted: false,
+                        doorCode: null,
+                        source: 'direct',
+                        externalConfirmationCode: null,
+                        departingReservationUid: 'res_out_1606',
+                        departingGuestName: 'Charlie Brown'
+                    ),
+                    new OperationsEvent(
+                        date: $today,
+                        movementType: MovementType::CHECK_OUT,
+                        propertyId: '1707',
+                        reservationUid: 'res_out_1707',
+                        guestName: 'David Copperfield',
+                        guestPhone: '+573007654321',
+                        status: 'confirmed',
+                        registryCompleted: true,
+                        doorCode: '4455',
+                        source: 'airbnb',
+                        externalConfirmationCode: 'HM998877',
+                        departingReservationUid: null,
+                        departingGuestName: null
+                    ),
+                ]
+            ],
+            rateStatus: [
+                '1606' => new PropertyRateStatus(
+                    propertyId: '1606',
+                    currentNightlyRate: 350000,
+                    isSeasonalTierActive: true,
+                    activeTierName: 'High Season',
+                    activeTierEndDate: '2026-10-31',
+                    nextTierName: 'Standard Low',
+                    nextTierRate: 280000,
+                    nextTierStartDate: '2026-11-01'
+                ),
+                '1707' => new PropertyRateStatus(
+                    propertyId: '1707',
+                    currentNightlyRate: 420000,
+                    isSeasonalTierActive: false,
+                    activeTierName: null,
+                    activeTierEndDate: null,
+                    nextTierName: null,
+                    nextTierRate: null,
+                    nextTierStartDate: null
+                ),
+            ],
+            upcomingMaintenanceBlocks: [
+                new MaintenanceBlock(
+                    propertyId: '1606',
+                    startDate: '2026-10-20',
+                    endDate: '2026-10-22',
+                    reason: 'Deep AC Maintenance',
+                    id: 1,
+                    createdBy: 1,
+                    createdByName: 'Admin Manager',
+                    createdAt: new \DateTimeImmutable('2026-10-01 00:00:00')
+                )
+            ],
+            channelSyncData: [],
+            todayArrivalsCount: 1,
+            todayDeparturesCount: 1,
+            activeStaysCount: 2
+        );
+    }
+}

@@ -1,10 +1,16 @@
 <?php
 /**
+ * Master Template: Admin Operational Dashboard Hub
+ *
  * @var array<string, mixed> $currentUser
+ * @var string $csrfToken
+ * @var string $propertyId
+ * @var string $hubContentHtml
  */
 ?>
 <div class="space-y-6">
-    <div class="bg-white overflow-hidden shadow-sm sm:rounded-xl border border-gray-100 p-6">
+    <!-- Top Greeting Banner -->
+    <div class="bg-white overflow-hidden shadow-2xs sm:rounded-xl border border-gray-200 p-6">
         <div class="md:flex md:items-center md:justify-between">
             <div class="flex-1 min-w-0">
                 <h1 class="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
@@ -16,58 +22,75 @@
                 </p>
             </div>
             <div class="mt-4 flex md:mt-0 md:ml-4 space-x-3">
-                <a href="/reservations/new" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <a href="/reservations/new"
+                   hx-get="/reservations/new"
+                   hx-target="#modal-container"
+                   hx-swap="innerHTML"
+                   role="button"
+                   class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-2xs text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     + New Reservation
                 </a>
             </div>
         </div>
     </div>
 
-    <!-- Quick Stat Cards -->
-    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        <div class="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-100 p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0 bg-indigo-50 rounded-lg p-3 text-indigo-600">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Reservations & Calendar</dt>
-                        <dd class="mt-1">
-                            <a href="/reservations" class="text-indigo-600 hover:text-indigo-900 font-semibold text-sm">
-                                View Unified Grid &rarr;
-                            </a>
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
+    <!-- Reactive Operational Hub Container (Swapped by HTMX on filter change) -->
+    <?= $hubContentHtml ?>
 
-        <?php
-        if (isset($channelCardData)) {
-            extract($channelCardData, EXTR_OVERWRITE);
-            include __DIR__ . '/_channel_card.php';
-        }
-        ?>
-
-        <div class="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-100 p-5">
-            <div class="flex items-center">
-                <div class="flex-shrink-0 bg-amber-50 rounded-lg p-3 text-amber-600">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-                    </svg>
-                </div>
-                <div class="ml-5 w-0 flex-1">
-                    <dl>
-                        <dt class="text-sm font-medium text-gray-500 truncate">Smart Lock Status</dt>
-                        <dd class="mt-1 text-sm font-semibold text-gray-700">
-                            Keypad PIN Integrations Ready
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Modal and Drawer Insertion Targets -->
+    <div id="modal-container"></div>
+    <div id="drawer-container"></div>
 </div>
+
+<script>
+function copyRegistryInvite(button) {
+    if (!button) return;
+    var inviteUrl = button.getAttribute('data-invite-url') || '';
+    var guestName = button.getAttribute('data-guest-name') || 'Guest';
+    var propId = button.getAttribute('data-prop-id') || '';
+    
+    var textToCopy = inviteUrl;
+    if (inviteUrl && guestName) {
+        textToCopy = "Hello " + guestName + ",\n\nPlease complete your guest registration for Apartment " + propId + " prior to arrival using this secure link:\n" + inviteUrl + "\n\nThank you!\nOcean View Flats Team";
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textToCopy).then(function() {
+            showCopyFeedback(button);
+        }).catch(function() {
+            fallbackCopy(textToCopy, button);
+        });
+    } else {
+        fallbackCopy(textToCopy, button);
+    }
+}
+
+function fallbackCopy(text, button) {
+    var textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        showCopyFeedback(button);
+    } catch (err) {
+        console.error('Unable to copy', err);
+    }
+    document.body.removeChild(textArea);
+}
+
+function showCopyFeedback(button) {
+    var originalHtml = button.innerHTML;
+    button.innerHTML = '<span>✓ Copied!</span>';
+    button.classList.add('bg-emerald-600', 'text-white');
+    button.classList.remove('bg-indigo-600');
+    setTimeout(function() {
+        button.innerHTML = originalHtml;
+        button.classList.remove('bg-emerald-600');
+        button.classList.add('bg-indigo-600');
+    }, 2000);
+}
+</script>

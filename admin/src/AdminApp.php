@@ -20,6 +20,10 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
+use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
+use OceanViewFlats\Admin\Repository\AdminRateRepository;
+use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use OceanViewFlats\Admin\Service\DashboardQueryService;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClient;
 use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Admin\Service\PublicUrlBuilder;
@@ -40,6 +44,7 @@ use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Quote\RateRepositoryInterface;
 use OceanViewFlats\Domain\Quote\RateSourceInterface;
+use OceanViewFlats\Domain\Reservation\Dashboard\DashboardQueryServiceInterface;
 use OceanViewFlats\Domain\Reservation\InboundChannelSyncService;
 use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
@@ -115,10 +120,6 @@ final class AdminApp
             auditLogger: $auditLogger,
             authService: $authService,
             viewRenderer: $viewRenderer
-        );
-        $dashboardController = new DashboardController(
-            viewRenderer: $viewRenderer,
-            syncService: $channelSyncService
         );
 
         // 5. Reservation Dependencies & Controller
@@ -215,7 +216,30 @@ final class AdminApp
             reservationRepository: $reservationRepository
         );
 
-        // 8. Security Middlewares & Router (immutable internal security pipeline)
+        // 8. Dashboard Dependencies & Controller
+        $adminReservationRepo = $options['admin_reservation_repository']
+            ?? new AdminReservationRepository($pdo, $reservationSearch, $reservationRepository);
+        $adminCalendarBlockRepo = $options['admin_calendar_block_repository']
+            ?? new AdminCalendarBlockRepository($calendarBlockRepo instanceof PdoMaintenanceBlockRepository ? $calendarBlockRepo : $pdo);
+        $adminRateRepo = $options['admin_rate_repository']
+            ?? new AdminRateRepository($pdo, $ratesConfig, $rateRepo);
+
+        /** @var DashboardQueryServiceInterface $dashboardQueryService */
+        $dashboardQueryService = $options['dashboard_query_service'] ?? new DashboardQueryService(
+            reservationRepo: $adminReservationRepo,
+            calendarBlockRepo: $adminCalendarBlockRepo,
+            rateRepo: $adminRateRepo,
+            channelSyncService: $channelSyncService,
+            ledger: $ledger
+        );
+
+        $dashboardController = new DashboardController(
+            viewRenderer: $viewRenderer,
+            syncService: $channelSyncService,
+            dashboardQueryService: $dashboardQueryService
+        );
+
+        // 9. Security Middlewares & Router (immutable internal security pipeline)
         $sessionMiddleware = new SessionMiddleware();
         $csrfMiddleware = new CsrfMiddleware();
         $authMiddleware = new AuthMiddleware();
@@ -226,11 +250,12 @@ final class AdminApp
             authMiddleware: $authMiddleware
         );
 
-        // 9. Register Declarative Administrative Routes
+        // 10. Register Declarative Administrative Routes
         $router->get('/login', [$authController, 'showLogin'])
             ->post('/login', [$authController, 'login'])
             ->get('/logout', [$authController, 'logout'])
             ->get('/', [$dashboardController, 'index'])
+            ->get('/dashboard/hub', [$dashboardController, 'hub'])
             ->get('/channel-sync/card', [$channelSyncController, 'card'])
             ->get('/channel-sync/panel', [$channelSyncController, 'panel'])
             ->post('/channel-sync', [$channelSyncController, 'sync'])
