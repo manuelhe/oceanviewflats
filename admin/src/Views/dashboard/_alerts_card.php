@@ -94,9 +94,11 @@ $alertCount = count($alerts);
                             </button>
                         <?php elseif ($alert->type === AlertType::UNONBOARDED_CHANNEL_BLOCK): ?>
                             <?php
+                            $startDate = (string) ($alert->actionPayload['start_date'] ?? $alert->actionPayload['startDate'] ?? '');
+                            $endDate = (string) ($alert->actionPayload['end_date'] ?? $alert->actionPayload['endDate'] ?? '');
                             $onboardUrl = '/reservations/new?property_id=' . urlencode($alert->propertyId)
-                                . '&check_in=' . urlencode((string) ($alert->actionPayload['startDate'] ?? ''))
-                                . '&check_out=' . urlencode((string) ($alert->actionPayload['endDate'] ?? ''))
+                                . '&check_in=' . urlencode($startDate)
+                                . '&check_out=' . urlencode($endDate)
                                 . '&source=airbnb';
                             ?>
                             <a href="<?= htmlspecialchars($onboardUrl, ENT_QUOTES, 'UTF-8') ?>"
