@@ -63,7 +63,7 @@ $years = [$year - 1, $year, $year + 1];
     </div>
 
     <!-- Dynamic HTMX Content Partial -->
-    <div id="rates-content">
+    <div id="rates-content" hx-swap="innerHTML">
         <?= $contentHtml ?>
     </div>
 

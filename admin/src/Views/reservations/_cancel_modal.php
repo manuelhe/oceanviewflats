@@ -65,6 +65,7 @@ $sendCancellationEmail = !empty($oldInput)
             <form id="cancel-reservation-form"
                   hx-post="/reservations/<?= urlencode($uid) ?>/cancel"
                   hx-target="#modal-container"
+                  hx-swap="innerHTML"
                   class="p-6 space-y-4">
 
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">

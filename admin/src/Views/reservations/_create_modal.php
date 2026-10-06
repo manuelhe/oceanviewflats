@@ -64,6 +64,7 @@ $sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
             <form id="create-reservation-form"
                   hx-post="/reservations/create-manual"
                   hx-target="#modal-container"
+                  hx-swap="innerHTML"
                   class="p-6 space-y-4">
 
                 <?php if (!empty($errorMessage)): ?>

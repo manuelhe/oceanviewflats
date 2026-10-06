@@ -61,6 +61,7 @@ $formAction = $isEdit ? "/rates/{$rateId}" : '/rates';
             <form id="rate-tier-form"
                   hx-post="<?= $formAction ?>"
                   hx-target="#modal-container"
+                  hx-swap="innerHTML"
                   class="p-6 space-y-4">
 
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">

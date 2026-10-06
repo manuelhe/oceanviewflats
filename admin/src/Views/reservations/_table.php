@@ -130,6 +130,7 @@ $buildPageUrl = static function (array $currentFilters, int $targetPage): string
                                 <button type="button"
                                         hx-get="/reservations/<?= urlencode($uid) ?>/registry"
                                         hx-target="#modal-container"
+                                        hx-swap="innerHTML"
                                         class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer <?= $registryCompleted ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200' ?>"
                                         title="Click to view registry details">
                                     <?php if ($registryCompleted): ?>

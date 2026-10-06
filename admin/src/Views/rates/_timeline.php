@@ -139,6 +139,7 @@ usort($timelineItems, fn($a, $b) => strcmp((string) $a['start_date'], (string) $
                                 <button type="button"
                                         hx-get="/rates/<?= (int) $item['id'] ?>/edit"
                                         hx-target="#modal-container"
+                                        hx-swap="innerHTML"
                                         class="text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer">
                                     Edit Tier
                                 </button>
@@ -176,6 +177,7 @@ usort($timelineItems, fn($a, $b) => strcmp((string) $a['start_date'], (string) $
                                 <button type="button"
                                         hx-get="/rates/new?property_id=<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>&start_date=<?= htmlspecialchars((string) $item['start_date'], ENT_QUOTES, 'UTF-8') ?>&end_date=<?= htmlspecialchars((string) $item['end_date'], ENT_QUOTES, 'UTF-8') ?>"
                                         hx-target="#modal-container"
+                                        hx-swap="innerHTML"
                                         class="text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer">
                                     + Add Tier
                                 </button>
