@@ -164,7 +164,7 @@ _Avoid_: Calendar Export, ICS Feed, Availability Export
 ### Guest Onboarding & Fulfillment
 
 **Guest Registry**:
-The mandatory record of legal identification, ages, and vehicle details for all staying Guests required by building administration and regulatory compliance before Property access is granted. Can be pre-filled via stay parameters in the query string or resolved asynchronously by reservation UID (`code=res-man-*`, `code=res-abnb-*`, or `code=ovf_*`).
+The mandatory record of legal identification, ages, Primary Guest contact email, and vehicle details for all staying Guests required by building administration and regulatory compliance before Property access is granted. Can be pre-filled via stay parameters in the query string or resolved asynchronously by reservation UID (`code=res-man-*`, `code=res-abnb-*`, or `code=ovf_*`).
 _Avoid_: Check-in Form, Registration Card, Guest List
 
 **Guest Guide**:
