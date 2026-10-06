@@ -26,6 +26,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Please enter a valid name for Guest %d (2-100 characters).',
+            'err_guest_email' => 'Please provide a valid email address for the primary guest.',
             'err_guest_age' => 'Please enter a valid age (0-120) for Guest %d.',
             'err_guest_doc' => 'Please enter a valid document number for Guest %d.',
             'err_car_plates' => 'Car plates cannot exceed 20 characters.',
@@ -120,6 +121,33 @@ return [
             'host_subject' => '[ADMIN] Reservation Cancelled - Unit %s (%s)',
             'host_title' => 'Reservation Cancelled',
             'host_reason' => 'Cancellation Reason',
+        ],
+        // Access Dispatch Notice (AccessDispatchEmailRenderer.php)
+        'access_dispatch' => [
+            'subject' => 'Access Credentials & Arrival Guide - OceanViewFlats %s',
+            'title' => 'Your Access Credentials & Arrival Guide',
+            'intro' => 'Dear <strong>%s</strong>, your Guest Registry has been verified and registered with condominium security.',
+            'intro_plain' => 'Dear %s, your Guest Registry has been verified and registered with condominium security.',
+            'summary_title' => 'Stay Summary',
+            'property' => 'Property',
+            'reservation_code' => 'Reservation Code',
+            'check_in' => 'Check-In',
+            'check_in_time' => 'From 3:00 PM',
+            'check_out' => 'Check-Out',
+            'check_out_time' => 'Until 11:00 AM',
+            'pin_title' => 'Smart Lock Door PIN',
+            'pin_instructions' => 'Enter this 7-digit PIN followed by the # key on the digital door lock to unlock.',
+            'guide_title' => 'Interactive Guest Guide',
+            'guide_desc' => 'Access your complete digital guide with Wi-Fi details, building amenities, pool access, and local recommendations:',
+            'btn_guide' => 'Open Guest Guide',
+            'house_rules_title' => 'House Rules & Arrival Reminders',
+            'house_rules' => [
+                'Quiet hours: 10:00 PM – 8:00 AM. Please respect neighbors and building tranquillity.',
+                'No smoking: Smoking is strictly prohibited inside the apartment and on balconies.',
+                'Condominium check-in: Present physical IDs at the reception desk upon arrival to receive building wristbands.',
+                'No unregistered visitors or parties permitted per condominium bylaws.',
+            ],
+            'footer' => 'OceanViewFlats &bull; Beachfront Living in Santa Marta, Colombia',
         ]
     ],
     'es' => [
@@ -141,6 +169,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Por favor, ingrese un nombre válido para el Huésped %d (2-100 caracteres).',
+            'err_guest_email' => 'Por favor ingrese un correo electrónico válido para el huésped principal.',
             'err_guest_age' => 'Por favor, ingrese una edad válida (0-120) para el Huésped %d.',
             'err_guest_doc' => 'Por favor, ingrese un número de documento válido para el Huésped %d.',
             'err_car_plates' => 'Las placas del vehículo no pueden superar los 20 caracteres.',
@@ -235,6 +264,33 @@ return [
             'host_subject' => '[ADMIN] Reserva Cancelada - Unidad %s (%s)',
             'host_title' => 'Reserva Cancelada',
             'host_reason' => 'Motivo de Cancelación',
+        ],
+        // Access Dispatch Notice (AccessDispatchEmailRenderer.php)
+        'access_dispatch' => [
+            'subject' => 'Credenciales de Acceso y Guía de Llegada - OceanViewFlats %s',
+            'title' => 'Tus Credenciales de Acceso y Guía de Llegada',
+            'intro' => 'Estimado/a <strong>%s</strong>, tu Registro de Huéspedes ha sido verificado y radicado ante la seguridad del condominio.',
+            'intro_plain' => 'Estimado/a %s, tu Registro de Huéspedes ha sido verificado y radicado ante la seguridad del condominio.',
+            'summary_title' => 'Resumen de la Estadía',
+            'property' => 'Propiedad',
+            'reservation_code' => 'Código de Reserva',
+            'check_in' => 'Check-In',
+            'check_in_time' => 'A partir de las 3:00 PM',
+            'check_out' => 'Check-Out',
+            'check_out_time' => 'Hasta las 11:00 AM',
+            'pin_title' => 'PIN de Acceso Smart Lock',
+            'pin_instructions' => 'Ingresa este PIN de 7 dígitos seguido de la tecla # en la cerradura digital de la puerta para abrir.',
+            'guide_title' => 'Guía Interactiva del Huésped',
+            'guide_desc' => 'Accede a tu guía digital completa con clave de Wi-Fi, servicios del edificio, acceso a la piscina y recomendaciones locales:',
+            'btn_guide' => 'Abrir Guía del Huésped',
+            'house_rules_title' => 'Reglas de la Casa y Recordatorios de Llegada',
+            'house_rules' => [
+                'Horas de silencio: 10:00 PM – 8:00 AM. Por favor respetar la tranquilidad y descanso de los vecinos.',
+                'Prohibido fumar: Totalmente prohibido fumar dentro del apartamento y en las áreas de balcón.',
+                'Recepción del condominio: Presenta documentos de identidad físicos al llegar para recibir las manillas de acceso.',
+                'Visitas no registradas y fiestas estrictamente prohibidas por reglamento de propiedad horizontal.',
+            ],
+            'footer' => 'OceanViewFlats &bull; Apartamentos frente al mar en Santa Marta, Colombia',
         ]
     ],
     'fr' => [
@@ -256,6 +312,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Veuillez entrer un nom valide pour le client %d (2-100 caractères).',
+            'err_guest_email' => 'Veuillez fournir une adresse e-mail valide pour le client principal.',
             'err_guest_age' => 'Veuillez entrer un âge valide (0-120) pour le client %d.',
             'err_guest_doc' => 'Veuillez entrer un numéro de document valide pour le client %d.',
             'err_car_plates' => 'Les plaques d\'immatriculation ne peuvent pas dépasser 20 caractères.',
@@ -350,6 +407,33 @@ return [
             'host_subject' => '[ADMIN] Réservation Annulée - Unité %s (%s)',
             'host_title' => 'Réservation Annulée',
             'host_reason' => 'Motif d\'Annulation',
+        ],
+        // Access Dispatch Notice (AccessDispatchEmailRenderer.php)
+        'access_dispatch' => [
+            'subject' => 'Identifiants d’accès et guide d’arrivée - OceanViewFlats %s',
+            'title' => 'Vos identifiants d’accès et guide d’arrivée',
+            'intro' => 'Cher/Chère <strong>%s</strong>, votre enregistrement a été vérifié et validé auprès de la sécurité de la copropriété.',
+            'intro_plain' => 'Cher/Chère %s, votre enregistrement a été vérifié et validé auprès de la sécurité de la copropriété.',
+            'summary_title' => 'Résumé du séjour',
+            'property' => 'Propriété',
+            'reservation_code' => 'Code de réservation',
+            'check_in' => 'Arrivée (Check-In)',
+            'check_in_time' => 'À partir de 15h00',
+            'check_out' => 'Départ (Check-Out)',
+            'check_out_time' => 'Jusqu’à 11h00',
+            'pin_title' => 'Code PIN de la serrure connectée',
+            'pin_instructions' => 'Composez ce code PIN à 7 chiffres suivi de la touche # sur la serrure numérique de la porte pour déverrouiller.',
+            'guide_title' => 'Guide interactif du voyageur',
+            'guide_desc' => 'Consultez votre guide numérique complet avec les codes Wi-Fi, les services de l’immeuble, la piscine et nos adresses locales :',
+            'btn_guide' => 'Ouvrir le guide du voyageur',
+            'house_rules_title' => 'Règlement intérieur et rappels d’arrivée',
+            'house_rules' => [
+                'Heures de silence : 22h00 – 8h00. Merci de respecter la tranquillité du voisinage.',
+                'Non-fumeur : Il est strictement interdit de fumer à l’intérieur et sur les balcons.',
+                'Réception de la copropriété : Présentez vos pièces d’identité à l’accueil à l’arrivée pour obtenir vos bracelets.',
+                'Fêtes et visiteurs non enregistrés strictement interdits selon le règlement de l’immeuble.',
+            ],
+            'footer' => 'OceanViewFlats &bull; Séjour face à la mer à Santa Marta, Colombie',
         ]
     ],
     'it' => [
@@ -371,6 +455,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Inserisci un nome valido per l\'Ospite %d (2-100 caratteri).',
+            'err_guest_email' => 'Si prega di fornire un indirizzo email valido per l\'ospite principale.',
             'err_guest_age' => 'Inserisci un\'età valida (0-120) per l\'Ospite %d.',
             'err_guest_doc' => 'Inserisci un numero di documento valido per l\'Ospite %d.',
             'err_car_plates' => 'Le targhe dell\'auto non possono superare i 20 caratteri.',
@@ -465,6 +550,33 @@ return [
             'host_subject' => '[ADMIN] Prenotazione Cancellata - Unità %s (%s)',
             'host_title' => 'Prenotazione Cancellata',
             'host_reason' => 'Motivo della Cancellazione',
+        ],
+        // Access Dispatch Notice (AccessDispatchEmailRenderer.php)
+        'access_dispatch' => [
+            'subject' => 'Credenziali di accesso e guida all’arrivo - OceanViewFlats %s',
+            'title' => 'Le tue credenziali di accesso e guida all’arrivo',
+            'intro' => 'Gentile <strong>%s</strong>, la registrazione dei tuoi ospiti è stata verificata e trasmessa alla sicurezza del condominio.',
+            'intro_plain' => 'Gentile %s, la registrazione dei tuoi ospiti è stata verificata e trasmessa alla sicurezza del condominio.',
+            'summary_title' => 'Riepilogo del soggiorno',
+            'property' => 'Proprietà',
+            'reservation_code' => 'Codice di prenotazione',
+            'check_in' => 'Check-In',
+            'check_in_time' => 'Dalle 15:00',
+            'check_out' => 'Check-Out',
+            'check_out_time' => 'Entro le 11:00',
+            'pin_title' => 'PIN della serratura smart',
+            'pin_instructions' => 'Inserisci questo PIN di 7 cifre seguito dal tasto # sulla tastiera digitale per aprire la porta.',
+            'guide_title' => 'Guida interattiva dell’ospite',
+            'guide_desc' => 'Accedi alla tua guida digitale completa con password Wi-Fi, servizi del condominio, piscina e consigli locali:',
+            'btn_guide' => 'Apri la Guida dell’Ospite',
+            'house_rules_title' => 'Regole della casa e promemoria per l’arrivo',
+            'house_rules' => [
+                'Ore di silenzio: 22:00 – 8:00. Si prega di rispettare la quiete condominiale e il riposo dei vicini.',
+                'Vietato fumare: È severamente vietato fumare all’interno dell’appartamento e sui balconi.',
+                'Reception condominiale: Presenta i documenti d’identità fisici all’arrivo per ricevere i braccialetti di accesso.',
+                'Feste e visitatori non registrati severamente vietati dal regolamento condominiale.',
+            ],
+            'footer' => 'OceanViewFlats &bull; Fronte mare a Santa Marta, Colombia',
         ]
     ],
     'de' => [
@@ -486,6 +598,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Bitte geben Sie einen gültigen Namen für Gast %d ein (2-100 Zeichen).',
+            'err_guest_email' => 'Bitte geben Sie eine gültige E-Mail-Adresse für den Hauptgast an.',
             'err_guest_age' => 'Bitte geben Sie ein gültiges Alter (0-120) für Gast %d ein.',
             'err_guest_doc' => 'Bitte geben Sie eine gültige Dokumentennummer für Gast %d ein.',
             'err_car_plates' => 'Das Kennzeichen darf nicht länger als 20 Zeichen sein.',
@@ -580,6 +693,33 @@ return [
             'host_subject' => '[ADMIN] Reservierung Storniert - Einheit %s (%s)',
             'host_title' => 'Reservierung Storniert',
             'host_reason' => 'Stornierungsgrund',
+        ],
+        // Access Dispatch Notice (AccessDispatchEmailRenderer.php)
+        'access_dispatch' => [
+            'subject' => 'Zugangsdaten & Ankunftsleitfaden - OceanViewFlats %s',
+            'title' => 'Ihre Zugangsdaten & Ankunftsleitfaden',
+            'intro' => 'Sehr geehrte(r) <strong>%s</strong>, Ihre Gästeregistrierung wurde geprüft und an die Gebäudesicherheit übermittelt.',
+            'intro_plain' => 'Sehr geehrte(r) %s, Ihre Gästeregistrierung wurde geprüft und an die Gebäudesicherheit übermittelt.',
+            'summary_title' => 'Aufenthaltsübersicht',
+            'property' => 'Unterkunft',
+            'reservation_code' => 'Buchungscode',
+            'check_in' => 'Anreise (Check-In)',
+            'check_in_time' => 'Ab 15:00 Uhr',
+            'check_out' => 'Abreise (Check-Out)',
+            'check_out_time' => 'Bis 11:00 Uhr',
+            'pin_title' => 'Smart Lock Tür-PIN',
+            'pin_instructions' => 'Geben Sie diese 7-stellige PIN gefolgt von der Taste # auf dem digitalen Türschloss ein, um zu öffnen.',
+            'guide_title' => 'Interaktiver Gäste-Leitfaden',
+            'guide_desc' => 'Rufen Sie Ihren digitalen Leitfaden mit WLAN-Passwort, Gebäude-Annehmlichkeiten, Poolzugang und Empfehlungen auf:',
+            'btn_guide' => 'Gäste-Leitfaden öffnen',
+            'house_rules_title' => 'Hausordnung & Ankunftshinweise',
+            'house_rules' => [
+                'Ruhezeiten: 22:00 – 8:00 Uhr. Bitte nehmen Sie Rücksicht auf die Nachbarschaft.',
+                'Rauchverbot: Rauchen ist in der Wohnung und auf dem Balkon strengstens verboten.',
+                'Empfang des Gebäudes: Bitte legen Sie beim Check-in am Empfang Ihre Ausweise vor, um Armbänder zu erhalten.',
+                'Partys und nicht registrierte Besucher sind laut Hausordnung strengstens untersagt.',
+            ],
+            'footer' => 'OceanViewFlats &bull; Direkt am Strand in Santa Marta, Kolumbien',
         ]
     ],
     'ja' => [
@@ -601,6 +741,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'ゲスト %d の有効な名前を入力してください（2〜100文字）。',
+            'err_guest_email' => '主ゲストの有効なメールアドレスを入力してください。',
             'err_guest_age' => 'ゲスト %d の有効な年齢を入力してください（0〜120）。',
             'err_guest_doc' => 'ゲスト %d の有効な身分証明書番号を入力してください。',
             'err_car_plates' => '車両ナンバーは20文字以内で入力してください。',
@@ -695,6 +836,33 @@ return [
             'host_subject' => '[ADMIN] ご予約キャンセル - ユニット %s (%s)',
             'host_title' => 'ご予約キャンセル',
             'host_reason' => 'キャンセル理由',
+        ],
+        // Access Dispatch Notice (AccessDispatchEmailRenderer.php)
+        'access_dispatch' => [
+            'subject' => 'アクセス認証情報とご到着案内 - OceanViewFlats %s',
+            'title' => 'アクセス認証情報とご到着案内',
+            'intro' => '<strong>%s</strong> 様、ゲスト登録が確認され、コンドミニアムの警備受付へ提出されました。',
+            'intro_plain' => '%s 様、ゲスト登録が確認され、コンドミニアムの警備受付へ提出されました。',
+            'summary_title' => 'ご滞在の概要',
+            'property' => 'お部屋',
+            'reservation_code' => '予約コード',
+            'check_in' => 'チェックイン',
+            'check_in_time' => '15:00以降',
+            'check_out' => 'チェックアウト',
+            'check_out_time' => '11:00まで',
+            'pin_title' => 'スマートロック ドア暗証番号',
+            'pin_instructions' => 'ドアのデジタルロックでこの7桁のPINコードを入力し、最後に「#」を押して解錠してください。',
+            'guide_title' => 'インタラクティブ ゲスト案内ガイド',
+            'guide_desc' => 'Wi-Fiパスワード、建物のアメニティ、プール利用案内、周辺のおすすめスポットを含む完全デジタルガイドをご覧ください：',
+            'btn_guide' => 'ゲストガイドを開く',
+            'house_rules_title' => 'ハウスルールとご到着時の注意事項',
+            'house_rules' => [
+                '静粛時間：22:00～翌朝8:00。近隣へのご配慮をお願いいたします。',
+                '全館禁煙：室内およびバルコニーでの喫煙は固くお断りいたします。',
+                'フロント受付：到着時にフロントにて身分証明書をご提示の上、リストバンドをお受け取りください。',
+                '登録外の部外者の入館およびパーティーの開催は規約により厳禁です。',
+            ],
+            'footer' => 'OceanViewFlats &bull; サンタ・マルタ（コロンビア）のオーシャンフロント宿泊施設',
         ]
     ]
 ];

@@ -157,6 +157,7 @@ final class GuestRegistryEndpointTest extends TestCase
             'check_in' => '2026-11-15',
             'check_out' => '2026-11-20',
             'guest_count' => 2,
+            'guest_email_1' => 'maria.gomez@example.com',
             'guest_name_1' => 'Maria Gomez',
             'guest_age_1' => 34,
             'guest_doc_type_1' => 'Passport',
@@ -352,6 +353,7 @@ final class GuestRegistryEndpointTest extends TestCase
             'property_id' => '1606',
             'check_in' => '2026-11-15',
             'check_out' => '2026-11-20',
+            'primary_guest_email' => 'maria.gomez@example.com',
             'occupants' => [
                 [
                     'index' => 1,
@@ -522,6 +524,230 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertIsArray($res['json']);
         $this->assertFalse($res['json']['success']);
         $this->assertStringContainsString('cancelled', strtolower((string) $res['json']['error']));
+    }
+
+    public function testRegistryEndpointRejectsMissingPrimaryGuestEmailWith400(): void
+    {
+        $payload = $this->createValidRegistryData();
+        unset($payload['guest_email_1']);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid email address for the primary guest.', $res['json']['error']);
+        $this->assertContains('Please provide a valid email address for the primary guest.', $res['json']['errors']);
+    }
+
+    public function testRegistryEndpointRejectsInvalidPrimaryGuestEmailWith400(): void
+    {
+        $payload = $this->createValidRegistryData([
+            'guest_email_1' => 'not-an-email-address',
+        ]);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid email address for the primary guest.', $res['json']['error']);
+    }
+
+    public function testRegistryEndpointRejectsEmailLongerThan100CharsWith400(): void
+    {
+        $payload = $this->createValidRegistryData([
+            'guest_email_1' => str_repeat('a', 95) . '@example.com',
+        ]);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid email address for the primary guest.', $res['json']['error']);
+    }
+
+    public function testRegistryEndpointAcceptsFallbackEmailFields(): void
+    {
+        $payload = $this->createValidRegistryData();
+        unset($payload['guest_email_1']);
+        $payload['guest_email'] = 'fallback.guest@example.com';
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+    }
+
+    public function testSelectiveEmailEnrichmentForAirbnbVsWebReservations(): void
+    {
+        // 1. Airbnb reservation: initial relay email should be enriched
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, payment_status, registry_completed
+            ) VALUES (
+                'res-abnb-endpoint-test', '1606', 'Airbnb Guest', 'relay-encrypted@guest.airbnb.com', '+12025550199',
+                '2026-11-22', '2026-11-25', 0.0, 'confirmed', 'airbnb', 'approved', 0
+            );
+        ");
+
+        $abnbPayload = $this->createValidRegistryData([
+            'reservation_code' => 'res-abnb-endpoint-test',
+            'check_in' => '2026-11-22',
+            'check_out' => '2026-11-25',
+            'guest_email_1' => 'verified.traveler@example.com',
+            'guest_name_1' => 'Verified Traveler',
+        ]);
+        $resAbnb = $this->callRegistryEndpoint($abnbPayload);
+        $this->assertSame(0, $resAbnb['exitCode'], $resAbnb['stderr']);
+        $this->assertSame(200, $resAbnb['statusCode']);
+        $this->assertTrue($resAbnb['json']['success'] ?? false);
+
+        $abnbEmail = $this->pdo->query("SELECT guest_email FROM reservations WHERE reservation_uid = 'res-abnb-endpoint-test'")->fetchColumn();
+        $this->assertSame('verified.traveler@example.com', $abnbEmail);
+
+        // 2. Direct web reservation with valid customer email: preserved, not overwritten
+        $webPayload = $this->createValidRegistryData([
+            'reservation_code' => 'ovf_conf_100',
+            'check_in' => '2026-11-15',
+            'check_out' => '2026-11-20',
+            'guest_email_1' => 'companion.traveler@example.com',
+            'guest_name_1' => 'Companion Traveler',
+        ]);
+        $resWeb = $this->callRegistryEndpoint($webPayload);
+        $this->assertSame(0, $resWeb['exitCode'], $resWeb['stderr']);
+        $this->assertSame(200, $resWeb['statusCode']);
+        $this->assertTrue($resWeb['json']['success'] ?? false);
+
+        $webEmail = $this->pdo->query("SELECT guest_email FROM reservations WHERE reservation_uid = 'ovf_conf_100'")->fetchColumn();
+        $this->assertSame('maria@example.com', $webEmail);
+
+        // 3. Direct web reservation with placeholder email: enriched
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, payment_status, registry_completed
+            ) VALUES (
+                'ovf_web_placeholder_test', '1606', 'Web Placeholder', 'guest@oceanviewflats.com', '+12025550199',
+                '2026-11-26', '2026-11-30', 500000.0, 'confirmed', 'web', 'approved', 0
+            );
+        ");
+        $placeholderPayload = $this->createValidRegistryData([
+            'reservation_code' => 'ovf_web_placeholder_test',
+            'check_in' => '2026-11-26',
+            'check_out' => '2026-11-30',
+            'guest_email_1' => 'actual.guest@example.com',
+            'guest_name_1' => 'Actual Guest',
+        ]);
+        $resPlaceholder = $this->callRegistryEndpoint($placeholderPayload);
+        $this->assertSame(0, $resPlaceholder['exitCode'], $resPlaceholder['stderr']);
+        $this->assertSame(200, $resPlaceholder['statusCode']);
+        $this->assertTrue($resPlaceholder['json']['success'] ?? false);
+
+        $placeholderEmail = $this->pdo->query("SELECT guest_email FROM reservations WHERE reservation_uid = 'ovf_web_placeholder_test'")->fetchColumn();
+        $this->assertSame('actual.guest@example.com', $placeholderEmail);
+    }
+
+    public function testValidSubmissionDispatchesAccessCredentialsEmailToPrimaryGuest(): void
+    {
+        $logFile = sys_get_temp_dir() . '/test_access_dispatch_emails_' . uniqid('', true) . '.json';
+        if (file_exists($logFile)) {
+            @unlink($logFile);
+        }
+
+        $payload = $this->createValidRegistryData();
+        $escapedLogFile = addslashes($logFile);
+        $autoloadPath = var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true);
+
+        $prependCode = <<<PHP
+            require_once {$autoloadPath};
+            \$emailSender = new class implements \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface {
+                public function send(string \$to, string \$subject, string \$htmlBody, array \$headers = []): bool {
+                    \$log = '{$escapedLogFile}';
+                    \$messages = file_exists(\$log) ? json_decode((string) file_get_contents(\$log), true) : [];
+                    \$messages[] = [
+                        'to' => \$to,
+                        'subject' => \$subject,
+                        'htmlBody' => \$htmlBody,
+                    ];
+                    file_put_contents(\$log, json_encode(\$messages));
+                    return true;
+                }
+            };
+            \$GLOBALS['TEST_LIFECYCLE_SERVICE'] = \OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService::createDefault(
+                \$GLOBALS['TEST_PDO'],
+                ['email_sender' => \$emailSender]
+            );
+PHP;
+
+        $res = $this->callRegistryEndpoint($payload, 'POST', [], $prependCode);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertSame('0345678#', $res['json']['door_code']);
+
+        $this->assertFileExists($logFile);
+        $sentMessages = json_decode((string) file_get_contents($logFile), true);
+        @unlink($logFile);
+
+        $this->assertIsArray($sentMessages);
+        $this->assertCount(2, $sentMessages);
+
+        // Host Notification
+        $this->assertSame('rentals@oceanviewflats.com', $sentMessages[0]['to']);
+        $this->assertStringContainsString('OceanViewFlats Guest Registry Report', $sentMessages[0]['subject']);
+
+        // Access Dispatch Email to Primary Guest
+        $guestEmail = $sentMessages[1];
+        $this->assertSame('maria.gomez@example.com', $guestEmail['to']);
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
+        $this->assertStringContainsString('0345678#', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('Maria Gomez', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('/guide/?code=ovf_conf_100', $guestEmail['htmlBody']);
+    }
+
+    public function testValidSubmissionSucceedsEvenIfEmailSendingFails(): void
+    {
+        $payload = $this->createValidRegistryData();
+        $autoloadPath = var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true);
+
+        $prependCode = <<<PHP
+            require_once {$autoloadPath};
+            \$emailSender = new class implements \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface {
+                public function send(string \$to, string \$subject, string \$htmlBody, array \$headers = []): bool {
+                    throw new \RuntimeException('Outbound mail server unavailable');
+                }
+            };
+            \$GLOBALS['TEST_LIFECYCLE_SERVICE'] = \OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService::createDefault(
+                \$GLOBALS['TEST_PDO'],
+                ['email_sender' => \$emailSender]
+            );
+PHP;
+
+        $res = $this->callRegistryEndpoint($payload, 'POST', [], $prependCode);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertSame('0345678#', $res['json']['door_code']);
+
+        // Assert database was still updated
+        $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE reservation_uid = :uid');
+        $stmt->execute([':uid' => 'ovf_conf_100']);
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame(1, (int) $row['registry_completed']);
+        $this->assertSame('0345678#', $row['door_code']);
     }
 
     /**

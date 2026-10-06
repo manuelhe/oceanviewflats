@@ -49,6 +49,7 @@ final class HostRegistryEmailRendererTest extends TestCase
             checkIn: '2026-11-01',
             checkOut: '2026-11-05',
             occupants: $occupants,
+            primaryGuestEmail: 'jane.doe@example.com',
             carPlates: $carPlates,
             carModel: $carModel,
             ipAddress: '190.24.15.2',
@@ -100,6 +101,7 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('Check-in:      2026-11-01', $text);
         $this->assertStringContainsString('Check-out:     2026-11-05', $text);
         $this->assertStringContainsString('Total Guests:  2', $text);
+        $this->assertStringContainsString('Primary Email: jane.doe@example.com', $text);
 
         // Vehicle info
         $this->assertStringContainsString('VEHICLE INFORMATION (OPTIONAL)', $text);
@@ -108,7 +110,7 @@ final class HostRegistryEmailRendererTest extends TestCase
 
         // Registered guests
         $this->assertStringContainsString('REGISTERED GUESTS DETAILS', $text);
-        $this->assertStringContainsString("Guest #1:\n  Name:     Jane Doe\n  ID/Doc:   Passport (US12345678)\n  Age:      34", $text);
+        $this->assertStringContainsString("Guest #1:\n  Name:     Jane Doe\n  Email:    jane.doe@example.com\n  ID/Doc:   Passport (US12345678)\n  Age:      34", $text);
         $this->assertStringContainsString("Guest #2:\n  Name:     John Doe\n  ID/Doc:   Driver License (DL887766)\n  Age:      36", $text);
 
         // Smart lock access PIN
@@ -179,6 +181,8 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('Guest Registry Report', $html);
         $this->assertStringContainsString('Stay Information', $html);
         $this->assertStringContainsString('OceanViewFlats 1606', $html);
+        $this->assertStringContainsString('Primary Email', $html);
+        $this->assertStringContainsString('jane.doe@example.com', $html);
         $this->assertStringContainsString('Vehicle Information', $html);
         $this->assertStringContainsString('ABC-999', $html);
         $this->assertStringContainsString('Hyundai Tucson', $html);
@@ -186,6 +190,7 @@ final class HostRegistryEmailRendererTest extends TestCase
         // Occupants
         $this->assertStringContainsString('Registered Guests Details', $html);
         $this->assertStringContainsString('Jane Doe', $html);
+        $this->assertStringContainsString('<code>jane.doe@example.com</code>', $html);
         $this->assertStringContainsString('Passport (US12345678)', $html);
         $this->assertStringContainsString('John Doe', $html);
         $this->assertStringContainsString('Driver License (DL887766)', $html);
@@ -219,6 +224,7 @@ final class HostRegistryEmailRendererTest extends TestCase
             checkIn: '2026-11-01',
             checkOut: '2026-11-05',
             occupants: [$maliciousOccupant],
+            primaryGuestEmail: 'malicious@example.com',
             carPlates: '<script>',
             carModel: '<b>Model</b>',
             ipAddress: '<test-ip>',
@@ -240,5 +246,36 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $html);
         $this->assertStringContainsString('OceanViewFlats &lt;b&gt;1606&lt;/b&gt;', $html);
         $this->assertStringContainsString('&lt;test-ip&gt;', $html);
+    }
+
+    public function testRenderOmitsCompanionEmailInBothTextAndHtml(): void
+    {
+        $occupants = [
+            new OccupantDetails(1, 'Primary Person', 35, 'Passport', 'P111', 'primary.person@example.com'),
+            new OccupantDetails(2, 'Companion Person', 30, 'Passport', 'P222'),
+        ];
+
+        $submission = new GuestRegistrySubmission(
+            reservationCode: 'res_companion_email_check',
+            propertyId: '1606',
+            checkIn: '2026-11-01',
+            checkOut: '2026-11-05',
+            occupants: $occupants,
+            primaryGuestEmail: 'primary.person@example.com'
+        );
+
+        $text = $this->renderer->renderPlainText($submission, '123456#');
+        $html = $this->renderer->renderHtml($submission, '123456#');
+
+        // Plain text checks
+        $this->assertStringContainsString("Guest #1:\n  Name:     Primary Person\n  Email:    primary.person@example.com", $text);
+        $this->assertStringContainsString("Guest #2:\n  Name:     Companion Person\n  ID/Doc:   Passport (P222)", $text);
+        $this->assertStringNotContainsString("Guest #2:\n  Name:     Companion Person\n  Email:", $text);
+
+        // HTML checks
+        $this->assertStringContainsString('Primary Email', $html);
+        $this->assertStringContainsString('<code>primary.person@example.com</code>', $html);
+        $this->assertStringContainsString('Guest #2: <strong>Companion Person</strong>', $html);
+        $this->assertSame(1, substr_count($html, 'Email: <code>'));
     }
 }

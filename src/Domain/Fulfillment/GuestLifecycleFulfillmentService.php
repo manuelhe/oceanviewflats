@@ -19,6 +19,8 @@ use Throwable;
  */
 final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmentServiceInterface
 {
+    private readonly AccessDispatchEmailRendererInterface $accessDispatchRenderer;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly ReservationRepositoryInterface $reservationRepository,
@@ -27,8 +29,11 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         private readonly SpreadsheetSyncInterface $spreadsheetSync,
         private readonly ConfirmationEmailRendererInterface $confirmationEmailRenderer,
         private readonly string $hostNotificationEmail = 'rentals@oceanviewflats.com',
-        private readonly string $publicSiteUrl = 'https://oceanviewflats.com'
-    ) {}
+        private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
+        ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null
+    ) {
+        $this->accessDispatchRenderer = $accessDispatchRenderer ?? new AccessDispatchEmailRenderer($this->publicSiteUrl);
+    }
 
     /**
      * Factory creating a service configured with production defaults or custom overrides.
@@ -63,6 +68,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         $spreadsheetSync = $options['spreadsheet_sync'] ?? GoogleSheetWebhookSync::createFromEnv();
         /** @var ConfirmationEmailRendererInterface $confirmationEmailRenderer */
         $confirmationEmailRenderer = $options['confirmation_email_renderer'] ?? new ConfirmationEmailRenderer($resolvedPublicSiteUrl);
+        /** @var AccessDispatchEmailRendererInterface $accessDispatchRenderer */
+        $accessDispatchRenderer = $options['access_dispatch_renderer'] ?? new AccessDispatchEmailRenderer($resolvedPublicSiteUrl);
 
         return new self(
             pdo: $pdo,
@@ -72,7 +79,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             spreadsheetSync: $spreadsheetSync,
             confirmationEmailRenderer: $confirmationEmailRenderer,
             hostNotificationEmail: $resolvedHost,
-            publicSiteUrl: $resolvedPublicSiteUrl
+            publicSiteUrl: $resolvedPublicSiteUrl,
+            accessDispatchRenderer: $accessDispatchRenderer
         );
     }
 
@@ -157,6 +165,24 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
                 $doorCode
             );
 
+            // Enrich external/placeholder reservation email with verified Primary Guest email
+            if ($this->shouldEnrichReservationEmail($reservation)) {
+                $submittedEmail = trim($submission->primaryGuestEmail);
+                if (strcasecmp(trim($reservation->guestEmail), $submittedEmail) !== 0) {
+                    $stmtEmail = $this->pdo->prepare("
+                        UPDATE `reservations`
+                        SET `guest_email` = :guest_email,
+                            `updated_at` = CURRENT_TIMESTAMP
+                        WHERE `reservation_uid` = :reservation_uid
+                    ");
+                    $stmtEmail->execute([
+                        ':guest_email' => $submittedEmail,
+                        ':reservation_uid' => $reservation->reservationUid,
+                    ]);
+                    $reservation = $reservation->withGuestEmail($submittedEmail);
+                }
+            }
+
             $this->insertGuestRegistry(
                 reservationUid: $reservation->reservationUid,
                 propertyId: $reservation->propertyId,
@@ -224,7 +250,32 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         // 8. Generate unlocked guide URL
         $guideUrl = rtrim($this->publicSiteUrl, '/') . '/guide/?code=' . urlencode($reservation->reservationUid) . '&lang=' . urlencode($submission->lang);
 
-        // 9. Fetch fresh reservation
+        // 9. Dispatch Access Credentials email to Primary Guest (ADR 0001, Ticket #131)
+        $accessDispatchSent = false;
+        if (trim($submission->primaryGuestEmail) !== '') {
+            try {
+                $recipientEmail = trim($submission->primaryGuestEmail);
+                $lang = $submission->lang !== '' ? $submission->lang : ($reservation->lang !== '' ? $reservation->lang : 'en');
+                $primaryOccupantName = $submission->getPrimaryOccupant()->name;
+                $recipientName = $primaryOccupantName !== '' ? $primaryOccupantName : $reservation->guestName;
+
+                $dispatchSubject = $this->accessDispatchRenderer->renderSubject($reservation, $lang);
+                $dispatchHtml = $this->accessDispatchRenderer->renderHtml(
+                    reservation: $reservation,
+                    doorCode: $doorCode,
+                    guideUrl: $guideUrl,
+                    lang: $lang,
+                    recipientName: $recipientName
+                );
+
+                $accessDispatchSent = $this->emailSender->send($recipientEmail, $dispatchSubject, $dispatchHtml);
+            } catch (Throwable $e) {
+                error_log('Access Dispatch email transmission failed for reservation ' . $reservation->reservationUid . ': ' . $e->getMessage());
+                $accessDispatchSent = false;
+            }
+        }
+
+        // 10. Fetch fresh reservation
         $freshReservation = $this->reservationRepository->findByUid($reservation->reservationUid)
             ?? $reservation->withRegistryCompleted(new DateTimeImmutable(), $doorCode);
 
@@ -233,7 +284,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             doorCode: $doorCode,
             guideUrl: $guideUrl,
             hostReportDispatched: $hostReportSent,
-            spreadsheetSynced: $spreadsheetSynced
+            spreadsheetSynced: $spreadsheetSynced,
+            accessDispatchDispatched: $accessDispatchSent
         );
     }
 
@@ -526,5 +578,22 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             ':car_model' => $carModel,
             ':ip_address' => $ipAddress,
         ]);
+    }
+
+    /**
+     * Evaluates whether a reservation's guest email qualifies for enrichment
+     * with the Primary Guest's verified email upon Guest Registry submission.
+     *
+     * Criteria (Q7-A):
+     * - source === 'airbnb' OR
+     * - UID starts with 'res-abnb-' OR
+     * - email contains 'airbnb.com' OR
+     * - email is empty OR
+     * - email starts with 'guest@' OR
+     * - email starts with 'none@'
+     */
+    private function shouldEnrichReservationEmail(Reservation $reservation): bool
+    {
+        return $reservation->hasExternalOrPlaceholderEmail();
     }
 }

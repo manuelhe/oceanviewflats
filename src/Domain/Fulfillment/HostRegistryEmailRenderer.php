@@ -45,7 +45,8 @@ final class HostRegistryEmailRenderer implements HostRegistryEmailRendererInterf
         $emailBody .= "Property:      " . $propertyStr . "\n";
         $emailBody .= "Check-in:      " . $checkInStr . "\n";
         $emailBody .= "Check-out:     " . $checkOutStr . "\n";
-        $emailBody .= "Total Guests:  " . $submission->getGuestCount() . "\n\n";
+        $emailBody .= "Total Guests:  " . $submission->getGuestCount() . "\n";
+        $emailBody .= "Primary Email: " . $this->stripNewlines($submission->primaryGuestEmail) . "\n\n";
 
         if ($this->hasVehicleInfo($submission)) {
             $emailBody .= "VEHICLE INFORMATION (OPTIONAL)\n";
@@ -59,6 +60,9 @@ final class HostRegistryEmailRenderer implements HostRegistryEmailRendererInterf
         foreach ($submission->occupants as $g) {
             $emailBody .= "Guest #" . $g->index . ":\n";
             $emailBody .= "  Name:     " . $this->stripNewlines($g->name) . "\n";
+            if ($g->index === 1 && $g->email !== null) {
+                $emailBody .= "  Email:    " . $this->stripNewlines($g->email) . "\n";
+            }
             $emailBody .= "  ID/Doc:   " . $this->stripNewlines($g->docType) . " (" . $this->stripNewlines($g->docNum) . ")\n";
             $emailBody .= "  Age:      " . $g->age . "\n";
             $emailBody .= "--------------------------------------------------\n";
@@ -103,6 +107,7 @@ final class HostRegistryEmailRenderer implements HostRegistryEmailRendererInterf
         $safeGuestCount = $submission->getGuestCount();
         $safeDoorCode = htmlspecialchars($this->stripNewlines($doorCode), ENT_QUOTES, 'UTF-8');
         $safePrimaryGuestDoc = htmlspecialchars($this->stripNewlines($primaryGuestDoc), ENT_QUOTES, 'UTF-8');
+        $safePrimaryEmail = htmlspecialchars($this->stripNewlines($submission->primaryGuestEmail), ENT_QUOTES, 'UTF-8');
         $safeIp = htmlspecialchars($submission->ipAddress ?: 'Unknown', ENT_QUOTES, 'UTF-8');
         $safeTimestamp = htmlspecialchars($timestamp, ENT_QUOTES, 'UTF-8');
         $safeSheetStatus = htmlspecialchars($sheetStatus, ENT_QUOTES, 'UTF-8');
@@ -127,6 +132,11 @@ HTML;
             $safeDocNum = htmlspecialchars($this->stripNewlines($g->docNum), ENT_QUOTES, 'UTF-8');
             $safeAge = $g->age;
             $safeIndex = $g->index;
+            $emailSnippet = '';
+            if ($g->index === 1 && $g->email !== null) {
+                $safeEmail = htmlspecialchars($this->stripNewlines($g->email), ENT_QUOTES, 'UTF-8');
+                $emailSnippet = "<span>Email: <code>{$safeEmail}</code></span>";
+            }
 
             $occupantsRows .= <<<HTML
         <div class="occupant-item">
@@ -134,6 +144,7 @@ HTML;
           <div class="occupant-meta">
             <span>ID/Doc: <code>{$safeDocType} ({$safeDocNum})</code></span>
             <span>Age: {$safeAge}</span>
+            {$emailSnippet}
           </div>
         </div>
 HTML;
@@ -180,6 +191,7 @@ HTML;
         <div class="row"><span>Check-in</span><strong>{$safeCheckIn}</strong></div>
         <div class="row"><span>Check-out</span><strong>{$safeCheckOut}</strong></div>
         <div class="row"><span>Total Guests</span><strong>{$safeGuestCount}</strong></div>
+        <div class="row"><span>Primary Email</span><strong>{$safePrimaryEmail}</strong></div>
       </div>
 
       {$vehicleSection}

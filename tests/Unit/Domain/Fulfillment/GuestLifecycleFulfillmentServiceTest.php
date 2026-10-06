@@ -172,6 +172,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             checkIn: $checkIn,
             checkOut: $checkOut,
             occupants: $occupants,
+            primaryGuestEmail: 'jane.smith@example.com',
             carPlates: $carPlates,
             carModel: $carModel,
             ipAddress: '190.24.15.2',
@@ -202,6 +203,9 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame($expectedDoorCode, $result->doorCode);
         $this->assertSame($expectedDoorCode, $result->reservation->doorCode);
         $this->assertSame('https://oceanviewflats.com/guide/?code=ovf_sample_100&lang=en', $result->guideUrl);
+        $this->assertTrue($result->hostReportDispatched);
+        $this->assertTrue($result->spreadsheetSynced);
+        $this->assertTrue($result->accessDispatchDispatched);
 
         // Verify DB update on reservations table
         $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE reservation_uid = :uid');
@@ -239,13 +243,19 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('190.24.15.2', $auditRow['ip_address']);
         $this->assertStringContainsString('Jane Smith', (string) $auditRow['payload_after']);
 
-        // Verify Host Notification Email
-        $this->assertSame(1, $this->emailSender->count());
-        $email = $this->emailSender->getSentMessages()[0];
-        $this->assertSame('rentals@oceanviewflats.com', $email['to']);
-        $this->assertStringContainsString('OceanViewFlats Guest Registry Report', $email['subject']);
-        $this->assertStringContainsString($expectedDoorCode, $email['htmlBody']);
-        $this->assertStringContainsString('Mazda CX-5', $email['htmlBody']);
+        // Verify Dispatched Emails: Host Notification & Guest Access Dispatch
+        $this->assertSame(2, $this->emailSender->count());
+        $hostEmail = $this->emailSender->getSentMessages()[0];
+        $this->assertSame('rentals@oceanviewflats.com', $hostEmail['to']);
+        $this->assertStringContainsString('OceanViewFlats Guest Registry Report', $hostEmail['subject']);
+        $this->assertStringContainsString($expectedDoorCode, $hostEmail['htmlBody']);
+        $this->assertStringContainsString('Mazda CX-5', $hostEmail['htmlBody']);
+
+        $guestEmail = $this->emailSender->getSentMessages()[1];
+        $this->assertSame('jane.smith@example.com', $guestEmail['to']);
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
+        $this->assertStringContainsString($expectedDoorCode, $guestEmail['htmlBody']);
+        $this->assertStringContainsString('/guide/?code=ovf_sample_100', $guestEmail['htmlBody']);
 
         // Verify Spreadsheet Sync
         $this->assertSame(1, $this->spreadsheetSync->count());
@@ -282,7 +292,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             propertyId: '1606',
             checkIn: '2026-11-15',
             checkOut: '2026-11-20',
-            occupants: []
+            occupants: [],
+            primaryGuestEmail: 'jane.smith@example.com'
         );
         $resultZero = $this->service->submitRegistry($submissionZero);
         $this->assertFalse($resultZero->success);
@@ -304,7 +315,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             propertyId: '1606',
             checkIn: '2026-11-15',
             checkOut: '2026-11-20',
-            occupants: $sevenOccupants
+            occupants: $sevenOccupants,
+            primaryGuestEmail: 'jane.smith@example.com'
         );
         $resultSeven = $this->service->submitRegistry($submissionSeven);
         $this->assertFalse($resultSeven->success);
@@ -323,13 +335,15 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $refClass->getProperty('age')->setValue($occupant, 130); // invalid: > 120
         $refClass->getProperty('docType')->setValue($occupant, 'Passport');
         $refClass->getProperty('docNum')->setValue($occupant, 'X'); // invalid: < 2 chars
+        $refClass->getProperty('email')->setValue($occupant, 'jane.smith@example.com');
 
         $submission = new GuestRegistrySubmission(
             reservationCode: 'ovf_sample_invalid_occ',
             propertyId: '1606',
             checkIn: '2026-11-15',
             checkOut: '2026-11-20',
-            occupants: [$occupant]
+            occupants: [$occupant],
+            primaryGuestEmail: 'jane.smith@example.com'
         );
 
         $result = $this->service->submitRegistry($submission);
@@ -401,9 +415,66 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('0345678#', $result->doorCode);
         $this->assertFalse($result->spreadsheetSynced);
         $this->assertFalse($result->hostReportDispatched);
+        $this->assertFalse($result->accessDispatchDispatched);
 
         // DB reservation must still be completed
         $res = $this->reservationRepository->findByUid('ovf_side_effects_fail');
+        $this->assertNotNull($res);
+        $this->assertTrue($res->registryCompleted);
+        $this->assertSame('0345678#', $res->doorCode);
+    }
+
+    public function testSubmitRegistryDispatchesAccessDispatchToPrimaryGuest(): void
+    {
+        $this->createSampleReservation('ovf_dispatch_test');
+        $submission = $this->createSubmission('ovf_dispatch_test');
+
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->accessDispatchDispatched);
+        $this->assertSame(2, $this->emailSender->count());
+
+        $dispatchEmail = $this->emailSender->getSentMessages()[1];
+        $this->assertSame('jane.smith@example.com', $dispatchEmail['to']);
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $dispatchEmail['subject']);
+        $this->assertStringContainsString('0345678#', $dispatchEmail['htmlBody']);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=ovf_dispatch_test&amp;lang=en', $dispatchEmail['htmlBody']);
+        $this->assertStringContainsString('Jane Smith', $dispatchEmail['htmlBody']);
+    }
+
+    public function testSubmitRegistrySoftFailsWhenAccessDispatchEmailThrowsException(): void
+    {
+        $this->createSampleReservation('ovf_dispatch_throw');
+        $submission = $this->createSubmission('ovf_dispatch_throw');
+
+        $failingSender = new class implements \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface {
+            private int $callCount = 0;
+            public function send(string $to, string $subject, string $htmlBody, array $headers = []): bool
+            {
+                $this->callCount++;
+                // Allow host email (call 1) to succeed, but throw on guest dispatch (call 2)
+                if ($this->callCount === 2) {
+                    throw new \RuntimeException('SMTP Connection timed out');
+                }
+                return true;
+            }
+        };
+
+        $service = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'email_sender' => $failingSender,
+            'spreadsheet_sync' => $this->spreadsheetSync,
+        ]);
+
+        $result = $service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('0345678#', $result->doorCode);
+        $this->assertTrue($result->hostReportDispatched);
+        $this->assertFalse($result->accessDispatchDispatched);
+
+        // Core business transaction still completes in DB
+        $res = $this->reservationRepository->findByUid('ovf_dispatch_throw');
         $this->assertNotNull($res);
         $this->assertTrue($res->registryCompleted);
         $this->assertSame('0345678#', $res->doorCode);
@@ -665,12 +736,162 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             propertyId: '1606',
             checkIn: '2026-11-20',
             checkOut: '2026-11-10', // checkOut before checkIn
-            occupants: [$occupant]
+            occupants: [$occupant],
+            primaryGuestEmail: 'jane.smith@example.com'
         );
 
         $result = $this->service->submitRegistry($submission);
         $this->assertFalse($result->success);
         $this->assertContains('Check-in and check-out dates are invalid or improperly ordered.', $result->errors);
+    }
+
+    public function testSubmitRegistryEnrichesAirbnbReservationEmail(): void
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, external_confirmation_code,
+                registry_completed, created_at
+            ) VALUES (
+                'res-abnb-testemail1', '1606', 'Airbnb Traveler', 'automated-relay@guest.airbnb.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 0.0, 'confirmed', 'airbnb', 'HMTEST123',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('res-abnb-testemail1');
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->reservation);
+        $this->assertSame('jane.smith@example.com', $result->reservation->guestEmail);
+
+        $stmtCheck = $this->pdo->prepare("SELECT guest_email FROM reservations WHERE reservation_uid = 'res-abnb-testemail1'");
+        $stmtCheck->execute();
+        $this->assertSame('jane.smith@example.com', $stmtCheck->fetchColumn());
+    }
+
+    public function testSubmitRegistryEnrichesPlaceholderEmailOnWebReservation(): void
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_placeholder_test', '1606', 'Placeholder Guest', 'guest@oceanviewflats.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 1000000.0, 'confirmed', 'web',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('ovf_placeholder_test');
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->reservation);
+        $this->assertSame('jane.smith@example.com', $result->reservation->guestEmail);
+
+        $stmtCheck = $this->pdo->prepare("SELECT guest_email FROM reservations WHERE reservation_uid = 'ovf_placeholder_test'");
+        $stmtCheck->execute();
+        $this->assertSame('jane.smith@example.com', $stmtCheck->fetchColumn());
+    }
+
+    public function testSubmitRegistryPreservesDirectReservationEmail(): void
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_direct_billing_test', '1606', 'Direct Buyer', 'buyer.billing@personal.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 1000000.0, 'confirmed', 'web',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('ovf_direct_billing_test');
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->reservation);
+        // Billing email must NOT be overwritten
+        $this->assertSame('buyer.billing@personal.com', $result->reservation->guestEmail);
+
+        $stmtCheck = $this->pdo->prepare("SELECT guest_email FROM reservations WHERE reservation_uid = 'ovf_direct_billing_test'");
+        $stmtCheck->execute();
+        $this->assertSame('buyer.billing@personal.com', $stmtCheck->fetchColumn());
+    }
+
+    public function testSubmitRegistryEnrichesResAbnbPrefixReservation(): void
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'res-abnb-external99', '1606', 'OTA Guest', 'relay123@external.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 0.0, 'confirmed', 'channel_sync',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('res-abnb-external99');
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('jane.smith@example.com', $result->reservation->guestEmail);
+
+        $stmtCheck = $this->pdo->prepare("SELECT guest_email FROM reservations WHERE reservation_uid = 'res-abnb-external99'");
+        $stmtCheck->execute();
+        $this->assertSame('jane.smith@example.com', $stmtCheck->fetchColumn());
+    }
+
+    public function testSubmitRegistryEnrichesEmptyOrNonePlaceholderEmail(): void
+    {
+        // 1. None@ placeholder
+        $stmt1 = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_none_placeholder', '1606', 'OTA Guest', 'none@domain.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 0.0, 'confirmed', 'channel_sync',
+                0, datetime('now')
+            )
+        ");
+        $stmt1->execute();
+
+        $sub1 = $this->createSubmission('ovf_none_placeholder');
+        $res1 = $this->service->submitRegistry($sub1);
+        $this->assertTrue($res1->success);
+        $this->assertSame('jane.smith@example.com', $res1->reservation->guestEmail);
+
+        // 2. Empty email
+        $stmt2 = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_empty_email', '1606', 'No Email Guest', '', '+12025550199',
+                '2026-11-15', '2026-11-20', 0.0, 'confirmed', 'direct_phone',
+                0, datetime('now')
+            )
+        ");
+        $stmt2->execute();
+
+        $sub2 = $this->createSubmission('ovf_empty_email');
+        $res2 = $this->service->submitRegistry($sub2);
+        $this->assertTrue($res2->success);
+        $this->assertSame('jane.smith@example.com', $res2->reservation->guestEmail);
     }
 
     // ==========================================

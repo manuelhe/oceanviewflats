@@ -317,4 +317,105 @@ final class ReservationEntityEnrichmentTest extends TestCase
         $this->assertSame('AIRBNB-XYZ', $fetched->externalConfirmationCode);
         $this->assertSame('block-uid-999', $fetched->channelBlockUid);
     }
+
+    public function testHasExternalOrPlaceholderEmail(): void
+    {
+        // 1. source === 'airbnb'
+        $rAirbnbSource = new Reservation(
+            reservationUid: 'ovf_abnb_source',
+            propertyId: '1606',
+            guestName: 'Airbnb Guest',
+            guestEmail: 'realguest@gmail.com',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'airbnb'
+        );
+        $this->assertTrue($rAirbnbSource->hasExternalOrPlaceholderEmail());
+
+        // 2. reservationUid starts with res-abnb-
+        $rAirbnbUid = new Reservation(
+            reservationUid: 'res-abnb-12345',
+            propertyId: '1606',
+            guestName: 'Airbnb UID Guest',
+            guestEmail: 'realguest@gmail.com',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'external'
+        );
+        $this->assertTrue($rAirbnbUid->hasExternalOrPlaceholderEmail());
+
+        // 3. email contains airbnb.com
+        $rAirbnbDomain = new Reservation(
+            reservationUid: 'ovf_abnb_domain',
+            propertyId: '1606',
+            guestName: 'Airbnb Domain Guest',
+            guestEmail: 'automated-proxy@guest.airbnb.com',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'ota'
+        );
+        $this->assertTrue($rAirbnbDomain->hasExternalOrPlaceholderEmail());
+
+        // 4. email is empty
+        $rEmptyEmail = new Reservation(
+            reservationUid: 'ovf_empty_email',
+            propertyId: '1606',
+            guestName: 'Empty Email Guest',
+            guestEmail: '',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'direct'
+        );
+        $this->assertTrue($rEmptyEmail->hasExternalOrPlaceholderEmail());
+
+        // 5. email starts with guest@
+        $rPlaceholderGuest = new Reservation(
+            reservationUid: 'ovf_placeholder_guest',
+            propertyId: '1606',
+            guestName: 'Placeholder Guest',
+            guestEmail: 'guest@placeholder.org',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'manual'
+        );
+        $this->assertTrue($rPlaceholderGuest->hasExternalOrPlaceholderEmail());
+
+        // 6. email starts with none@
+        $rPlaceholderNone = new Reservation(
+            reservationUid: 'ovf_placeholder_none',
+            propertyId: '1606',
+            guestName: 'None Guest',
+            guestEmail: 'none@noemail.com',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'manual'
+        );
+        $this->assertTrue($rPlaceholderNone->hasExternalOrPlaceholderEmail());
+
+        // 7. regular direct booking with valid personal email
+        $rDirectNormal = new Reservation(
+            reservationUid: 'ovf_direct_normal',
+            propertyId: '1606',
+            guestName: 'Direct Guest',
+            guestEmail: 'direct.guest@gmail.com',
+            guestPhone: '+1 555 123 4567',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0,
+            source: 'web'
+        );
+        $this->assertFalse($rDirectNormal->hasExternalOrPlaceholderEmail());
+    }
 }

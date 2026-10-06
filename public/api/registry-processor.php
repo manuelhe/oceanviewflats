@@ -92,6 +92,25 @@ if ($captchaCheck !== true) {
     send_json_response(false, $captchaCheck);
 }
 
+// Extract & validate primary guest email
+$primaryEmail = trim((string) (
+    $data['guest_email_1']
+    ?? $data['guest_email']
+    ?? $data['primary_email']
+    ?? $data['primary_guest_email']
+    ?? ($data['occupants'][0]['email'] ?? '')
+));
+
+if ($primaryEmail === '' || !filter_var($primaryEmail, FILTER_VALIDATE_EMAIL) || strlen($primaryEmail) > 100) {
+    http_response_code(400);
+    $emailError = $t['err_guest_email'] ?? '';
+    send_json_response(false, $emailError, [
+        'errors' => [$emailError],
+    ]);
+}
+$data['guest_email_1'] = $primaryEmail;
+$data['primary_guest_email'] = $primaryEmail;
+
 // Database & Service Resolution
 if (isset($GLOBALS['TEST_LIFECYCLE_SERVICE']) && $GLOBALS['TEST_LIFECYCLE_SERVICE'] instanceof GuestLifecycleFulfillmentServiceInterface) {
     $service = $GLOBALS['TEST_LIFECYCLE_SERVICE'];

@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgLoading = form.getAttribute('data-msg-loading') || 'Loading...';
     const msgNotFound = form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.';
     const msgAlreadyCompleted = form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.';
+    const msgErrEmail = form.getAttribute('data-msg-err-email') || '';
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');
@@ -351,6 +352,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!isValid) {
             showMsg(defaultErrorMsg, false);
+            return;
+        }
+
+        // Validate Primary Guest Email (guest_email_1)
+        const emailInput = document.getElementById('guest-email-1');
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailInput || !emailInput.value.trim() || !emailRegex.test(emailInput.value.trim())) {
+            if (emailInput) {
+                emailInput.classList.add('border-red-400');
+                emailInput.addEventListener('input', function removeRed() {
+                    emailInput.classList.remove('border-red-400');
+                    emailInput.removeEventListener('input', removeRed);
+                });
+            }
+            showMsg(msgErrEmail, false);
             return;
         }
 
