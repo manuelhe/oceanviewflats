@@ -236,6 +236,8 @@ export const dict = {
 		registryPlaceholderEmail: "john.doe@example.com",
 		registryRequiredBadge: "Required",
 		errEmailInvalid: "Please enter a valid email address.",
+		err_guest_email:
+			"Please provide a valid email address for the primary guest.",
 		registryDocType: "Document Type",
 		registryDocTypeNational: "National ID (Cédula)",
 		registryDocTypePassport: "Passport",
@@ -628,6 +630,8 @@ export const dict = {
 		registryPlaceholderEmail: "juan.perez@ejemplo.com",
 		registryRequiredBadge: "Obligatorio",
 		errEmailInvalid: "Por favor ingrese un correo electrónico válido.",
+		err_guest_email:
+			"Por favor ingrese un correo electrónico válido para el huésped principal.",
 		registryDocType: "Tipo de Documento",
 		registryDocTypeNational: "Cédula de Extranjería",
 		registryDocTypePassport: "Pasaporte",
@@ -1022,6 +1026,8 @@ export const dict = {
 		registryPlaceholderEmail: "jean.dupont@exemple.com",
 		registryRequiredBadge: "Requis",
 		errEmailInvalid: "Veuillez fournir une adresse e-mail valide.",
+		err_guest_email:
+			"Veuillez fournir une adresse e-mail valide pour le client principal.",
 		registryDocType: "Type de Document",
 		registryDocTypeNational: "Carte d'Identité Nationale",
 		registryDocTypePassport: "Passeport",
@@ -1410,6 +1416,8 @@ export const dict = {
 		registryPlaceholderEmail: "mario.rossi@esempio.com",
 		registryRequiredBadge: "Richiesto",
 		errEmailInvalid: "Si prega di fornire un indirizzo email valido.",
+		err_guest_email:
+			"Si prega di fornire un indirizzo email valido per l'ospite principale.",
 		registryDocType: "Tipo di Documento",
 		registryDocTypeNational: "Carta d'Identità Nazionale",
 		registryDocTypePassport: "Passaporto",
@@ -1802,6 +1810,8 @@ export const dict = {
 		registryPlaceholderEmail: "max.mustermann@beispiel.de",
 		registryRequiredBadge: "Erforderlich",
 		errEmailInvalid: "Bitte geben Sie eine gültige E-Mail-Adresse ein.",
+		err_guest_email:
+			"Bitte geben Sie eine gültige E-Mail-Adresse für den Hauptgast an.",
 		registryDocType: "Dokumentenart",
 		registryDocTypeNational: "Personalausweis",
 		registryDocTypePassport: "Reisepass",
@@ -2195,6 +2205,7 @@ export const dict = {
 		registryPlaceholderEmail: "taro.yamada@example.com",
 		registryRequiredBadge: "必須",
 		errEmailInvalid: "有効なメールアドレスを入力してください。",
+		err_guest_email: "主ゲストの有効なメールアドレスを入力してください。",
 		registryDocType: "身分証明書の種類",
 		registryDocTypeNational: "マイナンバーカード / 身分証明書",
 		registryDocTypePassport: "パスポート",

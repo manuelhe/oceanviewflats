@@ -183,7 +183,7 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 							data-msg-loading={t.registryLookupLoading}
 							data-msg-not-found={t.registryLookupNotFound}
 							data-msg-already-completed={t.registryAlreadyCompleted}
-							data-msg-err-email={t.errEmailInvalid ?? "Please enter a valid email address."}
+							data-msg-err-email={t.err_guest_email || t.errEmailInvalid}
 							noValidate
 						>
 							{/* Hidden Stay Parameter Fields */}
@@ -288,6 +288,7 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 														name="guest_email_1"
 														required
 														placeholder={t.registryPlaceholderEmail}
+														data-msg-err-email={t.err_guest_email || t.errEmailInvalid}
 														className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
 													/>
 												</div>

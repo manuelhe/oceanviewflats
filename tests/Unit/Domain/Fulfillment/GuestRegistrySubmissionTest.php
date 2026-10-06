@@ -275,4 +275,66 @@ final class GuestRegistrySubmissionTest extends TestCase
         ]);
         $this->assertSame('occupant@example.com', $sub3->primaryGuestEmail);
     }
+
+    public function testCompanionGuestsEmailIsAlwaysNull(): void
+    {
+        // 1. In flat form data with companion emails
+        $subForm = GuestRegistrySubmission::fromArray([
+            'reservation_code' => 'res_companions_form',
+            'property_id' => '1606',
+            'check_in' => '2026-10-01',
+            'check_out' => '2026-10-05',
+            'primary_email' => 'primary@example.com',
+            'guest_count' => 3,
+            'guest_name_1' => 'Primary Guest',
+            'guest_age_1' => 30,
+            'guest_doc_type_1' => 'Passport',
+            'guest_doc_num_1' => 'P111',
+            'guest_name_2' => 'Companion Two',
+            'guest_age_2' => 28,
+            'guest_doc_type_2' => 'Passport',
+            'guest_doc_num_2' => 'P222',
+            'guest_email_2' => 'companion2@example.com',
+            'guest_name_3' => 'Companion Three',
+            'guest_age_3' => 26,
+            'guest_doc_type_3' => 'Passport',
+            'guest_doc_num_3' => 'P333',
+            'guest_email_3' => 'companion3@example.com',
+        ]);
+
+        $this->assertSame('primary@example.com', $subForm->occupants[0]->email);
+        $this->assertNull($subForm->occupants[1]->email);
+        $this->assertNull($subForm->occupants[2]->email);
+
+        // 2. In array form data where companion has email
+        $subArray = GuestRegistrySubmission::fromArray([
+            'reservation_code' => 'res_companions_arr',
+            'property_id' => '1606',
+            'check_in' => '2026-10-01',
+            'check_out' => '2026-10-05',
+            'primary_email' => 'primary@example.com',
+            'occupants' => [
+                ['name' => 'Primary', 'age' => 30, 'doc_type' => 'Passport', 'doc_num' => 'P1', 'email' => 'primary@example.com'],
+                ['name' => 'Companion', 'age' => 25, 'doc_type' => 'Passport', 'doc_num' => 'P2', 'email' => 'companion@example.com'],
+            ],
+        ]);
+
+        $this->assertSame('primary@example.com', $subArray->occupants[0]->email);
+        $this->assertNull($subArray->occupants[1]->email);
+
+        // 3. Directly passed OccupantDetails objects
+        $occ1 = new OccupantDetails(1, 'Primary', 30, 'Passport', 'P1', 'primary@example.com');
+        $occ2 = new OccupantDetails(2, 'Companion', 25, 'Passport', 'P2', 'companion@example.com');
+        $subDirect = new GuestRegistrySubmission(
+            reservationCode: 'res_companions_direct',
+            propertyId: '1606',
+            checkIn: '2026-10-01',
+            checkOut: '2026-10-05',
+            occupants: [$occ1, $occ2],
+            primaryGuestEmail: 'primary@example.com'
+        );
+
+        $this->assertSame('primary@example.com', $subDirect->occupants[0]->email);
+        $this->assertNull($subDirect->occupants[1]->email);
+    }
 }

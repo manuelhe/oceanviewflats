@@ -103,7 +103,7 @@ $primaryEmail = trim((string) (
 
 if ($primaryEmail === '' || !filter_var($primaryEmail, FILTER_VALIDATE_EMAIL) || strlen($primaryEmail) > 100) {
     http_response_code(400);
-    $emailError = $t['err_guest_email'] ?? 'Please provide a valid email address for the primary guest.';
+    $emailError = $t['err_guest_email'] ?? '';
     send_json_response(false, $emailError, [
         'errors' => [$emailError],
     ]);

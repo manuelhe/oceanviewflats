@@ -270,6 +270,22 @@ final class Reservation
     }
 
     /**
+     * Determines whether the reservation contains an external or placeholder email address
+     * eligible for enrichment upon verified Guest Registry submission.
+     */
+    public function hasExternalOrPlaceholderEmail(): bool
+    {
+        $guestEmailLower = strtolower(trim($this->guestEmail));
+
+        return $this->source === 'airbnb'
+            || str_starts_with($this->reservationUid, 'res-abnb-')
+            || str_contains($guestEmailLower, 'airbnb.com')
+            || $guestEmailLower === ''
+            || str_starts_with($guestEmailLower, 'guest@')
+            || str_starts_with($guestEmailLower, 'none@');
+    }
+
+    /**
      * Evaluates if the stay dates overlap with a given check-in / check-out interval.
      */
     public function overlaps(string $checkIn, string $checkOut): bool

@@ -594,13 +594,6 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
      */
     private function shouldEnrichReservationEmail(Reservation $reservation): bool
     {
-        $guestEmailLower = strtolower(trim($reservation->guestEmail));
-
-        return $reservation->source === 'airbnb'
-            || str_starts_with($reservation->reservationUid, 'res-abnb-')
-            || str_contains($guestEmailLower, 'airbnb.com')
-            || $guestEmailLower === ''
-            || str_starts_with($guestEmailLower, 'guest@')
-            || str_starts_with($guestEmailLower, 'none@');
+        return $reservation->hasExternalOrPlaceholderEmail();
     }
 }

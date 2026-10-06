@@ -247,4 +247,35 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('OceanViewFlats &lt;b&gt;1606&lt;/b&gt;', $html);
         $this->assertStringContainsString('&lt;test-ip&gt;', $html);
     }
+
+    public function testRenderOmitsCompanionEmailInBothTextAndHtml(): void
+    {
+        $occupants = [
+            new OccupantDetails(1, 'Primary Person', 35, 'Passport', 'P111', 'primary.person@example.com'),
+            new OccupantDetails(2, 'Companion Person', 30, 'Passport', 'P222'),
+        ];
+
+        $submission = new GuestRegistrySubmission(
+            reservationCode: 'res_companion_email_check',
+            propertyId: '1606',
+            checkIn: '2026-11-01',
+            checkOut: '2026-11-05',
+            occupants: $occupants,
+            primaryGuestEmail: 'primary.person@example.com'
+        );
+
+        $text = $this->renderer->renderPlainText($submission, '123456#');
+        $html = $this->renderer->renderHtml($submission, '123456#');
+
+        // Plain text checks
+        $this->assertStringContainsString("Guest #1:\n  Name:     Primary Person\n  Email:    primary.person@example.com", $text);
+        $this->assertStringContainsString("Guest #2:\n  Name:     Companion Person\n  ID/Doc:   Passport (P222)", $text);
+        $this->assertStringNotContainsString("Guest #2:\n  Name:     Companion Person\n  Email:", $text);
+
+        // HTML checks
+        $this->assertStringContainsString('Primary Email', $html);
+        $this->assertStringContainsString('<code>primary.person@example.com</code>', $html);
+        $this->assertStringContainsString('Guest #2: <strong>Companion Person</strong>', $html);
+        $this->assertSame(1, substr_count($html, 'Email: <code>'));
+    }
 }

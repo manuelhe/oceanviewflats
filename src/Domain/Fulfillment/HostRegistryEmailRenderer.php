@@ -60,7 +60,7 @@ final class HostRegistryEmailRenderer implements HostRegistryEmailRendererInterf
         foreach ($submission->occupants as $g) {
             $emailBody .= "Guest #" . $g->index . ":\n";
             $emailBody .= "  Name:     " . $this->stripNewlines($g->name) . "\n";
-            if ($g->email !== null) {
+            if ($g->index === 1 && $g->email !== null) {
                 $emailBody .= "  Email:    " . $this->stripNewlines($g->email) . "\n";
             }
             $emailBody .= "  ID/Doc:   " . $this->stripNewlines($g->docType) . " (" . $this->stripNewlines($g->docNum) . ")\n";
@@ -133,7 +133,7 @@ HTML;
             $safeAge = $g->age;
             $safeIndex = $g->index;
             $emailSnippet = '';
-            if ($g->email !== null) {
+            if ($g->index === 1 && $g->email !== null) {
                 $safeEmail = htmlspecialchars($this->stripNewlines($g->email), ENT_QUOTES, 'UTF-8');
                 $emailSnippet = "<span>Email: <code>{$safeEmail}</code></span>";
             }

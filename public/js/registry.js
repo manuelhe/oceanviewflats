@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgLoading = form.getAttribute('data-msg-loading') || 'Loading...';
     const msgNotFound = form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.';
     const msgAlreadyCompleted = form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.';
+    const msgErrEmail = form.getAttribute('data-msg-err-email') || '';
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');
@@ -166,10 +167,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const guest1NameInput = document.getElementById('guest-name-1');
                 if (guest1NameInput && !guest1NameInput.value && r.guest_name) {
                     guest1NameInput.value = r.guest_name;
-                }
-                const guest1EmailInput = document.getElementById('guest-email-1');
-                if (guest1EmailInput && !guest1EmailInput.value && r.guest_email) {
-                    guest1EmailInput.value = r.guest_email;
                 }
 
                 if (r.registry_completed) {
@@ -361,7 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Validate Primary Guest Email (guest_email_1)
         const emailInput = document.getElementById('guest-email-1');
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const msgErrEmail = form.getAttribute('data-msg-err-email') || 'Please enter a valid email address.';
         if (!emailInput || !emailInput.value.trim() || !emailRegex.test(emailInput.value.trim())) {
             if (emailInput) {
                 emailInput.classList.add('border-red-400');

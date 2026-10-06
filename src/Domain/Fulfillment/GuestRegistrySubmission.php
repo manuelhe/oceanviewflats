@@ -43,7 +43,7 @@ final class GuestRegistrySubmission
                 throw new InvalidArgumentException('All occupants must be instances of OccupantDetails.');
             }
             if ($isFirst) {
-                $occEmail = isset($occupant->email) ? $occupant->email : null;
+                $occEmail = $occupant->email;
                 if ($occEmail !== null && strcasecmp(trim($occEmail), $trimmedEmail) !== 0) {
                     throw new InvalidArgumentException('Primary occupant email must match primary guest email.');
                 }
@@ -65,6 +65,17 @@ final class GuestRegistrySubmission
                     }
                 }
                 $isFirst = false;
+            } else {
+                if ($occupant->email !== null) {
+                    $occupant = new OccupantDetails(
+                        index: $occupant->index,
+                        name: $occupant->name,
+                        age: $occupant->age,
+                        docType: $occupant->docType,
+                        docNum: $occupant->docNum,
+                        email: null
+                    );
+                }
             }
             $validated[] = $occupant;
         }
@@ -164,7 +175,7 @@ final class GuestRegistrySubmission
                         'age' => (int)($data["guest_age_{$i}"] ?? 0),
                         'doc_type' => (string)($data["guest_doc_type_{$i}"] ?? 'Other ID'),
                         'doc_num' => (string)($data["guest_doc_num_{$i}"] ?? ''),
-                        'email' => $i === 1 ? ($primaryEmail !== '' ? $primaryEmail : null) : ($data["guest_email_{$i}"] ?? null),
+                        'email' => $i === 1 ? ($primaryEmail !== '' ? $primaryEmail : null) : null,
                     ], $i);
                 }
             }
