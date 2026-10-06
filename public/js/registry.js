@@ -167,6 +167,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (guest1NameInput && !guest1NameInput.value && r.guest_name) {
                     guest1NameInput.value = r.guest_name;
                 }
+                const guest1EmailInput = document.getElementById('guest-email-1');
+                if (guest1EmailInput && !guest1EmailInput.value && r.guest_email) {
+                    guest1EmailInput.value = r.guest_email;
+                }
 
                 if (r.registry_completed) {
                     if (btnUnlockedGuide) {
@@ -351,6 +355,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!isValid) {
             showMsg(defaultErrorMsg, false);
+            return;
+        }
+
+        // Validate Primary Guest Email (guest_email_1)
+        const emailInput = document.getElementById('guest-email-1');
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const msgErrEmail = form.getAttribute('data-msg-err-email') || 'Please enter a valid email address.';
+        if (!emailInput || !emailInput.value.trim() || !emailRegex.test(emailInput.value.trim())) {
+            if (emailInput) {
+                emailInput.classList.add('border-red-400');
+                emailInput.addEventListener('input', function removeRed() {
+                    emailInput.classList.remove('border-red-400');
+                    emailInput.removeEventListener('input', removeRed);
+                });
+            }
+            showMsg(msgErrEmail, false);
             return;
         }
 

@@ -25,6 +25,7 @@ final class OccupantDetailsTest extends TestCase
         $this->assertSame(32, $occupant->age);
         $this->assertSame('Passport', $occupant->docType);
         $this->assertSame('A12345678', $occupant->docNum);
+        $this->assertNull($occupant->email);
     }
 
     public function testThrowsOnInvalidIndex(): void
@@ -155,9 +156,70 @@ final class OccupantDetailsTest extends TestCase
             'age' => 28,
             'doc_type' => 'Cédula de Ciudadanía',
             'doc_num' => '1098765432',
+            'email' => null,
         ];
 
         $this->assertSame($expected, $occupant->toArray());
+    }
+
+    public function testValidInstantiationWithEmail(): void
+    {
+        $occupant = new OccupantDetails(
+            index: 1,
+            name: 'Jane Doe',
+            age: 32,
+            docType: 'Passport',
+            docNum: 'A12345678',
+            email: 'jane.doe@example.com'
+        );
+
+        $this->assertSame('jane.doe@example.com', $occupant->email);
+        $this->assertSame('jane.doe@example.com', $occupant->toArray()['email']);
+    }
+
+    public function testThrowsOnInvalidEmail(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Occupant email must be a valid email address up to 100 characters.');
+
+        new OccupantDetails(
+            index: 1,
+            name: 'Jane Doe',
+            age: 30,
+            docType: 'Passport',
+            docNum: '12345',
+            email: 'not-a-valid-email'
+        );
+    }
+
+    public function testThrowsOnEmailTooLong(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Occupant email must be a valid email address up to 100 characters.');
+
+        new OccupantDetails(
+            index: 1,
+            name: 'Jane Doe',
+            age: 30,
+            docType: 'Passport',
+            docNum: '12345',
+            email: str_repeat('a', 95) . '@test.com'
+        );
+    }
+
+    public function testFromArrayWithEmail(): void
+    {
+        $data = [
+            'index' => 1,
+            'name' => 'Valid User',
+            'age' => 25,
+            'doc_type' => 'Passport',
+            'doc_num' => 'ID-12345',
+            'email' => 'valid.user@example.com',
+        ];
+
+        $occupant = OccupantDetails::fromArray($data);
+        $this->assertSame('valid.user@example.com', $occupant->email);
     }
 
     public function testFromArrayThrowsOnInvalidDocType(): void

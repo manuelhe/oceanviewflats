@@ -25,15 +25,46 @@ final class GuestRegistrySubmission
         public readonly string $checkIn,
         public readonly string $checkOut,
         array $occupants,
+        public readonly string $primaryGuestEmail,
         public readonly ?string $carPlates = null,
         public readonly ?string $carModel = null,
         public readonly ?string $ipAddress = null,
         public readonly string $lang = 'es'
     ) {
+        $trimmedEmail = trim($this->primaryGuestEmail);
+        if ($trimmedEmail === '' || !filter_var($trimmedEmail, FILTER_VALIDATE_EMAIL) || strlen($this->primaryGuestEmail) > 100) {
+            throw new InvalidArgumentException('Primary guest email must be a valid email address up to 100 characters.');
+        }
+
         $validated = [];
+        $isFirst = true;
         foreach ($occupants as $occupant) {
             if (!$occupant instanceof OccupantDetails) {
                 throw new InvalidArgumentException('All occupants must be instances of OccupantDetails.');
+            }
+            if ($isFirst) {
+                $occEmail = isset($occupant->email) ? $occupant->email : null;
+                if ($occEmail !== null && strcasecmp(trim($occEmail), $trimmedEmail) !== 0) {
+                    throw new InvalidArgumentException('Primary occupant email must match primary guest email.');
+                }
+                if ($occEmail === null) {
+                    try {
+                        $occupant = new OccupantDetails(
+                            index: $occupant->index,
+                            name: $occupant->name,
+                            age: $occupant->age,
+                            docType: $occupant->docType,
+                            docNum: $occupant->docNum,
+                            email: $this->primaryGuestEmail
+                        );
+                    } catch (InvalidArgumentException) {
+                        $ref = new \ReflectionClass($occupant);
+                        if ($ref->hasProperty('email')) {
+                            $ref->getProperty('email')->setValue($occupant, $this->primaryGuestEmail);
+                        }
+                    }
+                }
+                $isFirst = false;
             }
             $validated[] = $occupant;
         }
@@ -76,6 +107,8 @@ final class GuestRegistrySubmission
             'property_id' => $this->propertyId,
             'check_in' => $this->checkIn,
             'check_out' => $this->checkOut,
+            'primary_guest_email' => $this->primaryGuestEmail,
+            'guest_email_1' => $this->primaryGuestEmail,
             'occupants' => array_map(fn (OccupantDetails $o): array => $o->toArray(), $this->occupants),
             'car_plates' => $this->carPlates,
             'car_model' => $this->carModel,
@@ -93,6 +126,15 @@ final class GuestRegistrySubmission
         $propertyId = trim((string)($data['property_id'] ?? $data['propertyId'] ?? $data['property'] ?? ''));
         $checkIn = trim((string)($data['check_in'] ?? $data['checkIn'] ?? ''));
         $checkOut = trim((string)($data['check_out'] ?? $data['checkOut'] ?? ''));
+
+        $primaryEmail = trim((string)(
+            $data['guest_email_1']
+            ?? $data['primary_guest_email']
+            ?? $data['primaryGuestEmail']
+            ?? $data['primary_email']
+            ?? $data['guest_email']
+            ?? ''
+        ));
 
         $occupants = [];
         if (isset($data['occupants']) && is_array($data['occupants'])) {
@@ -122,9 +164,14 @@ final class GuestRegistrySubmission
                         'age' => (int)($data["guest_age_{$i}"] ?? 0),
                         'doc_type' => (string)($data["guest_doc_type_{$i}"] ?? 'Other ID'),
                         'doc_num' => (string)($data["guest_doc_num_{$i}"] ?? ''),
+                        'email' => $i === 1 ? ($primaryEmail !== '' ? $primaryEmail : null) : ($data["guest_email_{$i}"] ?? null),
                     ], $i);
                 }
             }
+        }
+
+        if ($primaryEmail === '' && !empty($occupants) && $occupants[0]->email !== null) {
+            $primaryEmail = $occupants[0]->email;
         }
 
         $carPlates = isset($data['car_plates']) || isset($data['carPlates'])
@@ -168,6 +215,7 @@ final class GuestRegistrySubmission
             checkIn: $checkIn,
             checkOut: $checkOut,
             occupants: $occupants,
+            primaryGuestEmail: $primaryEmail,
             carPlates: $carPlates,
             carModel: $carModel,
             ipAddress: $ipAddress,

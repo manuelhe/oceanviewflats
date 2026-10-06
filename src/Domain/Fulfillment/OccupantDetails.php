@@ -26,7 +26,8 @@ final class OccupantDetails
         public readonly string $name,
         public readonly int $age,
         public readonly string $docType,
-        public readonly string $docNum
+        public readonly string $docNum,
+        public readonly ?string $email = null
     ) {
         if ($this->index < 1) {
             throw new InvalidArgumentException('Occupant index must be at least 1.');
@@ -49,10 +50,17 @@ final class OccupantDetails
         if (strlen($trimmedDoc) < 2 || strlen($this->docNum) > 50) {
             throw new InvalidArgumentException('Occupant document number must be between 2 and 50 characters.');
         }
+
+        if ($this->email !== null) {
+            $trimmedEmail = trim($this->email);
+            if ($trimmedEmail === '' || !filter_var($trimmedEmail, FILTER_VALIDATE_EMAIL) || strlen($this->email) > 100) {
+                throw new InvalidArgumentException('Occupant email must be a valid email address up to 100 characters.');
+            }
+        }
     }
 
     /**
-     * @return array{index: int, name: string, age: int, doc_type: string, doc_num: string}
+     * @return array{index: int, name: string, age: int, doc_type: string, doc_num: string, email: ?string}
      */
     public function toArray(): array
     {
@@ -62,6 +70,7 @@ final class OccupantDetails
             'age' => $this->age,
             'doc_type' => $this->docType,
             'doc_num' => $this->docNum,
+            'email' => $this->email,
         ];
     }
 
@@ -77,12 +86,16 @@ final class OccupantDetails
         $docType = trim((string)($data['doc_type'] ?? $data['docType'] ?? ''));
         $docNum = trim((string)($data['doc_num'] ?? $data['docNum'] ?? ''));
 
+        $rawEmail = $data['email'] ?? null;
+        $email = $rawEmail !== null && trim((string)$rawEmail) !== '' ? (string)$rawEmail : null;
+
         return new self(
             index: $idx,
             name: $name,
             age: $age,
             docType: $docType,
-            docNum: $docNum
+            docNum: $docNum,
+            email: $email
         );
     }
 }

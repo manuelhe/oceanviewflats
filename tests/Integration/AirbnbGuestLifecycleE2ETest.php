@@ -268,6 +268,7 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
             'check_in' => $checkIn,
             'check_out' => $checkOut,
             'guest_count' => 2,
+            'guest_email_1' => 'jane.doe@example.com',
             'guest_name_1' => 'Jane Doe',
             'guest_age_1' => 32,
             'guest_doc_type_1' => 'Passport',

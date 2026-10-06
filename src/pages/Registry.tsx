@@ -183,6 +183,7 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 							data-msg-loading={t.registryLookupLoading}
 							data-msg-not-found={t.registryLookupNotFound}
 							data-msg-already-completed={t.registryAlreadyCompleted}
+							data-msg-err-email={t.errEmailInvalid ?? "Please enter a valid email address."}
 							noValidate
 						>
 							{/* Hidden Stay Parameter Fields */}
@@ -268,6 +269,29 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 													className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
 												/>
 											</div>
+
+											{/* Primary Guest Email (Guest 1 only) */}
+											{num === 1 && (
+												<div className="flex flex-col">
+													<label
+														htmlFor="guest-email-1"
+														className="text-xs font-bold text-slate-500 mb-1 flex justify-between"
+													>
+														<span>{t.registryGuestEmail}</span>
+														<span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">
+															{t.registryRequiredBadge ?? t.registryRequired}
+														</span>
+													</label>
+													<input
+														type="email"
+														id="guest-email-1"
+														name="guest_email_1"
+														required
+														placeholder={t.registryPlaceholderEmail}
+														className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
+													/>
+												</div>
+											)}
 
 											{/* Age */}
 											<div className="flex flex-col">

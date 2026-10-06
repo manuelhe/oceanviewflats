@@ -49,6 +49,7 @@ final class HostRegistryEmailRendererTest extends TestCase
             checkIn: '2026-11-01',
             checkOut: '2026-11-05',
             occupants: $occupants,
+            primaryGuestEmail: 'jane.doe@example.com',
             carPlates: $carPlates,
             carModel: $carModel,
             ipAddress: '190.24.15.2',
@@ -100,6 +101,7 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('Check-in:      2026-11-01', $text);
         $this->assertStringContainsString('Check-out:     2026-11-05', $text);
         $this->assertStringContainsString('Total Guests:  2', $text);
+        $this->assertStringContainsString('Primary Email: jane.doe@example.com', $text);
 
         // Vehicle info
         $this->assertStringContainsString('VEHICLE INFORMATION (OPTIONAL)', $text);
@@ -108,7 +110,7 @@ final class HostRegistryEmailRendererTest extends TestCase
 
         // Registered guests
         $this->assertStringContainsString('REGISTERED GUESTS DETAILS', $text);
-        $this->assertStringContainsString("Guest #1:\n  Name:     Jane Doe\n  ID/Doc:   Passport (US12345678)\n  Age:      34", $text);
+        $this->assertStringContainsString("Guest #1:\n  Name:     Jane Doe\n  Email:    jane.doe@example.com\n  ID/Doc:   Passport (US12345678)\n  Age:      34", $text);
         $this->assertStringContainsString("Guest #2:\n  Name:     John Doe\n  ID/Doc:   Driver License (DL887766)\n  Age:      36", $text);
 
         // Smart lock access PIN
@@ -179,6 +181,8 @@ final class HostRegistryEmailRendererTest extends TestCase
         $this->assertStringContainsString('Guest Registry Report', $html);
         $this->assertStringContainsString('Stay Information', $html);
         $this->assertStringContainsString('OceanViewFlats 1606', $html);
+        $this->assertStringContainsString('Primary Email', $html);
+        $this->assertStringContainsString('jane.doe@example.com', $html);
         $this->assertStringContainsString('Vehicle Information', $html);
         $this->assertStringContainsString('ABC-999', $html);
         $this->assertStringContainsString('Hyundai Tucson', $html);
@@ -186,6 +190,7 @@ final class HostRegistryEmailRendererTest extends TestCase
         // Occupants
         $this->assertStringContainsString('Registered Guests Details', $html);
         $this->assertStringContainsString('Jane Doe', $html);
+        $this->assertStringContainsString('<code>jane.doe@example.com</code>', $html);
         $this->assertStringContainsString('Passport (US12345678)', $html);
         $this->assertStringContainsString('John Doe', $html);
         $this->assertStringContainsString('Driver License (DL887766)', $html);
@@ -219,6 +224,7 @@ final class HostRegistryEmailRendererTest extends TestCase
             checkIn: '2026-11-01',
             checkOut: '2026-11-05',
             occupants: [$maliciousOccupant],
+            primaryGuestEmail: 'malicious@example.com',
             carPlates: '<script>',
             carModel: '<b>Model</b>',
             ipAddress: '<test-ip>',

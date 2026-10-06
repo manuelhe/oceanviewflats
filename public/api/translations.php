@@ -26,6 +26,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Please enter a valid name for Guest %d (2-100 characters).',
+            'err_guest_email' => 'Please provide a valid email address for the primary guest.',
             'err_guest_age' => 'Please enter a valid age (0-120) for Guest %d.',
             'err_guest_doc' => 'Please enter a valid document number for Guest %d.',
             'err_car_plates' => 'Car plates cannot exceed 20 characters.',
@@ -141,6 +142,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Por favor, ingrese un nombre válido para el Huésped %d (2-100 caracteres).',
+            'err_guest_email' => 'Por favor ingrese un correo electrónico válido para el huésped principal.',
             'err_guest_age' => 'Por favor, ingrese una edad válida (0-120) para el Huésped %d.',
             'err_guest_doc' => 'Por favor, ingrese un número de documento válido para el Huésped %d.',
             'err_car_plates' => 'Las placas del vehículo no pueden superar los 20 caracteres.',
@@ -256,6 +258,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Veuillez entrer un nom valide pour le client %d (2-100 caractères).',
+            'err_guest_email' => 'Veuillez fournir une adresse e-mail valide pour le client principal.',
             'err_guest_age' => 'Veuillez entrer un âge valide (0-120) pour le client %d.',
             'err_guest_doc' => 'Veuillez entrer un numéro de document valide pour le client %d.',
             'err_car_plates' => 'Les plaques d\'immatriculation ne peuvent pas dépasser 20 caractères.',
@@ -371,6 +374,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Inserisci un nome valido per l\'Ospite %d (2-100 caratteri).',
+            'err_guest_email' => 'Si prega di fornire un indirizzo email valido per l\'ospite principale.',
             'err_guest_age' => 'Inserisci un\'età valida (0-120) per l\'Ospite %d.',
             'err_guest_doc' => 'Inserisci un numero di documento valido per l\'Ospite %d.',
             'err_car_plates' => 'Le targhe dell\'auto non possono superare i 20 caratteri.',
@@ -486,6 +490,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Bitte geben Sie einen gültigen Namen für Gast %d ein (2-100 Zeichen).',
+            'err_guest_email' => 'Bitte geben Sie eine gültige E-Mail-Adresse für den Hauptgast an.',
             'err_guest_age' => 'Bitte geben Sie ein gültiges Alter (0-120) für Gast %d ein.',
             'err_guest_doc' => 'Bitte geben Sie eine gültige Dokumentennummer für Gast %d ein.',
             'err_car_plates' => 'Das Kennzeichen darf nicht länger als 20 Zeichen sein.',
@@ -601,6 +606,7 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'ゲスト %d の有効な名前を入力してください（2〜100文字）。',
+            'err_guest_email' => '主ゲストの有効なメールアドレスを入力してください。',
             'err_guest_age' => 'ゲスト %d の有効な年齢を入力してください（0〜120）。',
             'err_guest_doc' => 'ゲスト %d の有効な身分証明書番号を入力してください。',
             'err_car_plates' => '車両ナンバーは20文字以内で入力してください。',

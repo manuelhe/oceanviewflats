@@ -172,6 +172,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             checkIn: $checkIn,
             checkOut: $checkOut,
             occupants: $occupants,
+            primaryGuestEmail: 'jane.smith@example.com',
             carPlates: $carPlates,
             carModel: $carModel,
             ipAddress: '190.24.15.2',
@@ -282,7 +283,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             propertyId: '1606',
             checkIn: '2026-11-15',
             checkOut: '2026-11-20',
-            occupants: []
+            occupants: [],
+            primaryGuestEmail: 'jane.smith@example.com'
         );
         $resultZero = $this->service->submitRegistry($submissionZero);
         $this->assertFalse($resultZero->success);
@@ -304,7 +306,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             propertyId: '1606',
             checkIn: '2026-11-15',
             checkOut: '2026-11-20',
-            occupants: $sevenOccupants
+            occupants: $sevenOccupants,
+            primaryGuestEmail: 'jane.smith@example.com'
         );
         $resultSeven = $this->service->submitRegistry($submissionSeven);
         $this->assertFalse($resultSeven->success);
@@ -323,13 +326,15 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $refClass->getProperty('age')->setValue($occupant, 130); // invalid: > 120
         $refClass->getProperty('docType')->setValue($occupant, 'Passport');
         $refClass->getProperty('docNum')->setValue($occupant, 'X'); // invalid: < 2 chars
+        $refClass->getProperty('email')->setValue($occupant, 'jane.smith@example.com');
 
         $submission = new GuestRegistrySubmission(
             reservationCode: 'ovf_sample_invalid_occ',
             propertyId: '1606',
             checkIn: '2026-11-15',
             checkOut: '2026-11-20',
-            occupants: [$occupant]
+            occupants: [$occupant],
+            primaryGuestEmail: 'jane.smith@example.com'
         );
 
         $result = $this->service->submitRegistry($submission);
@@ -665,7 +670,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             propertyId: '1606',
             checkIn: '2026-11-20',
             checkOut: '2026-11-10', // checkOut before checkIn
-            occupants: [$occupant]
+            occupants: [$occupant],
+            primaryGuestEmail: 'jane.smith@example.com'
         );
 
         $result = $this->service->submitRegistry($submission);
