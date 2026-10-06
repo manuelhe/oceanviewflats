@@ -409,6 +409,41 @@ final class Reservation
     }
 
     /**
+     * Creates an updated clone with a specified guest email.
+     */
+    public function withGuestEmail(string $guestEmail): self
+    {
+        return new self(
+            reservationUid: $this->reservationUid,
+            propertyId: $this->propertyId,
+            guestName: $this->guestName,
+            guestEmail: $guestEmail,
+            guestPhone: $this->guestPhone,
+            checkIn: $this->checkIn,
+            checkOut: $this->checkOut,
+            totalPrice: $this->totalPrice,
+            status: $this->status,
+            paymentMethodId: $this->paymentMethodId,
+            id: $this->id,
+            mercadopagoPreferenceId: $this->mercadopagoPreferenceId,
+            mercadopagoPaymentId: $this->mercadopagoPaymentId,
+            paymentStatus: $this->paymentStatus,
+            paymentDetail: $this->paymentDetail,
+            lang: $this->lang,
+            createdAt: $this->createdAt,
+            updatedAt: $this->updatedAt,
+            registryCompleted: $this->registryCompleted,
+            registryCompletedAt: $this->registryCompletedAt,
+            doorCode: $this->doorCode,
+            source: $this->source,
+            notes: $this->notes,
+            refundedAmount: $this->refundedAmount,
+            externalConfirmationCode: $this->externalConfirmationCode,
+            channelBlockUid: $this->channelBlockUid
+        );
+    }
+
+    /**
      * Creates an updated clone recording an additional refund amount and optional note/status.
      */
     public function withRefund(

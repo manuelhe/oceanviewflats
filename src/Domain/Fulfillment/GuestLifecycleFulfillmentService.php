@@ -157,6 +157,24 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
                 $doorCode
             );
 
+            // Enrich external/placeholder reservation email with verified Primary Guest email
+            if ($this->shouldEnrichReservationEmail($reservation)) {
+                $submittedEmail = trim($submission->primaryGuestEmail);
+                if (strcasecmp(trim($reservation->guestEmail), $submittedEmail) !== 0) {
+                    $stmtEmail = $this->pdo->prepare("
+                        UPDATE `reservations`
+                        SET `guest_email` = :guest_email,
+                            `updated_at` = CURRENT_TIMESTAMP
+                        WHERE `reservation_uid` = :reservation_uid
+                    ");
+                    $stmtEmail->execute([
+                        ':guest_email' => $submittedEmail,
+                        ':reservation_uid' => $reservation->reservationUid,
+                    ]);
+                    $reservation = $reservation->withGuestEmail($submittedEmail);
+                }
+            }
+
             $this->insertGuestRegistry(
                 reservationUid: $reservation->reservationUid,
                 propertyId: $reservation->propertyId,
@@ -526,5 +544,29 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             ':car_model' => $carModel,
             ':ip_address' => $ipAddress,
         ]);
+    }
+
+    /**
+     * Evaluates whether a reservation's guest email qualifies for enrichment
+     * with the Primary Guest's verified email upon Guest Registry submission.
+     *
+     * Criteria (Q7-A):
+     * - source === 'airbnb' OR
+     * - UID starts with 'res-abnb-' OR
+     * - email contains 'airbnb.com' OR
+     * - email is empty OR
+     * - email starts with 'guest@' OR
+     * - email starts with 'none@'
+     */
+    private function shouldEnrichReservationEmail(Reservation $reservation): bool
+    {
+        $guestEmailLower = strtolower(trim($reservation->guestEmail));
+
+        return $reservation->source === 'airbnb'
+            || str_starts_with($reservation->reservationUid, 'res-abnb-')
+            || str_contains($guestEmailLower, 'airbnb.com')
+            || $guestEmailLower === ''
+            || str_starts_with($guestEmailLower, 'guest@')
+            || str_starts_with($guestEmailLower, 'none@');
     }
 }
