@@ -203,6 +203,9 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame($expectedDoorCode, $result->doorCode);
         $this->assertSame($expectedDoorCode, $result->reservation->doorCode);
         $this->assertSame('https://oceanviewflats.com/guide/?code=ovf_sample_100&lang=en', $result->guideUrl);
+        $this->assertTrue($result->hostReportDispatched);
+        $this->assertTrue($result->spreadsheetSynced);
+        $this->assertTrue($result->accessDispatchDispatched);
 
         // Verify DB update on reservations table
         $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE reservation_uid = :uid');
@@ -240,13 +243,19 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('190.24.15.2', $auditRow['ip_address']);
         $this->assertStringContainsString('Jane Smith', (string) $auditRow['payload_after']);
 
-        // Verify Host Notification Email
-        $this->assertSame(1, $this->emailSender->count());
-        $email = $this->emailSender->getSentMessages()[0];
-        $this->assertSame('rentals@oceanviewflats.com', $email['to']);
-        $this->assertStringContainsString('OceanViewFlats Guest Registry Report', $email['subject']);
-        $this->assertStringContainsString($expectedDoorCode, $email['htmlBody']);
-        $this->assertStringContainsString('Mazda CX-5', $email['htmlBody']);
+        // Verify Dispatched Emails: Host Notification & Guest Access Dispatch
+        $this->assertSame(2, $this->emailSender->count());
+        $hostEmail = $this->emailSender->getSentMessages()[0];
+        $this->assertSame('rentals@oceanviewflats.com', $hostEmail['to']);
+        $this->assertStringContainsString('OceanViewFlats Guest Registry Report', $hostEmail['subject']);
+        $this->assertStringContainsString($expectedDoorCode, $hostEmail['htmlBody']);
+        $this->assertStringContainsString('Mazda CX-5', $hostEmail['htmlBody']);
+
+        $guestEmail = $this->emailSender->getSentMessages()[1];
+        $this->assertSame('jane.smith@example.com', $guestEmail['to']);
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
+        $this->assertStringContainsString($expectedDoorCode, $guestEmail['htmlBody']);
+        $this->assertStringContainsString('/guide/?code=ovf_sample_100', $guestEmail['htmlBody']);
 
         // Verify Spreadsheet Sync
         $this->assertSame(1, $this->spreadsheetSync->count());
@@ -406,9 +415,66 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('0345678#', $result->doorCode);
         $this->assertFalse($result->spreadsheetSynced);
         $this->assertFalse($result->hostReportDispatched);
+        $this->assertFalse($result->accessDispatchDispatched);
 
         // DB reservation must still be completed
         $res = $this->reservationRepository->findByUid('ovf_side_effects_fail');
+        $this->assertNotNull($res);
+        $this->assertTrue($res->registryCompleted);
+        $this->assertSame('0345678#', $res->doorCode);
+    }
+
+    public function testSubmitRegistryDispatchesAccessDispatchToPrimaryGuest(): void
+    {
+        $this->createSampleReservation('ovf_dispatch_test');
+        $submission = $this->createSubmission('ovf_dispatch_test');
+
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->accessDispatchDispatched);
+        $this->assertSame(2, $this->emailSender->count());
+
+        $dispatchEmail = $this->emailSender->getSentMessages()[1];
+        $this->assertSame('jane.smith@example.com', $dispatchEmail['to']);
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $dispatchEmail['subject']);
+        $this->assertStringContainsString('0345678#', $dispatchEmail['htmlBody']);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=ovf_dispatch_test&amp;lang=en', $dispatchEmail['htmlBody']);
+        $this->assertStringContainsString('Jane Smith', $dispatchEmail['htmlBody']);
+    }
+
+    public function testSubmitRegistrySoftFailsWhenAccessDispatchEmailThrowsException(): void
+    {
+        $this->createSampleReservation('ovf_dispatch_throw');
+        $submission = $this->createSubmission('ovf_dispatch_throw');
+
+        $failingSender = new class implements \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface {
+            private int $callCount = 0;
+            public function send(string $to, string $subject, string $htmlBody, array $headers = []): bool
+            {
+                $this->callCount++;
+                // Allow host email (call 1) to succeed, but throw on guest dispatch (call 2)
+                if ($this->callCount === 2) {
+                    throw new \RuntimeException('SMTP Connection timed out');
+                }
+                return true;
+            }
+        };
+
+        $service = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'email_sender' => $failingSender,
+            'spreadsheet_sync' => $this->spreadsheetSync,
+        ]);
+
+        $result = $service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertSame('0345678#', $result->doorCode);
+        $this->assertTrue($result->hostReportDispatched);
+        $this->assertFalse($result->accessDispatchDispatched);
+
+        // Core business transaction still completes in DB
+        $res = $this->reservationRepository->findByUid('ovf_dispatch_throw');
         $this->assertNotNull($res);
         $this->assertTrue($res->registryCompleted);
         $this->assertSame('0345678#', $res->doorCode);

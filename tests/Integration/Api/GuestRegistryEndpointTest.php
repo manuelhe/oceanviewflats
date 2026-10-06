@@ -585,6 +585,101 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertTrue($res['json']['success']);
     }
 
+    public function testValidSubmissionDispatchesAccessCredentialsEmailToPrimaryGuest(): void
+    {
+        $logFile = sys_get_temp_dir() . '/test_access_dispatch_emails_' . uniqid('', true) . '.json';
+        if (file_exists($logFile)) {
+            @unlink($logFile);
+        }
+
+        $payload = $this->createValidRegistryData();
+        $escapedLogFile = addslashes($logFile);
+        $autoloadPath = var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true);
+
+        $prependCode = <<<PHP
+            require_once {$autoloadPath};
+            \$emailSender = new class implements \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface {
+                public function send(string \$to, string \$subject, string \$htmlBody, array \$headers = []): bool {
+                    \$log = '{$escapedLogFile}';
+                    \$messages = file_exists(\$log) ? json_decode((string) file_get_contents(\$log), true) : [];
+                    \$messages[] = [
+                        'to' => \$to,
+                        'subject' => \$subject,
+                        'htmlBody' => \$htmlBody,
+                    ];
+                    file_put_contents(\$log, json_encode(\$messages));
+                    return true;
+                }
+            };
+            \$GLOBALS['TEST_LIFECYCLE_SERVICE'] = \OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService::createDefault(
+                \$GLOBALS['TEST_PDO'],
+                ['email_sender' => \$emailSender]
+            );
+PHP;
+
+        $res = $this->callRegistryEndpoint($payload, 'POST', [], $prependCode);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertSame('0345678#', $res['json']['door_code']);
+
+        $this->assertFileExists($logFile);
+        $sentMessages = json_decode((string) file_get_contents($logFile), true);
+        @unlink($logFile);
+
+        $this->assertIsArray($sentMessages);
+        $this->assertCount(2, $sentMessages);
+
+        // Host Notification
+        $this->assertSame('rentals@oceanviewflats.com', $sentMessages[0]['to']);
+        $this->assertStringContainsString('OceanViewFlats Guest Registry Report', $sentMessages[0]['subject']);
+
+        // Access Dispatch Email to Primary Guest
+        $guestEmail = $sentMessages[1];
+        $this->assertSame('maria.gomez@example.com', $guestEmail['to']);
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
+        $this->assertStringContainsString('0345678#', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('Maria Gomez', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('/guide/?code=ovf_conf_100', $guestEmail['htmlBody']);
+    }
+
+    public function testValidSubmissionSucceedsEvenIfEmailSendingFails(): void
+    {
+        $payload = $this->createValidRegistryData();
+        $autoloadPath = var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true);
+
+        $prependCode = <<<PHP
+            require_once {$autoloadPath};
+            \$emailSender = new class implements \OceanViewFlats\Domain\Fulfillment\EmailSenderInterface {
+                public function send(string \$to, string \$subject, string \$htmlBody, array \$headers = []): bool {
+                    throw new \RuntimeException('Outbound mail server unavailable');
+                }
+            };
+            \$GLOBALS['TEST_LIFECYCLE_SERVICE'] = \OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService::createDefault(
+                \$GLOBALS['TEST_PDO'],
+                ['email_sender' => \$emailSender]
+            );
+PHP;
+
+        $res = $this->callRegistryEndpoint($payload, 'POST', [], $prependCode);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertSame('0345678#', $res['json']['door_code']);
+
+        // Assert database was still updated
+        $stmt = $this->pdo->prepare('SELECT * FROM reservations WHERE reservation_uid = :uid');
+        $stmt->execute([':uid' => 'ovf_conf_100']);
+        $row = $stmt->fetch();
+        $this->assertIsArray($row);
+        $this->assertSame(1, (int) $row['registry_completed']);
+        $this->assertSame('0345678#', $row['door_code']);
+    }
+
     /**
      * Executes public/api/registry-processor.php via a sub-process to test HTTP guards in complete isolation.
      *

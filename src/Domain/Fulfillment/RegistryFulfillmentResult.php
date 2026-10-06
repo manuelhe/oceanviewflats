@@ -21,7 +21,8 @@ final class RegistryFulfillmentResult
         public readonly ?string $guideUrl = null,
         public readonly bool $hostReportDispatched = false,
         public readonly bool $spreadsheetSynced = false,
-        public readonly array $errors = []
+        public readonly array $errors = [],
+        public readonly bool $accessDispatchDispatched = false
     ) {}
 
     public static function success(
@@ -29,7 +30,8 @@ final class RegistryFulfillmentResult
         string $doorCode,
         string $guideUrl,
         bool $hostReportDispatched = false,
-        bool $spreadsheetSynced = false
+        bool $spreadsheetSynced = false,
+        bool $accessDispatchDispatched = false
     ): self {
         return new self(
             success: true,
@@ -38,7 +40,8 @@ final class RegistryFulfillmentResult
             guideUrl: $guideUrl,
             hostReportDispatched: $hostReportDispatched,
             spreadsheetSynced: $spreadsheetSynced,
-            errors: []
+            errors: [],
+            accessDispatchDispatched: $accessDispatchDispatched
         );
     }
 
@@ -80,6 +83,7 @@ final class RegistryFulfillmentResult
             'door_code' => $this->doorCode,
             'guide_url' => $this->guideUrl,
             'host_report_dispatched' => $this->hostReportDispatched,
+            'access_dispatch_dispatched' => $this->accessDispatchDispatched,
             'spreadsheet_synced' => $this->spreadsheetSynced,
             'errors' => $this->errors,
         ];
