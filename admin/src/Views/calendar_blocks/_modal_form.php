@@ -56,6 +56,7 @@ $filter = !empty($filter) ? $filter : 'upcoming';
             <!-- Modal Form -->
             <form hx-post="/calendar-blocks"
                   hx-target="#modal-container"
+                  hx-swap="innerHTML"
                   class="p-6 space-y-4">
                 
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>">

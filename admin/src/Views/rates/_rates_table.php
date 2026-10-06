@@ -23,6 +23,7 @@
             <button type="button"
                     hx-get="/rates/new?property_id=<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>"
                     hx-target="#modal-container"
+                    hx-swap="innerHTML"
                     class="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 shadow-2xs transition cursor-pointer">
                 <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
@@ -47,6 +48,7 @@
                 <button type="button"
                         hx-get="/rates/new?property_id=<?= htmlspecialchars($propertyId, ENT_QUOTES, 'UTF-8') ?>&year=<?= $year ?>"
                         hx-target="#modal-container"
+                        hx-swap="innerHTML"
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition cursor-pointer">
                     + Add New Tier
                 </button>
@@ -111,6 +113,7 @@
                                 <button type="button"
                                         hx-get="/rates/<?= $rateId ?>/edit"
                                         hx-target="#modal-container"
+                                        hx-swap="innerHTML"
                                         class="inline-flex items-center px-2.5 py-1 text-xs font-medium text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded transition cursor-pointer">
                                     Edit
                                 </button>

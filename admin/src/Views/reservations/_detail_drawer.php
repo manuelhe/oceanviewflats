@@ -335,6 +335,7 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                                 <button type="button"
                                         hx-get="/reservations/<?= urlencode($uid) ?>/registry"
                                         hx-target="#modal-container"
+                                        hx-swap="innerHTML"
                                         class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-left">
                                     <?= $registryCompleted ? 'Inspect Registry &rarr;' : 'View Pending Details &rarr;' ?>
                                 </button>
@@ -525,6 +526,7 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                         <button type="button"
                                 hx-get="/reservations/<?= urlencode($uid) ?>/cancel-modal"
                                 hx-target="#modal-container"
+                                hx-swap="innerHTML"
                                 class="px-3.5 py-2 border border-rose-200 rounded-lg shadow-2xs text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 hover:border-rose-300 transition cursor-pointer flex items-center">
                             <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

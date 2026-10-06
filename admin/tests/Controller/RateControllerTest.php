@@ -497,4 +497,58 @@ final class RateControllerTest extends TestCase
         $after = json_decode((string) $log['payload_after'], true);
         $this->assertSame(3, $after['seeded_count']);
     }
+
+    public function testModalTriggersAndFormExplicitlyDeclareInnerHTMLSwap(): void
+    {
+        $id = $this->rateRepository->createRate([
+            'property_id' => '1606',
+            'start_date' => '2026-07-01',
+            'end_date' => '2026-07-31',
+            'season_name' => 'July High Season',
+            'price_per_night' => 450000.0,
+            'min_stay' => 2,
+        ]);
+
+        // 1. Check Full Rates Page
+        $request = new Request('GET', '/rates', query: ['property_id' => '1606', 'year' => '2026']);
+        $response = $this->controller->index($request, $this->session);
+        $body = $response->getBody();
+
+        // rates-content must specify innerHTML swap to avoid inheriting outerHTML from rates-view-container
+        $this->assertStringContainsString('id="rates-content" hx-swap="innerHTML"', $body);
+
+        // Every trigger targeting #modal-container must explicitly define hx-swap="innerHTML"
+        preg_match_all('/<[^>]+hx-target="#modal-container"[^>]*>/i', $body, $matches);
+        $this->assertNotEmpty($matches[0], 'Expected elements targeting #modal-container');
+        foreach ($matches[0] as $tag) {
+            $this->assertStringContainsString(
+                'hx-swap="innerHTML"',
+                $tag,
+                "Element targeting #modal-container must explicitly declare hx-swap=\"innerHTML\": {$tag}"
+            );
+        }
+
+        // 2. Check Edit Modal Form
+        $editRequest = new Request('GET', "/rates/{$id}/edit", attributes: ['id' => (string) $id]);
+        $editResponse = $this->controller->edit($editRequest, $this->session);
+        $editBody = $editResponse->getBody();
+
+        $this->assertMatchesRegularExpression(
+            '/<form[^>]+id="rate-tier-form"[^>]+hx-swap="innerHTML"[^>]*>/i',
+            $editBody,
+            'Edit modal form must explicitly declare hx-swap="innerHTML"'
+        );
+
+        // 3. Check New Modal Form
+        $newRequest = new Request('GET', '/rates/new', query: ['property_id' => '1606', 'year' => '2026']);
+        $newResponse = $this->controller->newTier($newRequest, $this->session);
+        $newBody = $newResponse->getBody();
+
+        $this->assertMatchesRegularExpression(
+            '/<form[^>]+id="rate-tier-form"[^>]+hx-swap="innerHTML"[^>]*>/i',
+            $newBody,
+            'New modal form must explicitly declare hx-swap="innerHTML"'
+        );
+    }
 }
+
