@@ -585,7 +585,6 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertTrue($res['json']['success']);
     }
 
-<<<<<<< HEAD
     public function testSelectiveEmailEnrichmentForAirbnbVsWebReservations(): void
     {
         // 1. Airbnb reservation: initial relay email should be enriched
