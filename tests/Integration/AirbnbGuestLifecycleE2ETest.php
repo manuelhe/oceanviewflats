@@ -304,6 +304,7 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
         $this->assertSame(1, (int) ($updatedRes['registry_completed'] ?? 0));
         $this->assertNotEmpty($updatedRes['registry_completed_at']);
         $this->assertSame($doorCode, $updatedRes['door_code']);
+        $this->assertSame('jane.doe@example.com', $updatedRes['guest_email']);
 
         $stmtReg = $this->pdo->prepare("SELECT * FROM guest_registries WHERE reservation_uid = :uid");
         $stmtReg->execute(['uid' => $uid]);
@@ -336,15 +337,22 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
         $this->assertNotEmpty($guidePostRes['json']['credentials']['wifi_ssid'] ?? '');
         $this->assertNotEmpty($guidePostRes['json']['credentials']['wifi_password'] ?? '');
 
-        // 3. Admin Detail Drawer (Stage 2 Presentation)
+        // 3. Admin Detail Drawer (Stage 2 Presentation & Enriched Email)
         $drawerPostHtml = $this->renderDetailDrawer($uid);
         $this->assertStringContainsString('Stage 2: Access Dispatched', $drawerPostHtml);
         $this->assertStringContainsString('ADR 0001: Registry complete. Door PIN and Guide are unlocked.', $drawerPostHtml);
         $this->assertStringContainsString($doorCode, $drawerPostHtml);
+        $this->assertStringContainsString('jane.doe@example.com', $drawerPostHtml);
         $this->assertStringContainsString('https://oceanviewflats.com/guide/es.html?code=' . $uid, $drawerPostHtml);
         $this->assertStringContainsString('https://oceanviewflats.com/guide/index.html?code=' . $uid, $drawerPostHtml);
         $this->assertStringContainsString('Tu código digital de acceso para la cerradura inteligente es: ' . $doorCode, $drawerPostHtml);
         $this->assertStringContainsString('Your smart door lock access code is: ' . $doorCode, $drawerPostHtml);
+
+        // 4. Admin Guest Registry Dossier Modal (Verified Primary Guest Email Presentation)
+        $modalHtml = $this->renderRegistryModal($uid);
+        $this->assertStringContainsString('jane.doe@example.com', $modalHtml);
+        $this->assertStringContainsString('Verified', $modalHtml);
+        $this->assertStringContainsString('Verified Primary Guest Email', $modalHtml);
     }
 
     /**
@@ -441,6 +449,26 @@ final class AirbnbGuestLifecycleE2ETest extends TestCase
             'auditLogs' => [],
             'refunds' => [],
             'csrfToken' => 'test_csrf_token',
+            'publicSiteUrl' => 'https://oceanviewflats.com',
+        ]);
+    }
+
+    private function renderRegistryModal(string $reservationUid): string
+    {
+        $reservationData = $this->fetchReservationRow($reservationUid);
+        if (!$reservationData) {
+            $this->fail("Reservation {$reservationUid} not found in database.");
+        }
+
+        $stmtReg = $this->pdo->prepare("SELECT * FROM guest_registries WHERE reservation_uid = :uid");
+        $stmtReg->execute(['uid' => $reservationUid]);
+        $registryRow = $stmtReg->fetch();
+
+        $renderer = new ViewRenderer(dirname(__DIR__, 2) . '/admin/src/Views');
+
+        return $renderer->renderPartial('reservations/_registry_modal.php', [
+            'reservation' => $reservationData,
+            'registry' => is_array($registryRow) ? $registryRow : null,
             'publicSiteUrl' => 'https://oceanviewflats.com',
         ]);
     }

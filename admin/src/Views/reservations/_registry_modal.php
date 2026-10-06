@@ -17,7 +17,27 @@ $guestEmail = (string) ($reservation['guest_email'] ?? '');
 $guestPhone = (string) ($reservation['guest_phone'] ?? '');
 
 $registryCompleted = (int) ($reservation['registry_completed'] ?? 0) === 1 && $registry !== null;
-$guestsPayload = $registry !== null && is_array($registry['guests_payload']) ? $registry['guests_payload'] : [];
+$guestsPayload = [];
+if ($registry !== null) {
+    if (is_array($registry['guests_payload'] ?? null)) {
+        $guestsPayload = $registry['guests_payload'];
+    } elseif (is_string($registry['guests_payload'] ?? null)) {
+        $decoded = json_decode($registry['guests_payload'], true);
+        if (is_array($decoded)) {
+            $guestsPayload = $decoded;
+        }
+    }
+}
+$primaryGuestEmail = '';
+foreach ($guestsPayload as $i => $g) {
+    if (!empty($g['is_primary']) || $i === 0) {
+        $primaryGuestEmail = (string) ($g['email'] ?? '');
+        break;
+    }
+}
+if ($primaryGuestEmail === '') {
+    $primaryGuestEmail = $guestEmail;
+}
 $carPlates = (string) ($registry['car_plates'] ?? '');
 $carModel = (string) ($registry['car_model'] ?? '');
 $submittedAt = (string) ($registry['created_at'] ?? '');
@@ -92,7 +112,7 @@ $guideUrl = $urlBuilder->buildGuideUrl($lang, $uid);
                     <!-- COMPLETED DOSSIER -->
                     
                     <!-- Submission Metadata Bar -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs bg-gray-50 p-3 rounded-xl border border-gray-200">
                         <div>
                             <span class="block text-gray-400">Total Guests</span>
                             <span class="font-bold text-gray-800"><?= count($guestsPayload) ?> Occupants</span>
@@ -109,6 +129,19 @@ $guideUrl = $urlBuilder->buildGuideUrl($lang, $uid);
                             <span class="block text-gray-400">Vehicle</span>
                             <span class="font-medium text-gray-800"><?= $carPlates !== '' ? htmlspecialchars($carPlates . ' (' . $carModel . ')', ENT_QUOTES, 'UTF-8') : 'None' ?></span>
                         </div>
+                        <div class="col-span-2 sm:col-span-1">
+                            <span class="block text-gray-400">Primary Email</span>
+                            <?php if ($primaryGuestEmail !== ''): ?>
+                                <span class="inline-flex items-center text-[11px] font-mono font-medium text-emerald-700 truncate" title="<?= htmlspecialchars($primaryGuestEmail, ENT_QUOTES, 'UTF-8') ?>">
+                                    <svg class="w-3 h-3 mr-1 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span class="truncate"><?= htmlspecialchars($primaryGuestEmail, ENT_QUOTES, 'UTF-8') ?></span>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-gray-400">None</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
 
                     <!-- Occupants List -->
@@ -119,18 +152,28 @@ $guideUrl = $urlBuilder->buildGuideUrl($lang, $uid);
                                 <?php
                                 $fullName = (string) ($guest['full_name'] ?? $guest['name'] ?? 'Occupant ' . ($index + 1));
                                 $docType = (string) ($guest['doc_type'] ?? 'ID');
-                                $docNumber = (string) ($guest['doc_number'] ?? '');
+                                $docNumber = (string) ($guest['doc_number'] ?? $guest['doc_num'] ?? '');
                                 $nationality = (string) ($guest['nationality'] ?? 'Not specified');
                                 $isPrimary = !empty($guest['is_primary']) || $index === 0;
+                                $occupantEmail = (string) ($guest['email'] ?? ($isPrimary ? $primaryGuestEmail : ''));
                                 ?>
                                 <div class="p-3.5 rounded-xl border border-gray-200 bg-white hover:border-indigo-200 transition">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center space-x-2">
+                                    <div class="flex items-center justify-between flex-wrap gap-2">
+                                        <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                                             <span class="font-semibold text-gray-900 text-sm"><?= htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8') ?></span>
                                             <?php if ($isPrimary): ?>
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 uppercase">
                                                     Primary Guest
                                                 </span>
+                                                <?php if ($occupantEmail !== ''): ?>
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200" title="Verified Primary Guest Email">
+                                                        <svg class="w-3 h-3 mr-1 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                        <span class="font-mono"><?= htmlspecialchars($occupantEmail, ENT_QUOTES, 'UTF-8') ?></span>
+                                                        <span class="ml-1 text-[9px] uppercase tracking-wider font-semibold text-emerald-600">Verified</span>
+                                                    </span>
+                                                <?php endif; ?>
                                             <?php else: ?>
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 uppercase">
                                                     Companion
@@ -141,7 +184,10 @@ $guideUrl = $urlBuilder->buildGuideUrl($lang, $uid);
                                             <span class="font-semibold text-gray-500"><?= htmlspecialchars($docType, ENT_QUOTES, 'UTF-8') ?>:</span> <?= htmlspecialchars($docNumber, ENT_QUOTES, 'UTF-8') ?>
                                         </div>
                                     </div>
-                                    <div class="mt-1 text-xs text-gray-500 flex items-center space-x-4">
+                                    <div class="mt-1 text-xs text-gray-500 flex items-center space-x-4 flex-wrap gap-y-1">
+                                        <?php if ($isPrimary && $occupantEmail !== ''): ?>
+                                            <span>Email: <a href="mailto:<?= htmlspecialchars($occupantEmail, ENT_QUOTES, 'UTF-8') ?>" class="text-indigo-600 hover:underline font-mono"><?= htmlspecialchars($occupantEmail, ENT_QUOTES, 'UTF-8') ?></a></span>
+                                        <?php endif; ?>
                                         <span>Nationality: <strong class="text-gray-700"><?= htmlspecialchars($nationality, ENT_QUOTES, 'UTF-8') ?></strong></span>
                                         <?php if (!empty($guest['birthdate'])): ?>
                                             <span>Birthdate: <strong class="text-gray-700"><?= htmlspecialchars((string) $guest['birthdate'], ENT_QUOTES, 'UTF-8') ?></strong></span>

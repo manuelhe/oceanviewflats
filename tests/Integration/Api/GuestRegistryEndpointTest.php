@@ -585,6 +585,76 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertTrue($res['json']['success']);
     }
 
+    public function testSelectiveEmailEnrichmentForAirbnbVsWebReservations(): void
+    {
+        // 1. Airbnb reservation: initial relay email should be enriched
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, payment_status, registry_completed
+            ) VALUES (
+                'res-abnb-endpoint-test', '1606', 'Airbnb Guest', 'relay-encrypted@guest.airbnb.com', '+12025550199',
+                '2026-11-22', '2026-11-25', 0.0, 'confirmed', 'airbnb', 'approved', 0
+            );
+        ");
+
+        $abnbPayload = $this->createValidRegistryData([
+            'reservation_code' => 'res-abnb-endpoint-test',
+            'check_in' => '2026-11-22',
+            'check_out' => '2026-11-25',
+            'guest_email_1' => 'verified.traveler@example.com',
+            'guest_name_1' => 'Verified Traveler',
+        ]);
+        $resAbnb = $this->callRegistryEndpoint($abnbPayload);
+        $this->assertSame(0, $resAbnb['exitCode'], $resAbnb['stderr']);
+        $this->assertSame(200, $resAbnb['statusCode']);
+        $this->assertTrue($resAbnb['json']['success'] ?? false);
+
+        $abnbEmail = $this->pdo->query("SELECT guest_email FROM reservations WHERE reservation_uid = 'res-abnb-endpoint-test'")->fetchColumn();
+        $this->assertSame('verified.traveler@example.com', $abnbEmail);
+
+        // 2. Direct web reservation with valid customer email: preserved, not overwritten
+        $webPayload = $this->createValidRegistryData([
+            'reservation_code' => 'ovf_conf_100',
+            'check_in' => '2026-11-15',
+            'check_out' => '2026-11-20',
+            'guest_email_1' => 'companion.traveler@example.com',
+            'guest_name_1' => 'Companion Traveler',
+        ]);
+        $resWeb = $this->callRegistryEndpoint($webPayload);
+        $this->assertSame(0, $resWeb['exitCode'], $resWeb['stderr']);
+        $this->assertSame(200, $resWeb['statusCode']);
+        $this->assertTrue($resWeb['json']['success'] ?? false);
+
+        $webEmail = $this->pdo->query("SELECT guest_email FROM reservations WHERE reservation_uid = 'ovf_conf_100'")->fetchColumn();
+        $this->assertSame('maria@example.com', $webEmail);
+
+        // 3. Direct web reservation with placeholder email: enriched
+        $this->pdo->exec("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source, payment_status, registry_completed
+            ) VALUES (
+                'ovf_web_placeholder_test', '1606', 'Web Placeholder', 'guest@oceanviewflats.com', '+12025550199',
+                '2026-11-26', '2026-11-30', 500000.0, 'confirmed', 'web', 'approved', 0
+            );
+        ");
+        $placeholderPayload = $this->createValidRegistryData([
+            'reservation_code' => 'ovf_web_placeholder_test',
+            'check_in' => '2026-11-26',
+            'check_out' => '2026-11-30',
+            'guest_email_1' => 'actual.guest@example.com',
+            'guest_name_1' => 'Actual Guest',
+        ]);
+        $resPlaceholder = $this->callRegistryEndpoint($placeholderPayload);
+        $this->assertSame(0, $resPlaceholder['exitCode'], $resPlaceholder['stderr']);
+        $this->assertSame(200, $resPlaceholder['statusCode']);
+        $this->assertTrue($resPlaceholder['json']['success'] ?? false);
+
+        $placeholderEmail = $this->pdo->query("SELECT guest_email FROM reservations WHERE reservation_uid = 'ovf_web_placeholder_test'")->fetchColumn();
+        $this->assertSame('actual.guest@example.com', $placeholderEmail);
+    }
+
     /**
      * Executes public/api/registry-processor.php via a sub-process to test HTTP guards in complete isolation.
      *
