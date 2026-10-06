@@ -157,6 +157,7 @@ final class GuestRegistryEndpointTest extends TestCase
             'check_in' => '2026-11-15',
             'check_out' => '2026-11-20',
             'guest_count' => 2,
+            'guest_email_1' => 'maria.gomez@example.com',
             'guest_name_1' => 'Maria Gomez',
             'guest_age_1' => 34,
             'guest_doc_type_1' => 'Passport',
@@ -352,6 +353,7 @@ final class GuestRegistryEndpointTest extends TestCase
             'property_id' => '1606',
             'check_in' => '2026-11-15',
             'check_out' => '2026-11-20',
+            'primary_guest_email' => 'maria.gomez@example.com',
             'occupants' => [
                 [
                     'index' => 1,
@@ -522,6 +524,65 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertIsArray($res['json']);
         $this->assertFalse($res['json']['success']);
         $this->assertStringContainsString('cancelled', strtolower((string) $res['json']['error']));
+    }
+
+    public function testRegistryEndpointRejectsMissingPrimaryGuestEmailWith400(): void
+    {
+        $payload = $this->createValidRegistryData();
+        unset($payload['guest_email_1']);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid email address for the primary guest.', $res['json']['error']);
+        $this->assertContains('Please provide a valid email address for the primary guest.', $res['json']['errors']);
+    }
+
+    public function testRegistryEndpointRejectsInvalidPrimaryGuestEmailWith400(): void
+    {
+        $payload = $this->createValidRegistryData([
+            'guest_email_1' => 'not-an-email-address',
+        ]);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid email address for the primary guest.', $res['json']['error']);
+    }
+
+    public function testRegistryEndpointRejectsEmailLongerThan100CharsWith400(): void
+    {
+        $payload = $this->createValidRegistryData([
+            'guest_email_1' => str_repeat('a', 95) . '@example.com',
+        ]);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid email address for the primary guest.', $res['json']['error']);
+    }
+
+    public function testRegistryEndpointAcceptsFallbackEmailFields(): void
+    {
+        $payload = $this->createValidRegistryData();
+        unset($payload['guest_email_1']);
+        $payload['guest_email'] = 'fallback.guest@example.com';
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
     }
 
     /**
