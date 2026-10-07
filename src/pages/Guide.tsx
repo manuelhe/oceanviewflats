@@ -400,7 +400,7 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 											id="btn-copy-wifi-ssid"
 											data-copy-target="display-wifi-ssid"
 											className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
-											title="Copy SSID"
+											aria-label={t.guideCopySuccess}
 										>
 											<Copy className="w-3 h-3" />
 										</button>
@@ -422,7 +422,7 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 											id="btn-copy-wifi-pass"
 											data-copy-target="display-wifi-password"
 											className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
-											title="Copy Password"
+											aria-label={t.guideCopySuccess}
 										>
 											<Copy className="w-3 h-3" />
 										</button>
@@ -475,7 +475,7 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 										id="btn-copy-parking-spot"
 										data-copy-target="display-parking-spot"
 										className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
-										title="Copy Spot"
+										aria-label={t.guideCopySuccess}
 									>
 										<Copy className="w-3 h-3" />
 									</button>

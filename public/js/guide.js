@@ -48,7 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. Read Query Parameters (Strictly reservation identifiers, no sensitive plaintext passwords)
     const urlParams = new URLSearchParams(window.location.search);
     const reservationCode = (urlParams.get('code') || urlParams.get('token') || '').trim();
-    const propertyNumber = (urlParams.get('property') || urlParams.get('prop') || urlParams.get('apt') || '1606').replace(/\D/g, '') || '1606';
+    const rawPropertyParam = (urlParams.get('property') || urlParams.get('prop') || urlParams.get('apt') || '').trim();
+    const hasPropertyContext = Boolean(rawPropertyParam || reservationCode);
+    const propertyNumber = (rawPropertyParam || '1606').replace(/\D/g, '') || '1606';
     const rawGuestName = urlParams.get('guest') || urlParams.get('name') || '';
     const rawCheckIn = urlParams.get('check_in') || urlParams.get('checkin') || '';
     const rawCheckOut = urlParams.get('check_out') || urlParams.get('checkout') || '';
@@ -123,7 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             displayWifiPassword.textContent = '••••••';
         }
         if (displayParkingSpot) {
-            displayParkingSpot.textContent = '••••••';
+            displayParkingSpot.textContent = hasPropertyContext ? '••••••' : msgParkingPlaceholder;
         }
 
         // Disable copy actions
@@ -143,7 +145,11 @@ document.addEventListener('DOMContentLoaded', () => {
             wifiLockedNotice.classList.remove('hidden');
         }
         if (parkingLockedNotice) {
-            parkingLockedNotice.classList.remove('hidden');
+            if (hasPropertyContext) {
+                parkingLockedNotice.classList.remove('hidden');
+            } else {
+                parkingLockedNotice.classList.add('hidden');
+            }
         }
         if (credentialLockedDesc && reasonMsg) {
             credentialLockedDesc.textContent = reasonMsg;

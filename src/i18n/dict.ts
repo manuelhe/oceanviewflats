@@ -345,10 +345,10 @@ export const dict = {
 		guideParkingTitle: "Assigned Parking Space",
 		guideParkingDesc:
 			"The building provides a private assigned parking space for your apartment. Gate security will authorize vehicular entry upon check-in. Please ensure you park exclusively in your assigned bay.",
-		guideParkingSpotLabel: "Assigned Spot",
+		guideParkingSpotLabel: "Assigned Space",
 		guideParkingLockedNotice:
 			"Submit the guest registry to unlock your assigned parking space.",
-		guideParkingPlaceholder: "No assigned spot",
+		guideParkingPlaceholder: "No assigned space",
 		guideAssistanceTitle: "Need Assistance?",
 		guideAssistanceDesc:
 			"If you have any issues with the card or lock, contact us immediately. We can generate a new access code remotely to help you.",
