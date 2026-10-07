@@ -166,6 +166,25 @@ CREATE TABLE IF NOT EXISTS `reservation_refunds` (
   CONSTRAINT `fk_ref_admin_user` FOREIGN KEY (`admin_user_id`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 10. Create Condominium Clearances Table (ADR 0008 Compliance)
+CREATE TABLE IF NOT EXISTS `condominium_clearances` (
+  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `reservation_uid` VARCHAR(36) NOT NULL UNIQUE,
+  `property_id` VARCHAR(16) NOT NULL,
+  `status` VARCHAR(16) NOT NULL DEFAULT 'pending',
+  `clearance_number` VARCHAR(32) DEFAULT NULL,
+  `error_message` TEXT DEFAULT NULL,
+  `request_payload` TEXT DEFAULT NULL,
+  `attempts` INT UNSIGNED NOT NULL DEFAULT 1,
+  `last_attempt_at` DATETIME NOT NULL,
+  `synced_at` DATETIME DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_cc_reservation_uid` (`reservation_uid`),
+  INDEX `idx_cc_status` (`status`),
+  INDEX `idx_cc_property_id` (`property_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- =============================================================================
 -- Verification Query: SHOW TABLES;
 -- =============================================================================
