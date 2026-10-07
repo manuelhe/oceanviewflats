@@ -9,6 +9,7 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Controller\ReservationController;
 use OceanViewFlats\Admin\Http\Request;
 use OceanViewFlats\Admin\Service\InMemoryMercadoPagoRefundClient;
+use OceanViewFlats\Admin\Tests\Support\AdminDatabaseTestHelper;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
@@ -52,95 +53,7 @@ final class ReservationCancellationEmailTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->pdo = new PDO('sqlite::memory:', null, null, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-
-        $this->pdo->exec('
-            CREATE TABLE reservations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reservation_uid TEXT NOT NULL UNIQUE,
-                property_id TEXT NOT NULL,
-                guest_name TEXT NOT NULL,
-                guest_email TEXT NOT NULL,
-                guest_phone TEXT NOT NULL,
-                check_in TEXT NOT NULL,
-                check_out TEXT NOT NULL,
-                total_price NUMERIC NOT NULL,
-                refunded_amount NUMERIC NOT NULL DEFAULT 0.00,
-                source TEXT NOT NULL DEFAULT "web",
-                external_confirmation_code TEXT DEFAULT NULL,
-                channel_block_uid TEXT DEFAULT NULL,
-                mercadopago_preference_id TEXT DEFAULT NULL,
-                mercadopago_payment_id TEXT DEFAULT NULL,
-                payment_status TEXT DEFAULT NULL,
-                payment_method_id TEXT DEFAULT NULL,
-                payment_detail TEXT DEFAULT NULL,
-                status TEXT NOT NULL DEFAULT "pending_payment",
-                lang TEXT NOT NULL DEFAULT "en",
-                registry_completed INTEGER NOT NULL DEFAULT 0,
-                registry_completed_at TEXT DEFAULT NULL,
-                door_code TEXT DEFAULT NULL,
-                notes TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE guest_registries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reservation_uid TEXT NOT NULL,
-                property_id TEXT NOT NULL,
-                check_in TEXT NOT NULL,
-                check_out TEXT NOT NULL,
-                guest_count INTEGER NOT NULL DEFAULT 1,
-                guests_payload TEXT NOT NULL,
-                car_plates TEXT DEFAULT NULL,
-                car_model TEXT DEFAULT NULL,
-                ip_address TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE admin_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE,
-                password_hash TEXT NOT NULL,
-                name TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT "admin",
-                is_active INTEGER NOT NULL DEFAULT 1,
-                failed_login_attempts INTEGER NOT NULL DEFAULT 0,
-                locked_until TEXT DEFAULT NULL,
-                last_login_at TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE admin_audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                admin_user_id INTEGER DEFAULT NULL,
-                action TEXT NOT NULL,
-                entity_type TEXT NOT NULL,
-                entity_id TEXT NOT NULL,
-                payload_before TEXT DEFAULT NULL,
-                payload_after TEXT DEFAULT NULL,
-                ip_address TEXT NOT NULL,
-                user_agent TEXT DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE reservation_refunds (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reservation_uid TEXT NOT NULL,
-                mercadopago_refund_id TEXT DEFAULT NULL UNIQUE,
-                mercadopago_payment_id TEXT NOT NULL,
-                amount NUMERIC NOT NULL,
-                status TEXT NOT NULL DEFAULT "approved",
-                reason TEXT DEFAULT NULL,
-                source TEXT NOT NULL DEFAULT "admin",
-                admin_user_id INTEGER DEFAULT NULL,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-        ');
+        $this->pdo = AdminDatabaseTestHelper::createDatabase();
 
         $this->seedDatabase();
 

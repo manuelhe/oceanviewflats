@@ -6,13 +6,11 @@
  * @var \OceanViewFlats\Domain\Fulfillment\CondominiumClearance|null $condominiumClearance
  * @var string $csrfToken
  * @var string $publicSiteUrl
- * @var \OceanViewFlats\Admin\Service\PublicUrlBuilder $urlBuilder
+ * @var \OceanViewFlats\Admin\Service\PublicUrlBuilder|null $urlBuilder
  */
 
 $condominiumClearance = $condominiumClearance ?? null;
-$urlBuilder = (isset($urlBuilder) && $urlBuilder instanceof \OceanViewFlats\Admin\Service\PublicUrlBuilder)
-    ? $urlBuilder
-    : new \OceanViewFlats\Admin\Service\PublicUrlBuilder($publicSiteUrl);
+$urlBuilder = $urlBuilder ?? new \OceanViewFlats\Admin\Service\PublicUrlBuilder($publicSiteUrl);
 
 $refunds = $refunds ?? [];
 $uid = (string) ($reservation['reservation_uid'] ?? '');
@@ -419,7 +417,7 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                                 <?php if ($condominiumClearance->syncedAt): ?>
                                     <div>
                                         <span class="text-gray-400 mr-1">Synced:</span>
-                                        <span class="font-medium text-gray-700"><?= htmlspecialchars(date('M j, Y H:i', strtotime($condominiumClearance->syncedAt)), ENT_QUOTES, 'UTF-8') ?></span>
+                                        <span class="font-medium text-gray-700"><?= htmlspecialchars(date('M j, Y H:i', (int) strtotime($condominiumClearance->syncedAt)), ENT_QUOTES, 'UTF-8') ?></span>
                                     </div>
                                 <?php endif; ?>
                                 <?php if ($condominiumClearance->attempts > 1): ?>
@@ -439,7 +437,7 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                                     <?php if ($condominiumClearance->lastAttemptAt): ?>
                                         <div>
                                             <span class="text-gray-400 mr-1">Last Attempt:</span>
-                                            <span class="text-gray-700"><?= htmlspecialchars(date('M j, Y H:i', strtotime($condominiumClearance->lastAttemptAt)), ENT_QUOTES, 'UTF-8') ?></span>
+                                            <span class="text-gray-700"><?= htmlspecialchars(date('M j, Y H:i', (int) strtotime($condominiumClearance->lastAttemptAt)), ENT_QUOTES, 'UTF-8') ?></span>
                                         </div>
                                     <?php endif; ?>
                                 </div>
