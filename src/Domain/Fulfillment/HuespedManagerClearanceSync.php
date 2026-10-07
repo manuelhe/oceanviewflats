@@ -91,7 +91,7 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
             return $clearance;
         }
 
-        $primaryPhone = trim($occupants[0]->phone);
+        $primaryPhone = trim((string) ($occupants[0]->phone ?? ''));
 
         $productionBase = $this->getProductionBaseUrl();
         $step1Url = sprintf('%s/reg_guest_owner_pre.php?unit=%s&check=%s', $productionBase, urlencode($propertyId), urlencode($checkToken));

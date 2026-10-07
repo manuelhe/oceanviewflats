@@ -9,9 +9,13 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
+use OceanViewFlats\Domain\Fulfillment\CurlHttpTransport;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestRegistrySubmission;
+use OceanViewFlats\Domain\Fulfillment\HttpTransportInterface;
+use OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync;
+use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 
 // Enforce security headers & CORS policy dynamically
 enforce_security_headers_and_cors(['POST', 'OPTIONS']);
@@ -167,7 +171,20 @@ if (isset($GLOBALS['TEST_LIFECYCLE_SERVICE']) && $GLOBALS['TEST_LIFECYCLE_SERVIC
         $config = require __DIR__ . '/config.php';
         $pdo = get_db_connection($config['db']);
     }
-    $service = GuestLifecycleFulfillmentService::createDefault($pdo);
+
+    $clearanceRepo = new PdoCondominiumClearanceRepository($pdo);
+    /** @var HttpTransportInterface $clearanceTransport */
+    $clearanceTransport = (isset($GLOBALS['TEST_CLEARANCE_TRANSPORT']) && $GLOBALS['TEST_CLEARANCE_TRANSPORT'] instanceof HttpTransportInterface)
+        ? $GLOBALS['TEST_CLEARANCE_TRANSPORT']
+        : new CurlHttpTransport();
+    $clearanceSync = new HuespedManagerClearanceSync(
+        repository: $clearanceRepo,
+        transport: $clearanceTransport
+    );
+
+    $service = GuestLifecycleFulfillmentService::createDefault($pdo, [
+        'condominium_clearance_sync' => $clearanceSync,
+    ]);
 }
 
 try {

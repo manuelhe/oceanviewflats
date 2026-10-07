@@ -339,6 +339,65 @@ final class DashboardControllerTest extends TestCase
         $this->assertSame(200, $response->getStatusCode());
     }
 
+    public function testIndexRendersFailedCondominiumClearanceAlert(): void
+    {
+        $today = date('Y-m-d');
+        $hubData = new DashboardHubViewData(
+            selectedPropertyFilter: 'all',
+            alerts: [
+                new OperationalAlert(
+                    id: 'clearance_res_fail_999',
+                    type: AlertType::FAILED_CONDOMINIUM_CLEARANCE,
+                    severity: AlertSeverity::CRITICAL,
+                    propertyId: '1606',
+                    title: 'Condominium Clearance Failed',
+                    description: 'Huésped Manager synchronization failed: Portal connection timed out',
+                    dueDate: $today,
+                    reservationUid: 'res_fail_999',
+                    channelBlockUid: null,
+                    guestName: 'Stuck Guest',
+                    actionPayload: [
+                        'reservationUid' => 'res_fail_999',
+                        'propertyId' => '1606',
+                        'errorMessage' => 'Portal connection timed out',
+                    ]
+                ),
+            ],
+            scheduleByDate: [],
+            rateStatus: [],
+            upcomingMaintenanceBlocks: [],
+            channelSyncData: [],
+            todayArrivalsCount: 0,
+            todayDeparturesCount: 0,
+            activeStaysCount: 0
+        );
+
+        $queryService = $this->createMock(DashboardQueryServiceInterface::class);
+        $queryService->expects($this->once())
+            ->method('getDashboardHubData')
+            ->with('all')
+            ->willReturn($hubData);
+
+        $controller = new DashboardController(
+            viewRenderer: $this->viewRenderer,
+            syncService: null,
+            dashboardQueryService: $queryService
+        );
+
+        $session = ['admin_user_id' => 1];
+        $request = new Request('GET', '/');
+
+        $response = $controller->index($request, $session);
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Condominium Clearance Failed', $body);
+        $this->assertStringContainsString('Portal connection timed out', $body);
+        $this->assertStringContainsString('href="/reservations/res_fail_999"', $body);
+        $this->assertStringContainsString('hx-get="/reservations/res_fail_999"', $body);
+        $this->assertStringContainsString('hx-target="#drawer-container"', $body);
+    }
+
     private function createSampleHubData(string $today): DashboardHubViewData
     {
         return new DashboardHubViewData(

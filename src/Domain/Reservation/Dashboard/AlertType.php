@@ -8,4 +8,5 @@ enum AlertType: string
 {
     case INCOMPLETE_GUEST_REGISTRY = 'incomplete_guest_registry';
     case UNONBOARDED_CHANNEL_BLOCK = 'unonboarded_channel_block';
+    case FAILED_CONDOMINIUM_CLEARANCE = 'failed_condominium_clearance';
 }

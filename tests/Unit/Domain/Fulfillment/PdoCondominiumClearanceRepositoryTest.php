@@ -7,6 +7,8 @@ namespace OceanViewFlats\Tests\Unit\Domain\Fulfillment;
 use OceanViewFlats\Domain\Database\MigrationRunner;
 use OceanViewFlats\Domain\Fulfillment\CondominiumClearance;
 use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -114,5 +116,79 @@ final class PdoCondominiumClearanceRepositoryTest extends TestCase
         $limited = $this->repository->findFailedClearances(1);
         $this->assertCount(1, $limited);
         $this->assertSame('res_failed_2', $limited[0]->reservationUid);
+    }
+
+    public function testGetFailedClearanceAlertsSeverityFilteringAndResolution(): void
+    {
+        // 1. Seed reservations
+        $this->pdo->exec("
+            INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, status, total_price)
+            VALUES 
+                ('res_alert_today', '1606', 'Today Guest', 'today@example.com', '+573001234567', '2026-10-07', '2026-10-10', 'confirmed', 500.0),
+                ('res_alert_future', '1707', 'Future Guest', 'future@example.com', '+573001234568', '2026-10-15', '2026-10-20', 'confirmed', 800.0),
+                ('res_alert_canc', '1606', 'Cancelled Guest', 'canc@example.com', '+573001234569', '2026-10-07', '2026-10-10', 'cancelled', 500.0),
+                ('res_alert_synced', '1606', 'Synced Guest', 'synced@example.com', '+573001234570', '2026-10-07', '2026-10-10', 'confirmed', 500.0);
+        ");
+
+        // 2. Seed clearances
+        $cToday = CondominiumClearance::createPending('res_alert_today', '1606')
+            ->markFailed('Portal connection timed out');
+        $this->repository->save($cToday);
+
+        $cFuture = CondominiumClearance::createPending('res_alert_future', '1707')
+            ->markFailed('Portal HTTP 500 error');
+        $this->repository->save($cFuture);
+
+        $cCanc = CondominiumClearance::createPending('res_alert_canc', '1606')
+            ->markFailed('Portal rejected');
+        $this->repository->save($cCanc);
+
+        $cSynced = CondominiumClearance::createPending('res_alert_synced', '1606')
+            ->markSynced('CLEAR-777');
+        $this->repository->save($cSynced);
+
+        // 3. Test retrieving all alerts on 2026-10-07
+        $alerts = $this->repository->getFailedClearanceAlerts('all', '2026-10-07');
+        $this->assertCount(2, $alerts, 'Cancelled and synced reservations should not produce alerts');
+
+        // Verify res_alert_today has CRITICAL severity (check_in <= today)
+        $todayAlert = null;
+        $futureAlert = null;
+        foreach ($alerts as $a) {
+            if ($a->actionPayload['reservationUid'] === 'res_alert_today') {
+                $todayAlert = $a;
+            } elseif ($a->actionPayload['reservationUid'] === 'res_alert_future') {
+                $futureAlert = $a;
+            }
+        }
+
+        $this->assertNotNull($todayAlert);
+        $this->assertSame(AlertType::FAILED_CONDOMINIUM_CLEARANCE, $todayAlert->type);
+        $this->assertSame(AlertSeverity::CRITICAL, $todayAlert->severity);
+        $this->assertSame('Condominium Clearance Failed', $todayAlert->title);
+        $this->assertSame('2026-10-07', $todayAlert->dueDate);
+        $this->assertSame('Portal connection timed out', $todayAlert->actionPayload['errorMessage']);
+
+        // Verify res_alert_future has WARNING severity (check_in > today)
+        $this->assertNotNull($futureAlert);
+        $this->assertSame(AlertSeverity::WARNING, $futureAlert->severity);
+        $this->assertSame('2026-10-15', $futureAlert->dueDate);
+
+        // 4. Test filtering by property
+        $alerts1606 = $this->repository->getFailedClearanceAlerts('1606', '2026-10-07');
+        $this->assertCount(1, $alerts1606);
+        $this->assertSame('res_alert_today', $alerts1606[0]->actionPayload['reservationUid']);
+
+        $alerts1707 = $this->repository->getFailedClearanceAlerts('1707', '2026-10-07');
+        $this->assertCount(1, $alerts1707);
+        $this->assertSame('res_alert_future', $alerts1707[0]->actionPayload['reservationUid']);
+
+        // 5. Test resolution when clearance status transitions to 'synced'
+        $resolvedToday = $cToday->markSynced('CLEAR-888');
+        $this->repository->save($resolvedToday);
+
+        $alertsAfterResolution = $this->repository->getFailedClearanceAlerts('all', '2026-10-07');
+        $this->assertCount(1, $alertsAfterResolution);
+        $this->assertSame('res_alert_future', $alertsAfterResolution[0]->actionPayload['reservationUid']);
     }
 }
