@@ -42,6 +42,9 @@ jobs:
           echo "SetEnv PROPERTY_1707_DOOR_CODE \"${{ secrets.PROPERTY_1707_DOOR_CODE }}\"" >> public/.htaccess
           echo "SetEnv PROPERTY_1707_WIFI_SSID \"${{ secrets.PROPERTY_1707_WIFI_SSID }}\"" >> public/.htaccess
           echo "SetEnv PROPERTY_1707_WIFI_PASSWORD \"${{ secrets.PROPERTY_1707_WIFI_PASSWORD }}\"" >> public/.htaccess
+          echo "SetEnv HUESPED_MANAGER_BASE_URL \"${{ secrets.HUESPED_MANAGER_BASE_URL }}\"" >> public/.htaccess
+          echo "SetEnv HUESPED_MANAGER_1707_CHECK \"${{ secrets.HUESPED_MANAGER_1707_CHECK }}\"" >> public/.htaccess
+          echo "SetEnv HUESPED_MANAGER_1606_CHECK \"${{ secrets.HUESPED_MANAGER_1606_CHECK }}\"" >> public/.htaccess
 
       - name: Inject MercadoPago Public Key into Config
         run: |

@@ -145,6 +145,12 @@ final class HtaccessTest extends TestCase
             $this->htaccessContent,
             'Must document sample SetEnv MERCADOPAGO_* directive.'
         );
+
+        $this->assertMatchesRegularExpression(
+            '/^#\s*SetEnv\s+HUESPED_MANAGER_\w+/m',
+            $this->htaccessContent,
+            'Must document sample SetEnv HUESPED_MANAGER_* directive.'
+        );
     }
 
     public function testDirectivesTagsAreBalanced(): void

@@ -36,7 +36,7 @@ The solution includes:
 8. As a property manager, I want the admin user provisioning tool to be idempotent, so that running it multiple times updates existing records safely without corrupting accounts or creating duplicates.
 9. As a security engineer, I want the admin user provisioning tool to enforce CLI-only execution, so that it cannot be triggered through a web browser.
 10. As a security engineer, I want the admin user provisioning tool to never output plaintext passwords in terminal output or log files, so that credentials are protected from shoulder-surfing and log indexing.
-11. As a system administrator, I want database credentials and payment gateway tokens injected into the admin web environment during deployment, so that sensitive production secrets are never stored in git.
+11. As a system administrator, I want database credentials, payment gateway tokens, and Condominium Administration Portal tokens injected into the admin web environment during deployment, so that sensitive production secrets are never stored in git.
 12. As a system administrator, I want production Composer dependencies packaged with `--no-dev --optimize-autoloader`, so that developer test tools are excluded from production and class loading performance is maximized.
 13. As a developer, I want public API endpoints (`public_html/api/*.php`) to utilize the production Composer autoloader deployed in the user home directory, so that domain logic is never duplicated between public and administrative runtimes.
 14. As an operator, I want clear documentation detailing cPanel subdomain setup, database migration execution, and initial account creation, so that infrastructure maintenance can be executed reliably.

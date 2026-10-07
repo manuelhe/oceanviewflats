@@ -142,6 +142,9 @@ Configure the following secrets in GitHub under **Repository Settings** -> **Sec
 | `RECIPIENT_EMAIL` | `deploy.yml` | Mailbox receiving booking notifications and guest registry alerts. | `reservas@oceanviewflats.com` |
 | `CAPTCHA_SECRET` | `deploy.yml` | HMAC key for signing mathematical captcha tokens. | 32-char random alphanumeric string |
 | `GOOGLE_SHEET_WEBAPP_URL` | `deploy.yml` | Google Apps Script endpoint URL for booking sync. | `https://script.google.com/macros/s/.../exec` |
+| `HUESPED_MANAGER_BASE_URL` | Both | Base endpoint for the Condominium Administration Portal (Huésped Manager) at Edificio Salguero Sunset. | `https://salguerosunset.huespedmanager.com.co/propietarios/production` |
+| `HUESPED_MANAGER_1707_CHECK` | Both | Property 1707 pre-shared security check token for reception portal submissions. | `ep92449222` |
+| `HUESPED_MANAGER_1606_CHECK` | Both | Property 1606 pre-shared security check token for reception portal submissions. | `ep24281580` |
 
 > [!NOTE]
 > Both deployment workflows connect via **SFTP Port 2223**, which is cPanel's custom SSH/SFTP port configured in the GitHub Actions runner.
@@ -243,6 +246,9 @@ Table `reservation_refunds` verified/created.
    - Manages dynamic seasonal rate overrides and cleaning fees.
 8. **`reservation_refunds` Table**:
    - Tracks itemized refund disbursements and Mercado Pago refund references.
+9. **`condominium_clearances` Table**:
+   - Tracks external Condominium Administration Portal (Huésped Manager) clearance synchronization state, submission attempts, error payloads, and assigned Condominium Clearance Numbers (`clearance_number` / `consecutivo`).
+   - Indexed on `(reservation_uid, clearance_status)` and `(property_id, check_in, check_out)`.
 
 ### 5.4 Emergency SQL (Manual Execution Fallback)
 
@@ -356,6 +362,18 @@ OceanViewFlats physical keypad locks require a **7-digit code followed by the '#
 
 > [!TIP]
 > **Zero-Downtime Door Code Rotation**: To rotate the fallback door lock code after a security audit, update `PROPERTY_1606_DOOR_CODE` in your GitHub Actions secrets and trigger a redeployment. Do **not** rebuild the frontend (`npm run build`), as the client queries `/api/guide-access.php` at runtime.
+
+### 7.3 Condominium Administration Portal Integration Variables
+The automated reception clearance synchronization engine communicates with the external Condominium Administration Portal (Huésped Manager) at Edificio Salguero Sunset using building endpoints and pre-shared check tokens configured per Property:
+
+| Variable | Description | Production Value / Fallback |
+| :--- | :--- | :--- |
+| `HUESPED_MANAGER_BASE_URL` | Base remote booking submission endpoint | `https://salguerosunset.huespedmanager.com.co/propietarios/production` |
+| `HUESPED_MANAGER_1707_CHECK` | Pre-shared security check token for Property 1707 | `ep92449222` |
+| `HUESPED_MANAGER_1606_CHECK` | Pre-shared security check token for Property 1606 | `ep24281580` |
+
+> [!TIP]
+> **Check Token Rotation**: If the building administration rotates the check tokens for Property 1707 or 1606, update the corresponding GitHub Actions secret (`HUESPED_MANAGER_1707_CHECK` or `HUESPED_MANAGER_1606_CHECK`) and trigger a deployment. The new tokens are immediately picked up by both the public Guest Registry submission handler and the Admin 1-click clearance retry tool.
 
 ---
 
@@ -641,6 +659,22 @@ Every synchronization attempt evaluates and records property status in `channel_
     ```bash
     php scripts/create-admin-user.php --email="admin@oceanviewflats.com" --name="Admin" --password="NewPassword123!"
     ```
+
+### Scenario F: Dashboard Hub shows "Condominium Clearance Failed" Operational Alert.
+* **Root Cause: The Condominium Administration Portal (Huésped Manager) was unreachable, the check token was rejected, or the building portal returned an error during Guest Registry submission.**
+  * *Verification*: Click the operational alert in the Dashboard Hub to open the affected reservation detail drawer. Inspect the "Condominium Administration Portal" card to review the attempt count and last error message.
+  * *Resolution*:
+    1. Confirm that `HUESPED_MANAGER_BASE_URL`, `HUESPED_MANAGER_1707_CHECK`, and `HUESPED_MANAGER_1606_CHECK` are properly configured in `.htaccess` / GitHub Actions secrets.
+    2. Click **Retry Clearance Sync** in the reservation detail drawer to trigger an immediate retry.
+    3. Alternatively, trigger the retry via the authenticated API:
+       ```bash
+       curl -X POST "https://admin.oceanviewflats.com/api/admin-condominium-clearance-retry.php" \
+         -H "Cookie: ovf_admin_session=..." \
+         -H "X-CSRF-Token: ..." \
+         -H "Content-Type: application/json" \
+         -d '{"reservation_uid":"ovf_..."}'
+       ```
+    4. Upon successful sync, the status badge turns green (`synced`) and the Condominium Clearance Number is recorded.
 
 ---
 
