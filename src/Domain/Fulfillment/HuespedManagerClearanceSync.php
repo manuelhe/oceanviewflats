@@ -59,6 +59,22 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
     }
 
     /**
+     * Centralizes formatting of reservation notes and vehicle details for the condominium portal.
+     */
+    public static function formatClearanceNotes(?string $notes, ?string $carModel): ?string
+    {
+        $cleanNotes = ($notes !== null && trim($notes) !== '') ? trim($notes) : null;
+        $cleanModel = ($carModel !== null && trim((string) $carModel) !== '') ? trim((string) $carModel) : null;
+
+        if ($cleanModel === null) {
+            return $cleanNotes;
+        }
+
+        $vehicleNote = 'Vehicle: ' . $cleanModel;
+        return $cleanNotes !== null ? $cleanNotes . ' | ' . $vehicleNote : $vehicleNote;
+    }
+
+    /**
      * @param array<int, OccupantDetails|array<string, mixed>> $guests
      */
     public function sync(
@@ -168,7 +184,7 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
             $sname[] = $occ->middleName ?? '';
             $lname[] = $occ->lastName ?? '';
             $mname[] = $occ->secondLastName ?? '';
-            $country[] = $occ->normalizeCountry($occ->country);
+            $country[] = $occ->normalizeCountry($occ->country ?? 'COLOMBIA') ?? 'COLOMBIA';
 
             // Companion inherits primary guest phone if empty
             $occPhone = trim((string) ($occ->phone ?? ''));

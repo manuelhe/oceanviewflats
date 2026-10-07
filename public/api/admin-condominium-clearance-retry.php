@@ -19,13 +19,8 @@ use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
 
-// 1. Enforce HTTP Method
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
-    http_response_code(405);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['success' => false, 'error' => 'Method Not Allowed']);
-    exit;
-}
+// 1. Enforce Security Headers, CORS, and Allowed Methods
+enforce_security_headers_and_cors(['POST', 'OPTIONS']);
 
 // 2. Manage Session State Safely
 if (session_status() === PHP_SESSION_NONE) {
@@ -45,9 +40,7 @@ if (session_status() === PHP_SESSION_NONE) {
 $adminUserId = $_SESSION['admin_user_id'] ?? null;
 if ($adminUserId === null || (int) $adminUserId <= 0) {
     http_response_code(401);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['success' => false, 'error' => 'Unauthorized: Active administrative session required.']);
-    exit;
+    send_json_response(false, 'Unauthorized: Active administrative session required.');
 }
 
 // 4. Validate CSRF Token
@@ -76,18 +69,14 @@ $providedCsrf = $headerCsrf !== '' ? $headerCsrf : $bodyCsrf;
 
 if ($sessionCsrf === '' || $providedCsrf === '' || !hash_equals($sessionCsrf, $providedCsrf)) {
     http_response_code(403);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['success' => false, 'error' => 'Forbidden: Invalid or missing CSRF token.']);
-    exit;
+    send_json_response(false, 'Forbidden: Invalid or missing CSRF token.');
 }
 
 // 5. Validate Required Input
 $reservationUid = trim((string) ($input['reservation_uid'] ?? ''));
 if ($reservationUid === '') {
     http_response_code(422);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['success' => false, 'error' => 'Missing required field: reservation_uid.']);
-    exit;
+    send_json_response(false, 'Missing required field: reservation_uid.');
 }
 
 // 6. Database Connection & Service Resolution
@@ -120,9 +109,7 @@ $reservationRepo = new PdoReservationRepository($pdo);
 $reservation = $reservationRepo->findByUid($reservationUid);
 if ($reservation === null) {
     http_response_code(404);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['success' => false, 'error' => 'Reservation not found.']);
-    exit;
+    send_json_response(false, 'Reservation not found.');
 }
 
 // 8. Verify Guest Registry Submission
@@ -130,9 +117,7 @@ $reservationSearch = new PdoReservationSearchAdapter($pdo);
 $registry = $reservationSearch->findGuestRegistry($reservationUid);
 if ($registry === null) {
     http_response_code(400);
-    header('Content-Type: application/json; charset=UTF-8');
-    echo json_encode(['success' => false, 'error' => 'Guest registry must be submitted before condominium clearance can be synced.']);
-    exit;
+    send_json_response(false, 'Guest registry must be submitted before condominium clearance can be synced.');
 }
 
 // 9. Prepare Clearance Payload
@@ -142,13 +127,7 @@ if (is_string($guests)) {
     $guests = is_array($decoded) ? $decoded : [];
 }
 
-$notes = $reservation->notes;
-$carModel = $registry['car_model'] ?? null;
-if ($carModel !== null && trim((string) $carModel) !== '') {
-    $notes = ($notes !== null && $notes !== '')
-        ? $notes . ' | Vehicle: ' . trim((string) $carModel)
-        : 'Vehicle: ' . trim((string) $carModel);
-}
+$notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $registry['car_model'] ?? null);
 $carPlates = $registry['car_plates'] ?? null;
 
 $existingClearance = $clearanceRepo->findByReservationUid($reservationUid);
@@ -179,14 +158,15 @@ $auditLogger->record(
 );
 
 // 12. Return JSON Response
-header('Content-Type: application/json; charset=UTF-8');
-echo json_encode([
-    'success' => $clearance->isSynced(),
-    'status' => $clearance->status,
-    'clearance_number' => $clearance->clearanceNumber,
-    'error' => $clearance->errorMessage,
-    'attempts' => $clearance->attempts,
-    'last_attempt_at' => $clearance->lastAttemptAt,
-    'synced_at' => $clearance->syncedAt,
-]);
-exit;
+send_json_response(
+    $clearance->isSynced(),
+    $clearance->isSynced() ? 'Condominium clearance synchronization complete.' : ($clearance->errorMessage ?? 'Clearance synchronization failed.'),
+    [
+        'status' => $clearance->status,
+        'clearance_number' => $clearance->clearanceNumber,
+        'error' => $clearance->errorMessage,
+        'attempts' => $clearance->attempts,
+        'last_attempt_at' => $clearance->lastAttemptAt,
+        'synced_at' => $clearance->syncedAt,
+    ]
+);

@@ -203,7 +203,7 @@ final class PdoCondominiumClearanceRepository implements CondominiumClearanceRep
             $severity = ($checkIn <= $today) ? AlertSeverity::CRITICAL : AlertSeverity::WARNING;
 
             $description = sprintf(
-                'Clearance with Huésped Manager failed for %s (%s). Building reception has not been notified.',
+                'Clearance with Condominium Administration Portal failed for %s (%s). Building reception has not been notified.',
                 $guestName,
                 $rawErrorMessage
             );

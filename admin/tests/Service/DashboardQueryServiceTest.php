@@ -230,7 +230,7 @@ final class DashboardQueryServiceTest extends TestCase
                     severity: AlertSeverity::CRITICAL,
                     propertyId: '1606',
                     title: 'Condominium Clearance Failed',
-                    description: 'Huésped Manager synchronization failed: Portal connection timed out',
+                    description: 'Condominium Administration Portal synchronization failed: Portal connection timed out',
                     dueDate: '2026-10-10',
                     reservationUid: 'res_fail_critical',
                     actionPayload: [

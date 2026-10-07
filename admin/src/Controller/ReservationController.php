@@ -445,7 +445,7 @@ final class ReservationController
     }
 
     /**
-     * Retries or initiates condominium clearance synchronization via Huésped Manager.
+     * Retries or initiates condominium clearance synchronization via the Condominium Administration Portal.
      *
      * @param array<string, mixed> $session
      */
@@ -508,13 +508,7 @@ final class ReservationController
             $guests = is_array($decoded) ? $decoded : [];
         }
 
-        $notes = $reservation->notes;
-        $carModel = $registry['car_model'] ?? null;
-        if ($carModel !== null && trim((string) $carModel) !== '') {
-            $notes = ($notes !== null && $notes !== '')
-                ? $notes . ' | Vehicle: ' . trim((string) $carModel)
-                : 'Vehicle: ' . trim((string) $carModel);
-        }
+        $notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $registry['car_model'] ?? null);
         $carPlates = $registry['car_plates'] ?? null;
 
         $existingClearance = $this->clearanceRepo?->findByReservationUid($uid);

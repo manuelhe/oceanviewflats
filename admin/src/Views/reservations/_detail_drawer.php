@@ -374,7 +374,7 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <span class="block text-xs text-gray-500 font-medium mb-0.5">Condominium Clearance</span>
-                                <span class="text-[11px] text-gray-400">Huésped Manager HOA registration & building entry clearance</span>
+                                <span class="text-[11px] text-gray-400">Condominium Administration Portal registration & building entry clearance</span>
                             </div>
                             <div>
                                 <?php if ($condominiumClearance !== null && $condominiumClearance->isSynced()): ?>
@@ -450,14 +450,14 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                             </div>
                         <?php elseif ($condominiumClearance !== null && $condominiumClearance->isPending()): ?>
                             <div class="text-xs text-gray-500">
-                                Clearance is queued or awaiting response from Huésped Manager.
+                                Clearance is queued or awaiting response from Condominium Administration Portal.
                                 <?php if ($condominiumClearance->attempts > 0): ?>
                                     Attempts: <?= (int) $condominiumClearance->attempts ?>.
                                 <?php endif; ?>
                             </div>
                         <?php elseif ($registryCompleted): ?>
                             <div class="text-xs text-gray-500">
-                                Guest registry is verified. Clearance can now be synchronized with Huésped Manager.
+                                Guest registry is verified. Clearance can now be synchronized with Condominium Administration Portal.
                             </div>
                         <?php else: ?>
                             <div class="text-xs text-gray-400 italic">
@@ -479,7 +479,7 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                                     </svg>
                                     <span><?= ($condominiumClearance !== null && $condominiumClearance->isFailed()) ? 'Retry Condominium Clearance' : 'Sync Condominium Clearance' ?></span>
                                 </button>
-                                <span class="text-[11px] text-gray-400">1-click sync retry via Huésped Manager</span>
+                                <span class="text-[11px] text-gray-400">1-click clearance sync</span>
                             </div>
                         <?php endif; ?>
                     </div>
