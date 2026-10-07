@@ -88,7 +88,8 @@ final class GuideAccessService implements GuideAccessServiceInterface
                 propertyId: $credentials->propertyId,
                 doorCode: $reservation->doorCode,
                 wifiSsid: $credentials->wifiSsid,
-                wifiPassword: $credentials->wifiPassword
+                wifiPassword: $credentials->wifiPassword,
+                parkingSpot: $credentials->parkingSpot
             );
         }
 

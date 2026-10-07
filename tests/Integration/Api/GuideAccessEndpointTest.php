@@ -116,6 +116,7 @@ PHP;
         $this->assertSame('0170700#', $res['json']['credentials']['door_code']);
         $this->assertSame('APTO1707', $res['json']['credentials']['wifi_ssid']);
         $this->assertSame('Invitado@1707@HN', $res['json']['credentials']['wifi_password']);
+        $this->assertSame('95', $res['json']['credentials']['parking_spot']);
         $this->assertArrayHasKey('reservation', $res['json']);
         $this->assertSame('Completed Guest', $res['json']['reservation']['guest_name']);
         $this->assertSame('1707', $res['json']['reservation']['property_id']);
@@ -134,6 +135,7 @@ PHP;
         $this->assertSame('0876543#', $res['json']['credentials']['door_code']);
         $this->assertSame('APTO1606', $res['json']['credentials']['wifi_ssid']);
         $this->assertSame('Invitado@1606@HN', $res['json']['credentials']['wifi_password']);
+        $this->assertSame('87', $res['json']['credentials']['parking_spot']);
     }
 
     public function testGuideAccessEndpointHandlesCorsPreflightOptionsRequest(): void

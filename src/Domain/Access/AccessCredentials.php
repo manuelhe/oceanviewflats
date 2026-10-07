@@ -16,7 +16,8 @@ final class AccessCredentials
         public readonly string $propertyId,
         public readonly string $doorCode,
         public readonly string $wifiSsid,
-        public readonly string $wifiPassword
+        public readonly string $wifiPassword,
+        public readonly ?string $parkingSpot = null
     ) {
         if ($this->propertyId === '') {
             throw new InvalidArgumentException('Property ID cannot be empty');
@@ -27,7 +28,7 @@ final class AccessCredentials
     }
 
     /**
-     * @return array{door_code: string, wifi_ssid: string, wifi_password: string, property_id: string}
+     * @return array{property_id: string, door_code: string, wifi_ssid: string, wifi_password: string, parking_spot: ?string}
      */
     public function toArray(): array
     {
@@ -36,6 +37,7 @@ final class AccessCredentials
             'door_code' => $this->doorCode,
             'wifi_ssid' => $this->wifiSsid,
             'wifi_password' => $this->wifiPassword,
+            'parking_spot' => $this->parkingSpot,
         ];
     }
 }

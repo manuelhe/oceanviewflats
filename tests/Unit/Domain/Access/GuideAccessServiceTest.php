@@ -170,6 +170,7 @@ final class GuideAccessServiceTest extends TestCase
         $this->assertSame('1707*', $result->credentials->doorCode);
         $this->assertSame('APTO1707_5G', $result->credentials->wifiSsid);
         $this->assertSame('Secret1707', $result->credentials->wifiPassword);
+        $this->assertSame('95', $result->credentials->parkingSpot);
 
         // Verify serialized array includes credentials
         $array = $result->toArray();
@@ -178,6 +179,7 @@ final class GuideAccessServiceTest extends TestCase
         $this->assertSame('1707*', $array['credentials']['door_code']);
         $this->assertSame('APTO1707_5G', $array['credentials']['wifi_ssid']);
         $this->assertSame('Secret1707', $array['credentials']['wifi_password']);
+        $this->assertSame('95', $array['credentials']['parking_spot']);
     }
 
     public function testMarkRegistryCompletedTransitionsReservationState(): void
