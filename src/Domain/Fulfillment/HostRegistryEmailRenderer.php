@@ -63,6 +63,12 @@ final class HostRegistryEmailRenderer implements HostRegistryEmailRendererInterf
             if ($g->index === 1 && $g->email !== null) {
                 $emailBody .= "  Email:    " . $this->stripNewlines($g->email) . "\n";
             }
+            if ($g->phone !== null && $g->phone !== '') {
+                $emailBody .= "  Phone:    " . $this->stripNewlines($g->phone) . "\n";
+            }
+            if ($g->country !== null && $g->country !== '') {
+                $emailBody .= "  Country:  " . $this->stripNewlines($g->country) . "\n";
+            }
             $emailBody .= "  ID/Doc:   " . $this->stripNewlines($g->docType) . " (" . $this->stripNewlines($g->docNum) . ")\n";
             $emailBody .= "  Age:      " . $g->age . "\n";
             $emailBody .= "--------------------------------------------------\n";
@@ -138,12 +144,25 @@ HTML;
                 $emailSnippet = "<span>Email: <code>{$safeEmail}</code></span>";
             }
 
+            $phoneSnippet = '';
+            if ($g->phone !== null && $g->phone !== '') {
+                $safePhone = htmlspecialchars($this->stripNewlines($g->phone), ENT_QUOTES, 'UTF-8');
+                $phoneSnippet = "<span>Phone: <code>{$safePhone}</code></span>";
+            }
+            $countrySnippet = '';
+            if ($g->country !== null && $g->country !== '') {
+                $safeCountry = htmlspecialchars($this->stripNewlines($g->country), ENT_QUOTES, 'UTF-8');
+                $countrySnippet = "<span>Country: <code>{$safeCountry}</code></span>";
+            }
+
             $occupantsRows .= <<<HTML
         <div class="occupant-item">
           <div class="occupant-header">Guest #{$safeIndex}: <strong>{$safeName}</strong></div>
           <div class="occupant-meta">
             <span>ID/Doc: <code>{$safeDocType} ({$safeDocNum})</code></span>
             <span>Age: {$safeAge}</span>
+            {$countrySnippet}
+            {$phoneSnippet}
             {$emailSnippet}
           </div>
         </div>
