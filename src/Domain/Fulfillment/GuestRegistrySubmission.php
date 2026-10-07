@@ -120,6 +120,12 @@ final class GuestRegistrySubmission
         return $this->checkIn < $this->checkOut;
     }
 
+    public function hasVehicle(): bool
+    {
+        return ($this->carPlates !== null && trim($this->carPlates) !== '')
+            || ($this->carModel !== null && trim($this->carModel) !== '');
+    }
+
     /**
      * @return array<string, mixed>
      */

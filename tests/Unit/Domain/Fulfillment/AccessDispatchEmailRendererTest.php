@@ -109,36 +109,42 @@ final class AccessDispatchEmailRendererTest extends TestCase
                 'title' => 'Your Access Credentials & Arrival Guide',
                 'pin_label' => 'Smart Lock Door PIN',
                 'btn' => 'Open Guest Guide',
+                'parking_label' => 'Assigned Parking',
             ],
             'es' => [
                 'subject' => 'Credenciales de Acceso y Guía de Llegada - OceanViewFlats 1606',
                 'title' => 'Tus Credenciales de Acceso y Guía de Llegada',
                 'pin_label' => 'PIN de Acceso Smart Lock',
                 'btn' => 'Abrir Guía del Huésped',
+                'parking_label' => 'Parqueadero Asignado',
             ],
             'fr' => [
                 'subject' => 'Identifiants d’accès et guide d’arrivée - OceanViewFlats 1606',
                 'title' => 'Vos identifiants d’accès et guide d’arrivée',
                 'pin_label' => 'Code PIN de la serrure connectée',
                 'btn' => 'Ouvrir le guide du voyageur',
+                'parking_label' => 'Parking Assigné',
             ],
             'it' => [
                 'subject' => 'Credenziali di accesso e guida all’arrivo - OceanViewFlats 1606',
                 'title' => 'Le tue credenziali di accesso e guida all’arrivo',
                 'pin_label' => 'PIN della serratura smart',
                 'btn' => 'Apri la Guida dell’Ospite',
+                'parking_label' => 'Parcheggio Assegnato',
             ],
             'de' => [
                 'subject' => 'Zugangsdaten & Ankunftsleitfaden - OceanViewFlats 1606',
                 'title' => 'Ihre Zugangsdaten & Ankunftsleitfaden',
                 'pin_label' => 'Smart Lock Tür-PIN',
                 'btn' => 'Gäste-Leitfaden öffnen',
+                'parking_label' => 'Zugewiesener Parkplatz',
             ],
             'ja' => [
                 'subject' => 'アクセス認証情報とご到着案内 - OceanViewFlats 1606',
                 'title' => 'アクセス認証情報とご到着案内',
                 'pin_label' => 'スマートロック ドア暗証番号',
                 'btn' => 'ゲストガイドを開く',
+                'parking_label' => '専用駐車場',
             ],
         ];
 
@@ -149,20 +155,26 @@ final class AccessDispatchEmailRendererTest extends TestCase
             $html = $this->renderer->renderHtml(
                 reservation: $reservation,
                 doorCode: $doorCode,
-                lang: $lang
+                lang: $lang,
+                parkingSpot: '87'
             );
             $this->assertStringContainsString($expected['title'], $html, "Title mismatch for {$lang}");
             $this->assertStringContainsString($expected['pin_label'], $html, "PIN label mismatch for {$lang}");
             $this->assertStringContainsString($expected['btn'], $html, "Button mismatch for {$lang}");
+            $this->assertStringContainsString($expected['parking_label'], $html, "Parking label mismatch for {$lang}");
+            $this->assertStringContainsString('#87', $html, "Parking spot missing for {$lang}");
             $this->assertStringContainsString($doorCode, $html, "Door code missing for {$lang}");
             $this->assertStringContainsString("lang={$lang}", $html, "Guide URL lang mismatch for {$lang}");
 
             $plain = $this->renderer->renderPlainText(
                 reservation: $reservation,
                 doorCode: $doorCode,
-                lang: $lang
+                lang: $lang,
+                parkingSpot: '87'
             );
             $this->assertStringContainsString($expected['title'], $plain, "Plain title mismatch for {$lang}");
+            $this->assertStringContainsString($expected['parking_label'], $plain, "Plain parking label missing for {$lang}");
+            $this->assertStringContainsString('#87', $plain, "Plain parking spot missing for {$lang}");
             $this->assertStringContainsString($doorCode, $plain, "Plain door code missing for {$lang}");
         }
     }
@@ -227,5 +239,78 @@ final class AccessDispatchEmailRendererTest extends TestCase
 
         $this->assertStringContainsString('Dr. John Watson', $plain);
         $this->assertStringContainsString($customGuideUrl, $plain);
+    }
+
+    public function testRendersAssignedParkingWhenProvided(): void
+    {
+        $reservation = $this->createReservation('en');
+        $doorCode = '1234567#';
+
+        $html = $this->renderer->renderHtml(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: '87'
+        );
+
+        $this->assertStringContainsString('<div class="item-row"><span>Assigned Parking</span><strong>#87</strong></div>', $html);
+
+        $plain = $this->renderer->renderPlainText(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: '87'
+        );
+
+        $this->assertStringContainsString("Assigned Parking:         #87", $plain);
+
+        // Also handles pre-formatted hash `#95`
+        $html95 = $this->renderer->renderHtml(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: '#95'
+        );
+        $this->assertStringContainsString('<div class="item-row"><span>Assigned Parking</span><strong>#95</strong></div>', $html95);
+    }
+
+    public function testOmitsAssignedParkingWhenNullOrEmpty(): void
+    {
+        $reservation = $this->createReservation('en');
+        $doorCode = '1234567#';
+
+        // null parkingSpot
+        $htmlNull = $this->renderer->renderHtml(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: null
+        );
+        $this->assertStringNotContainsString('Assigned Parking', $htmlNull);
+
+        $plainNull = $this->renderer->renderPlainText(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: null
+        );
+        $this->assertStringNotContainsString('Assigned Parking', $plainNull);
+
+        // whitespace/empty parkingSpot
+        $htmlEmpty = $this->renderer->renderHtml(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: '   '
+        );
+        $this->assertStringNotContainsString('Assigned Parking', $htmlEmpty);
+
+        $plainEmpty = $this->renderer->renderPlainText(
+            reservation: $reservation,
+            doorCode: $doorCode,
+            lang: 'en',
+            parkingSpot: '   '
+        );
+        $this->assertStringNotContainsString('Assigned Parking', $plainEmpty);
     }
 }

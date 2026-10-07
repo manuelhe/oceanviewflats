@@ -273,6 +273,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
         $this->assertStringContainsString($expectedDoorCode, $guestEmail['htmlBody']);
         $this->assertStringContainsString('/guide/?code=ovf_sample_100', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('Assigned Parking', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('#87', $guestEmail['htmlBody']);
 
         // Verify Spreadsheet Sync
         $this->assertSame(1, $this->spreadsheetSync->count());
@@ -1055,5 +1057,60 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertTrue($result->success);
         $this->assertNotNull($result->doorCode);
         $this->assertNotNull($result->guideUrl);
+    }
+
+    public function testSubmitRegistryOmitsAssignedParkingWhenNoVehicleProvided(): void
+    {
+        $this->createSampleReservation('ovf_no_car_test');
+        $submission = $this->createSubmission(
+            code: 'ovf_no_car_test',
+            carPlates: null,
+            carModel: null
+        );
+
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->accessDispatchDispatched);
+        $this->assertSame(2, $this->emailSender->count());
+
+        $dispatchEmail = $this->emailSender->getSentMessages()[1];
+        $this->assertStringContainsString('Access Credentials & Arrival Guide', $dispatchEmail['subject']);
+        $this->assertStringNotContainsString('Assigned Parking', $dispatchEmail['htmlBody']);
+        $this->assertStringNotContainsString('#87', $dispatchEmail['htmlBody']);
+    }
+
+    public function testSubmitRegistryIncludesAssignedParkingForProperty1707(): void
+    {
+        // Setup 1707 reservation
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_1707_car_test', '1707', 'Maria Rodriguez', 'maria@example.com', '+573009876543',
+                '2026-11-15', '2026-11-20', 500.0, 'confirmed', 'direct',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission(
+            code: 'ovf_1707_car_test',
+            propertyId: '1707',
+            carPlates: 'ABC-789',
+            carModel: 'Toyota RAV4'
+        );
+
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->accessDispatchDispatched);
+        $this->assertSame(2, $this->emailSender->count());
+
+        $dispatchEmail = $this->emailSender->getSentMessages()[1];
+        $this->assertStringContainsString('Assigned Parking', $dispatchEmail['htmlBody']);
+        $this->assertStringContainsString('#95', $dispatchEmail['htmlBody']);
     }
 }

@@ -40,7 +40,8 @@ final class AccessDispatchEmailRenderer implements AccessDispatchEmailRendererIn
         string $doorCode,
         ?string $guideUrl = null,
         ?string $lang = null,
-        ?string $recipientName = null
+        ?string $recipientName = null,
+        ?string $parkingSpot = null
     ): string {
         $resolvedLang = $this->resolveLanguage($reservation, $lang);
         $t = $this->getTranslationsForLang($resolvedLang);
@@ -64,6 +65,7 @@ final class AccessDispatchEmailRenderer implements AccessDispatchEmailRendererIn
         $checkInTime = (string) ($t['check_in_time'] ?? 'From 3:00 PM');
         $checkOutLabel = (string) ($t['check_out'] ?? 'Check-Out');
         $checkOutTime = (string) ($t['check_out_time'] ?? 'Until 11:00 AM');
+        $parkingLabel = (string) ($t['parking_spot'] ?? 'Assigned Parking');
         $summaryTitle = (string) ($t['summary_title'] ?? 'Stay Summary');
         $pinTitle = (string) ($t['pin_title'] ?? 'Smart Lock Door PIN');
         $pinInstructions = (string) ($t['pin_instructions'] ?? 'Enter this 7-digit PIN followed by the # key on the digital door lock to unlock.');
@@ -71,6 +73,12 @@ final class AccessDispatchEmailRenderer implements AccessDispatchEmailRendererIn
         $guideDesc = (string) ($t['guide_desc'] ?? 'Access your complete digital guide with Wi-Fi details, building amenities, pool access, and local recommendations:');
         $houseRulesTitle = (string) ($t['house_rules_title'] ?? 'House Rules & Arrival Reminders');
         $footerText = strip_tags((string) ($t['footer'] ?? 'OceanViewFlats • Beachfront Living in Santa Marta, Colombia'));
+
+        $parkingLine = '';
+        if ($parkingSpot !== null && trim($parkingSpot) !== '') {
+            $cleanSpot = ltrim(trim($parkingSpot), '#');
+            $parkingLine = "\n{$parkingLabel}:         #{$cleanSpot}";
+        }
 
         return <<<TEXT
 ================================================================================
@@ -85,7 +93,7 @@ OceanViewFlats - {$t['title']}
 {$propertyLabel}:         OceanViewFlats {$reservation->propertyId}
 {$codeLabel}: {$reservation->reservationUid}
 {$checkInLabel}:         {$reservation->checkIn} ({$checkInTime})
-{$checkOutLabel}:        {$reservation->checkOut} ({$checkOutTime})
+{$checkOutLabel}:        {$reservation->checkOut} ({$checkOutTime}){$parkingLine}
 
 --------------------------------------------------------------------------------
 {$pinTitle}
@@ -114,7 +122,8 @@ TEXT;
         string $doorCode,
         ?string $guideUrl = null,
         ?string $lang = null,
-        ?string $recipientName = null
+        ?string $recipientName = null,
+        ?string $parkingSpot = null
     ): string {
         $resolvedLang = $this->resolveLanguage($reservation, $lang);
         $t = $this->getTranslationsForLang($resolvedLang);
@@ -148,6 +157,7 @@ TEXT;
         $checkInTime = (string) ($t['check_in_time'] ?? 'From 3:00 PM');
         $checkOutLabel = (string) ($t['check_out'] ?? 'Check-Out');
         $checkOutTime = (string) ($t['check_out_time'] ?? 'Until 11:00 AM');
+        $parkingLabel = (string) ($t['parking_spot'] ?? 'Assigned Parking');
         $pinTitle = (string) ($t['pin_title'] ?? 'Smart Lock Door PIN');
         $pinInstructions = (string) ($t['pin_instructions'] ?? 'Enter this 7-digit PIN followed by the # key on the digital door lock to unlock.');
         $guideTitle = (string) ($t['guide_title'] ?? 'Interactive Guest Guide');
@@ -155,6 +165,14 @@ TEXT;
         $btnGuide = (string) ($t['btn_guide'] ?? 'Open Guest Guide');
         $houseRulesTitle = (string) ($t['house_rules_title'] ?? 'House Rules & Arrival Reminders');
         $footerHtml = (string) ($t['footer'] ?? 'OceanViewFlats &bull; Beachfront Living in Santa Marta, Colombia');
+
+        $parkingRowHtml = '';
+        if ($parkingSpot !== null && trim($parkingSpot) !== '') {
+            $cleanSpot = ltrim(trim($parkingSpot), '#');
+            $safeParkingSpot = htmlspecialchars('#' . $cleanSpot, ENT_QUOTES, 'UTF-8');
+            $safeParkingLabel = htmlspecialchars($parkingLabel, ENT_QUOTES, 'UTF-8');
+            $parkingRowHtml = "\n        <div class=\"item-row\"><span>{$safeParkingLabel}</span><strong>{$safeParkingSpot}</strong></div>";
+        }
 
         return <<<HTML
 <!DOCTYPE html>
@@ -203,7 +221,7 @@ TEXT;
         <div class="item-row"><span>{$propertyLabel}</span><strong>OceanViewFlats {$safePropertyId}</strong></div>
         <div class="item-row"><span>{$codeLabel}</span><strong><code>{$safeUid}</code></strong></div>
         <div class="item-row"><span>{$checkInLabel}</span><strong>{$safeCheckIn} ({$checkInTime})</strong></div>
-        <div class="item-row"><span>{$checkOutLabel}</span><strong>{$safeCheckOut} ({$checkOutTime})</strong></div>
+        <div class="item-row"><span>{$checkOutLabel}</span><strong>{$safeCheckOut} ({$checkOutTime})</strong></div>{$parkingRowHtml}
       </div>
 
       <div class="pin-box">

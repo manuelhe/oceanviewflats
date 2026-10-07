@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace OceanViewFlats\Domain\Fulfillment;
 
 use DateTimeImmutable;
+use OceanViewFlats\Domain\Access\ConfigPropertyCredentialsProvider;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
+use OceanViewFlats\Domain\Access\PropertyCredentialsProviderInterface;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
@@ -20,6 +22,7 @@ use Throwable;
 final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmentServiceInterface
 {
     private readonly AccessDispatchEmailRendererInterface $accessDispatchRenderer;
+    private readonly PropertyCredentialsProviderInterface $credentialsProvider;
 
     public function __construct(
         private readonly PDO $pdo,
@@ -31,9 +34,11 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         private readonly string $hostNotificationEmail = 'rentals@oceanviewflats.com',
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null,
-        private readonly ?CondominiumClearanceSyncInterface $condominiumClearanceSync = null
+        private readonly ?CondominiumClearanceSyncInterface $condominiumClearanceSync = null,
+        ?PropertyCredentialsProviderInterface $credentialsProvider = null
     ) {
         $this->accessDispatchRenderer = $accessDispatchRenderer ?? new AccessDispatchEmailRenderer($this->publicSiteUrl);
+        $this->credentialsProvider = $credentialsProvider ?? new ConfigPropertyCredentialsProvider();
     }
 
     /**
@@ -75,6 +80,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         $condominiumClearanceSync = array_key_exists('condominium_clearance_sync', $options)
             ? $options['condominium_clearance_sync']
             : HuespedManagerClearanceSync::createDefault($pdo);
+        /** @var PropertyCredentialsProviderInterface $credentialsProvider */
+        $credentialsProvider = $options['credentials_provider'] ?? new ConfigPropertyCredentialsProvider();
 
         return new self(
             pdo: $pdo,
@@ -86,7 +93,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             hostNotificationEmail: $resolvedHost,
             publicSiteUrl: $resolvedPublicSiteUrl,
             accessDispatchRenderer: $accessDispatchRenderer,
-            condominiumClearanceSync: $condominiumClearanceSync
+            condominiumClearanceSync: $condominiumClearanceSync,
+            credentialsProvider: $credentialsProvider
         );
     }
 
@@ -284,13 +292,20 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
                 $primaryOccupantName = $submission->getPrimaryOccupant()->name;
                 $recipientName = $primaryOccupantName !== '' ? $primaryOccupantName : $reservation->guestName;
 
+                $parkingSpot = null;
+                if ($submission->hasVehicle()) {
+                    $creds = $this->credentialsProvider->getCredentials($reservation->propertyId);
+                    $parkingSpot = $creds?->parkingSpot;
+                }
+
                 $dispatchSubject = $this->accessDispatchRenderer->renderSubject($reservation, $lang);
                 $dispatchHtml = $this->accessDispatchRenderer->renderHtml(
                     reservation: $reservation,
                     doorCode: $doorCode,
                     guideUrl: $guideUrl,
                     lang: $lang,
-                    recipientName: $recipientName
+                    recipientName: $recipientName,
+                    parkingSpot: $parkingSpot
                 );
 
                 $accessDispatchSent = $this->emailSender->send($recipientEmail, $dispatchSubject, $dispatchHtml);
