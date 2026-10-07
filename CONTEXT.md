@@ -10,6 +10,10 @@ Direct booking platform and guest management system for premium beachfront short
 A specific physical residential apartment managed by OceanViewFlats and offered for short-term rental. Display names in guest-facing interfaces may be localized to match the target market (e.g., "Apartment", "Apartamento"), but Property remains the canonical domain entity.
 _Avoid_: Flat, Apartment, Unit, Condo, Listing
 
+**Assigned Parking Space**:
+A designated, numbered vehicular bay within Edificio Salguero Sunset deeded and allocated to a specific Property (Bay 87 for Property 1606, Bay 95 for Property 1707).
+_Avoid_: Parking Spot, Garage, Car Stall, Driveway
+
 ### Stay Duration
 
 **Check-in Date**:
@@ -41,6 +45,10 @@ _Avoid_: Sanitation Charge, Maid Fee, Turnover Fee
 **Resort Fee**:
 A mandatory, flat per-reservation administrative and amenities surcharge assessed on every Direct Reservation for building and common-area facilities maintenance.
 _Avoid_: Community Fee, Building Fee, Service Surcharge
+
+**Building Registration Fee**:
+The mandatory statutory fee of 20,000 COP per person assessed by the Edificio Salguero Sunset condominium administration for guest registration and common area amenities access, payable directly at the front-desk reception upon arrival.
+_Avoid_: Resort Fee (reserved strictly for direct booking platform surcharge), Common Area Surcharge, Reception Tax, Porter Fee
 
 **Settlement Currency**:
 The authoritative currency for all pricing, quotations, and financial transactions, which is Colombian Pesos (COP). Any foreign currencies presented in interfaces are non-authoritative reference conversions.

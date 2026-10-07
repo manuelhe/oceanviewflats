@@ -36,11 +36,13 @@ return [
             'door_code' => $_ENV['PROPERTY_1606_DOOR_CODE'] ?? $_SERVER['PROPERTY_1606_DOOR_CODE'] ?? getenv('PROPERTY_1606_DOOR_CODE') ?: '0160600#',
             'wifi_ssid' => $_ENV['PROPERTY_1606_WIFI_SSID'] ?? $_SERVER['PROPERTY_1606_WIFI_SSID'] ?? getenv('PROPERTY_1606_WIFI_SSID') ?: 'APTO1606',
             'wifi_password' => $_ENV['PROPERTY_1606_WIFI_PASSWORD'] ?? $_SERVER['PROPERTY_1606_WIFI_PASSWORD'] ?? getenv('PROPERTY_1606_WIFI_PASSWORD') ?: 'Invitado@1606@HN',
+            'parking_spot' => $_ENV['PROPERTY_1606_PARKING_SPOT'] ?? $_SERVER['PROPERTY_1606_PARKING_SPOT'] ?? getenv('PROPERTY_1606_PARKING_SPOT') ?: '87',
         ],
         '1707' => [
             'door_code' => $_ENV['PROPERTY_1707_DOOR_CODE'] ?? $_SERVER['PROPERTY_1707_DOOR_CODE'] ?? getenv('PROPERTY_1707_DOOR_CODE') ?: '0170700#',
             'wifi_ssid' => $_ENV['PROPERTY_1707_WIFI_SSID'] ?? $_SERVER['PROPERTY_1707_WIFI_SSID'] ?? getenv('PROPERTY_1707_WIFI_SSID') ?: 'APTO1707',
             'wifi_password' => $_ENV['PROPERTY_1707_WIFI_PASSWORD'] ?? $_SERVER['PROPERTY_1707_WIFI_PASSWORD'] ?? getenv('PROPERTY_1707_WIFI_PASSWORD') ?: 'Invitado@1707@HN',
+            'parking_spot' => $_ENV['PROPERTY_1707_PARKING_SPOT'] ?? $_SERVER['PROPERTY_1707_PARKING_SPOT'] ?? getenv('PROPERTY_1707_PARKING_SPOT') ?: '95',
         ],
     ]
 ];

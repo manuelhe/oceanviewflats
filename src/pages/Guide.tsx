@@ -2,6 +2,7 @@ import {
 	ArrowRight,
 	Building,
 	Calendar,
+	Car,
 	Check,
 	CheckCircle2,
 	Compass,
@@ -399,7 +400,7 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 											id="btn-copy-wifi-ssid"
 											data-copy-target="display-wifi-ssid"
 											className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
-											title="Copy SSID"
+											aria-label={t.guideCopySuccess}
 										>
 											<Copy className="w-3 h-3" />
 										</button>
@@ -421,11 +422,63 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 											id="btn-copy-wifi-pass"
 											data-copy-target="display-wifi-password"
 											className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
-											title="Copy Password"
+											aria-label={t.guideCopySuccess}
 										>
 											<Copy className="w-3 h-3" />
 										</button>
 									</div>
+								</div>
+							</div>
+						</section>
+
+						{/* Assigned Parking Space Card */}
+						<section
+							id="parking-card"
+							className="bg-white rounded-3xl p-6 shadow-md border border-slate-100 relative overflow-hidden"
+							data-msg-locked={t.guideParkingLockedNotice}
+							data-msg-placeholder={t.guideParkingPlaceholder}
+						>
+							<div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none"></div>
+
+							<h2 className="text-lg font-extrabold text-slate-900 mb-2 flex items-center space-x-2 pb-3 border-b border-slate-50">
+								<Car className="w-5 h-5 text-amber-500" />
+								<span>{t.guideParkingTitle}</span>
+							</h2>
+
+							<p className="text-xs text-slate-500 leading-relaxed font-medium mb-4">
+								{t.guideParkingDesc}
+							</p>
+
+							<div
+								id="parking-locked-notice"
+								className="hidden p-3 mb-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-800 font-medium flex items-center space-x-2"
+							>
+								<Lock className="w-4 h-4 text-amber-600 shrink-0" />
+								<span>{t.guideParkingLockedNotice}</span>
+							</div>
+
+							<div
+								id="parking-spot-container"
+								className="bg-slate-50 rounded-2xl p-4 border border-slate-100 relative group"
+							>
+								<span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+									{t.guideParkingSpotLabel}
+								</span>
+								<div className="flex items-center justify-between mt-1">
+									<span
+										id="display-parking-spot"
+										className="font-black text-slate-800 text-sm tracking-wide"
+									>
+										--
+									</span>
+									<button
+										id="btn-copy-parking-spot"
+										data-copy-target="display-parking-spot"
+										className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg transition-all cursor-pointer"
+										aria-label={t.guideCopySuccess}
+									>
+										<Copy className="w-3 h-3" />
+									</button>
 								</div>
 							</div>
 						</section>

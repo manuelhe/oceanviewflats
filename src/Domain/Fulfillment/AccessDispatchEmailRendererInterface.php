@@ -26,7 +26,8 @@ interface AccessDispatchEmailRendererInterface
         string $doorCode,
         ?string $guideUrl = null,
         ?string $lang = null,
-        ?string $recipientName = null
+        ?string $recipientName = null,
+        ?string $parkingSpot = null
     ): string;
 
     /**
@@ -37,7 +38,8 @@ interface AccessDispatchEmailRendererInterface
         string $doorCode,
         ?string $guideUrl = null,
         ?string $lang = null,
-        ?string $recipientName = null
+        ?string $recipientName = null,
+        ?string $parkingSpot = null
     ): string;
 
     /**
