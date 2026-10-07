@@ -201,6 +201,18 @@ _Avoid_: Key Code Email, Door PIN Message, Welcome Packet
 The automated transactional communication dispatched to the Primary Guest when a Reservation is voided or cancelled, itemizing voided stay dates, financial settlement accounting (Refunded Amount vs. Policy Retention), and customer support channels.
 _Avoid_: Cancellation Receipt, Refund Email, Drop Notice
 
+**Condominium Administration Portal**:
+The external property management and building reception system (Huésped Manager) utilized by security and front-desk personnel at Edificio Salguero Sunset to verify guest occupancy authorizations, register vehicles, and enforce statutory local building compliance.
+_Avoid_: External Tool, Third-party Form, Salguero App, Huesped Manager
+
+**Condominium Clearance Sync**:
+The automated or administratively retried integration process that transmits verified Guest Registry stay parameters, vehicle plates, and registered occupant identities to the Condominium Administration Portal upon Guest Registry submission under ADR 0001.
+_Avoid_: Reception Push, Front Desk Export, Building Registration
+
+**Condominium Clearance Number**:
+The authoritative external numeric tracking sequence (`consecutivo` / `last_id`) issued by the Condominium Administration Portal upon successful reservation and guest registration, recorded on the reservation audit dossier for front-desk cross-referencing and verification.
+_Avoid_: Registration ID, External Consecutivo, Booking Voucher Number
+
 ### Administration & Operations
 
 **Admin User**:
