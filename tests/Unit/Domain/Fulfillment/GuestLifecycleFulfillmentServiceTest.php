@@ -6,6 +6,8 @@ namespace OceanViewFlats\Tests\Unit\Domain\Fulfillment;
 
 use DateTimeImmutable;
 use OceanViewFlats\Domain\Fulfillment\AdminContext;
+use OceanViewFlats\Domain\Fulfillment\CondominiumClearance;
+use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestRegistrySubmission;
@@ -90,6 +92,21 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
                 ip_address TEXT,
                 user_agent TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE condominium_clearances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT UNIQUE NOT NULL,
+                property_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                clearance_number TEXT DEFAULT NULL,
+                error_message TEXT DEFAULT NULL,
+                request_payload TEXT DEFAULT NULL,
+                attempts INTEGER DEFAULT 0,
+                last_attempt_at TEXT DEFAULT NULL,
+                synced_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
         ");
 
@@ -908,5 +925,135 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         ]);
 
         $this->assertInstanceOf(GuestLifecycleFulfillmentService::class, $service);
+    }
+
+    public function testSubmitRegistryInvokesCondominiumClearanceSyncWhenConfigured(): void
+    {
+        $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('sync')
+            ->with(
+                'ovf_clearance_success',
+                '1606',
+                '2026-11-15',
+                '2026-11-20',
+                $this->isType('array'),
+                'XYZ-123',
+                $this->stringContains('Vehicle: Mazda CX-5')
+            )
+            ->willReturn(
+                CondominiumClearance::createPending('ovf_clearance_success', '1606')
+                    ->markSynced('CLEAR-999')
+            );
+
+        $service = new GuestLifecycleFulfillmentService(
+            pdo: $this->pdo,
+            reservationRepository: $this->reservationRepository,
+            hostRegistryRenderer: $this->hostRegistryRenderer,
+            emailSender: $this->emailSender,
+            spreadsheetSync: $this->spreadsheetSync,
+            confirmationEmailRenderer: $this->confirmationEmailRenderer,
+            condominiumClearanceSync: $mockSync
+        );
+
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_clearance_success', '1606', 'Jane Smith', 'jane.smith@example.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 450.0, 'confirmed', 'airbnb',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('ovf_clearance_success');
+        $result = $service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->doorCode);
+        $this->assertNotNull($result->guideUrl);
+    }
+
+    public function testSubmitRegistrySucceedsWhenCondominiumClearanceSyncThrowsException(): void
+    {
+        $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('sync')
+            ->willThrowException(new \RuntimeException('Connection timed out to Huésped Manager'));
+
+        $service = new GuestLifecycleFulfillmentService(
+            pdo: $this->pdo,
+            reservationRepository: $this->reservationRepository,
+            hostRegistryRenderer: $this->hostRegistryRenderer,
+            emailSender: $this->emailSender,
+            spreadsheetSync: $this->spreadsheetSync,
+            confirmationEmailRenderer: $this->confirmationEmailRenderer,
+            condominiumClearanceSync: $mockSync
+        );
+
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_clearance_throws', '1606', 'Jane Smith', 'jane.smith@example.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 450.0, 'confirmed', 'airbnb',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('ovf_clearance_throws');
+        $result = $service->submitRegistry($submission);
+
+        // ADR 0001: Access credentials must not be blocked by downstream external failure
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->doorCode);
+        $this->assertNotNull($result->guideUrl);
+    }
+
+    public function testSubmitRegistrySucceedsWhenCondominiumClearanceReturnsFailedStatus(): void
+    {
+        $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('sync')
+            ->willReturn(
+                CondominiumClearance::createPending('ovf_clearance_fails', '1606')
+                    ->markFailed('Portal authentication error')
+            );
+
+        $service = new GuestLifecycleFulfillmentService(
+            pdo: $this->pdo,
+            reservationRepository: $this->reservationRepository,
+            hostRegistryRenderer: $this->hostRegistryRenderer,
+            emailSender: $this->emailSender,
+            spreadsheetSync: $this->spreadsheetSync,
+            confirmationEmailRenderer: $this->confirmationEmailRenderer,
+            condominiumClearanceSync: $mockSync
+        );
+
+        $stmt = $this->pdo->prepare("
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, source,
+                registry_completed, created_at
+            ) VALUES (
+                'ovf_clearance_fails', '1606', 'Jane Smith', 'jane.smith@example.com', '+12025550199',
+                '2026-11-15', '2026-11-20', 450.0, 'confirmed', 'airbnb',
+                0, datetime('now')
+            )
+        ");
+        $stmt->execute();
+
+        $submission = $this->createSubmission('ovf_clearance_fails');
+        $result = $service->submitRegistry($submission);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->doorCode);
+        $this->assertNotNull($result->guideUrl);
     }
 }

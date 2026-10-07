@@ -30,11 +30,13 @@ use OceanViewFlats\Admin\Service\PublicUrlBuilder;
 use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
+use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceRepositoryInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
+use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\CsvRateSource;
 use OceanViewFlats\Domain\Quote\PdoRateRepository;
@@ -223,6 +225,8 @@ final class AdminApp
             ?? new AdminCalendarBlockRepository($calendarBlockRepo instanceof PdoMaintenanceBlockRepository ? $calendarBlockRepo : $pdo);
         $adminRateRepo = $options['admin_rate_repository']
             ?? new AdminRateRepository($pdo, $ratesConfig, $rateRepo);
+        $clearanceRepo = $options['condominium_clearance_repository']
+            ?? new PdoCondominiumClearanceRepository($pdo);
 
         /** @var DashboardQueryServiceInterface $dashboardQueryService */
         $dashboardQueryService = $options['dashboard_query_service'] ?? new DashboardQueryService(
@@ -230,7 +234,8 @@ final class AdminApp
             calendarBlockRepo: $adminCalendarBlockRepo,
             rateRepo: $adminRateRepo,
             channelSyncService: $channelSyncService,
-            ledger: $ledger
+            ledger: $ledger,
+            clearanceRepo: $clearanceRepo
         );
 
         $dashboardController = new DashboardController(

@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Domain\Fulfillment;
 
+use DateTimeInterface;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
+use OceanViewFlats\Domain\Reservation\Dashboard\OperationalAlert;
 use PDO;
+use Throwable;
 
 /**
  * PDO-backed database repository for CondominiumClearance entities.
@@ -151,5 +156,78 @@ final class PdoCondominiumClearanceRepository implements CondominiumClearanceRep
         }
 
         return $results;
+    }
+
+    /**
+     * @return list<OperationalAlert>
+     */
+    public function getFailedClearanceAlerts(string $propertyId = 'all', string|DateTimeInterface|null $now = null): array
+    {
+        $today = is_string($now) ? substr($now, 0, 10) : ($now instanceof DateTimeInterface ? $now->format('Y-m-d') : date('Y-m-d'));
+
+        $sql = "
+            SELECT c.reservation_uid, c.property_id, c.error_message, c.status, c.attempts, c.last_attempt_at,
+                   r.guest_name, r.check_in, r.check_out, r.status AS reservation_status
+            FROM condominium_clearances c
+            INNER JOIN reservations r ON c.reservation_uid = r.reservation_uid
+            WHERE c.status = 'failed'
+              AND r.status != 'cancelled'
+        ";
+        $params = [];
+
+        if ($propertyId !== 'all') {
+            $sql .= ' AND c.property_id = :property_id';
+            $params[':property_id'] = $propertyId;
+        }
+
+        $sql .= ' ORDER BY r.check_in ASC, c.last_attempt_at DESC';
+
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
+            /** @var list<array<string, mixed>> $rows */
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable) {
+            return [];
+        }
+
+        $alerts = [];
+        foreach ($rows as $row) {
+            $reservationUid = (string) $row['reservation_uid'];
+            $propId = (string) $row['property_id'];
+            $checkIn = (string) $row['check_in'];
+            $guestName = (string) ($row['guest_name'] ?? 'Guest');
+            $rawErrorMessage = !empty($row['error_message']) ? (string) $row['error_message'] : 'Unknown error';
+
+            // Severity: CRITICAL if check_in <= today, otherwise WARNING
+            $severity = ($checkIn <= $today) ? AlertSeverity::CRITICAL : AlertSeverity::WARNING;
+
+            $description = sprintf(
+                'Clearance with Huésped Manager failed for %s (%s). Building reception has not been notified.',
+                $guestName,
+                $rawErrorMessage
+            );
+
+            $alerts[] = new OperationalAlert(
+                id: 'clearance_' . $reservationUid,
+                type: AlertType::FAILED_CONDOMINIUM_CLEARANCE,
+                severity: $severity,
+                propertyId: $propId,
+                title: 'Condominium Clearance Failed',
+                description: $description,
+                dueDate: $checkIn,
+                reservationUid: $reservationUid,
+                guestName: $guestName,
+                channelBlockUid: null,
+                source: null,
+                actionPayload: [
+                    'reservationUid' => $reservationUid,
+                    'propertyId' => $propId,
+                    'errorMessage' => $rawErrorMessage,
+                ]
+            );
+        }
+
+        return $alerts;
     }
 }

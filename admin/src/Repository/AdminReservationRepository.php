@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OceanViewFlats\Admin\Repository;
 
 use DateTimeImmutable;
+use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
 use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
@@ -483,6 +484,20 @@ final class AdminReservationRepository
         usort($alerts, static fn(OperationalAlert $a, OperationalAlert $b): int => strcmp($a->dueDate, $b->dueDate));
 
         return $alerts;
+    }
+
+    /**
+     * Resolves failed condominium clearances into OperationalAlerts.
+     *
+     * @param string $propertyId 'all' | '1606' | '1707'
+     * @return list<OperationalAlert>
+     */
+    public function getFailedClearanceAlerts(
+        string $propertyId = 'all',
+        ?DateTimeImmutable $now = null
+    ): array {
+        $clearanceRepo = new PdoCondominiumClearanceRepository($this->pdo);
+        return $clearanceRepo->getFailedClearanceAlerts($propertyId, $now);
     }
 
     public function getActiveStaysCount(string $propertyId = 'all', ?DateTimeImmutable $now = null): int
