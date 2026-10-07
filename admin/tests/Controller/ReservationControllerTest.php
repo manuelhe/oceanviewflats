@@ -1046,6 +1046,296 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('ADR 0001: Registry complete. Door PIN and Guide are unlocked', $body);
     }
 
+    public function testShowRendersCondominiumClearanceSyncedBadgeAndNumber(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO condominium_clearances (
+                reservation_uid, property_id, status, clearance_number, attempts, synced_at
+            ) VALUES (
+                'res-1', '1606', 'synced', 'CLR-98765', 1, '2026-10-01 12:30:00'
+            )
+        ");
+
+        $response = $this->executeShow('res-1', isHtmx: true, hxTarget: 'drawer-container');
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Condominium Clearance', $body);
+        $this->assertStringContainsString('Synced', $body);
+        $this->assertStringContainsString('#CLR-98765', $body);
+        $this->assertStringNotContainsString('Retry Condominium Clearance', $body);
+    }
+
+    public function testShowRendersCondominiumClearanceFailedBadgeErrorDetailsAndRetryButton(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO condominium_clearances (
+                reservation_uid, property_id, status, error_message, attempts, last_attempt_at
+            ) VALUES (
+                'res-1', '1606', 'failed', 'Missing primary guest document number', 2, '2026-10-01 12:35:00'
+            )
+        ");
+
+        $response = $this->executeShow('res-1', isHtmx: true, hxTarget: 'drawer-container');
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Condominium Clearance', $body);
+        $this->assertStringContainsString('Failed', $body);
+        $this->assertStringContainsString('Missing primary guest document number', $body);
+        $this->assertStringContainsString('Retry Condominium Clearance', $body);
+        $this->assertStringContainsString('/reservations/res-1/clearance-retry', $body);
+    }
+
+    public function testShowRendersCondominiumClearancePendingBadge(): void
+    {
+        $this->pdo->exec("
+            INSERT INTO condominium_clearances (
+                reservation_uid, property_id, status, attempts
+            ) VALUES (
+                'res-1', '1606', 'pending', 0
+            )
+        ");
+
+        $response = $this->executeShow('res-1', isHtmx: true, hxTarget: 'drawer-container');
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Pending Sync', $body);
+    }
+
+    public function testShowRendersAwaitingGuestRegistryWhenNotCompleted(): void
+    {
+        $response = $this->executeShow('res-2', isHtmx: true, hxTarget: 'drawer-container');
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Awaiting Guest Registry', $body);
+        $this->assertStringNotContainsString('Retry Condominium Clearance', $body);
+    }
+
+    public function testShowRendersAwaitingInitialClearanceSyncWhenRegistryCompletedWithoutClearance(): void
+    {
+        // res-1 has registry_completed = 1, but no condominium_clearances record
+        $response = $this->executeShow('res-1', isHtmx: true, hxTarget: 'drawer-container');
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('Awaiting Initial Clearance Sync', $body);
+        $this->assertStringContainsString('Sync Condominium Clearance', $body);
+    }
+
+    public function testRetryClearanceRequiresActiveAdminSession(): void
+    {
+        $request = (new Request('POST', '/reservations/res-1/clearance-retry'))
+            ->withAttribute('uid', 'res-1');
+        $emptySession = [];
+
+        $response = $this->controller->retryClearance($request, $emptySession);
+        $this->assertSame(401, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertFalse($data['success']);
+        $this->assertStringContainsString('Unauthorized', $data['error']);
+    }
+
+    public function testRetryClearanceValidatesCsrfToken(): void
+    {
+        $request = (new Request('POST', '/reservations/res-1/clearance-retry', post: ['csrf_token' => 'wrong-token']))
+            ->withAttribute('uid', 'res-1');
+
+        $response = $this->controller->retryClearance($request, $this->session);
+        $this->assertSame(403, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertFalse($data['success']);
+        $this->assertStringContainsString('Forbidden', $data['error']);
+    }
+
+    public function testRetryClearanceFailsWhenReservationNotFound(): void
+    {
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-nonexistent/clearance-retry',
+            server: ['HTTP_X_CSRF_TOKEN' => 'test-csrf-token-xyz']
+        ))->withAttribute('uid', 'res-nonexistent');
+
+        $response = $this->controller->retryClearance($request, $this->session);
+        $this->assertSame(404, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertFalse($data['success']);
+        $this->assertSame('Reservation not found.', $data['error']);
+    }
+
+    public function testRetryClearanceFailsWhenGuestRegistryNotSubmitted(): void
+    {
+        // res-2 has no guest registry submitted
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-2/clearance-retry',
+            server: ['HTTP_X_CSRF_TOKEN' => 'test-csrf-token-xyz']
+        ))->withAttribute('uid', 'res-2');
+
+        $response = $this->controller->retryClearance($request, $this->session);
+        $this->assertSame(400, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertFalse($data['success']);
+        $this->assertStringContainsString('Guest registry must be submitted', $data['error']);
+    }
+
+    public function testRetryClearanceSucceedsAndRecordsAuditLog(): void
+    {
+        $mockSync = $this->createMock(\OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('sync')
+            ->willReturn(new \OceanViewFlats\Domain\Fulfillment\CondominiumClearance(
+                reservationUid: 'res-1',
+                propertyId: '1606',
+                status: 'synced',
+                clearanceNumber: 'CLR-SUCCESS-777',
+                attempts: 1,
+                syncedAt: '2026-10-01 12:00:00'
+            ));
+
+        $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            search: $this->search,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient,
+            pdo: $this->pdo,
+            clearanceRepo: $clearanceRepo,
+            clearanceSync: $mockSync
+        );
+
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-1/clearance-retry',
+            server: ['HTTP_X_CSRF_TOKEN' => 'test-csrf-token-xyz']
+        ))->withAttribute('uid', 'res-1');
+
+        $response = $controller->retryClearance($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertTrue($data['success']);
+        $this->assertSame('synced', $data['status']);
+        $this->assertSame('CLR-SUCCESS-777', $data['clearance_number']);
+
+        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_retry" AND entity_id = "res-1"');
+        $stmt->execute();
+        $log = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertNotFalse($log);
+        $after = json_decode((string) $log['payload_after'], true);
+        $this->assertSame('synced', $after['status']);
+        $this->assertSame('CLR-SUCCESS-777', $after['clearance_number']);
+    }
+
+    public function testRetryClearanceFailureCapturesErrorAndRecordsAuditLog(): void
+    {
+        $mockSync = $this->createMock(\OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('sync')
+            ->willReturn(new \OceanViewFlats\Domain\Fulfillment\CondominiumClearance(
+                reservationUid: 'res-1',
+                propertyId: '1606',
+                status: 'failed',
+                errorMessage: 'National ID document expired for primary guest',
+                attempts: 1,
+                lastAttemptAt: '2026-10-01 12:00:00'
+            ));
+
+        $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            search: $this->search,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient,
+            pdo: $this->pdo,
+            clearanceRepo: $clearanceRepo,
+            clearanceSync: $mockSync
+        );
+
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-1/clearance-retry',
+            server: ['HTTP_X_CSRF_TOKEN' => 'test-csrf-token-xyz']
+        ))->withAttribute('uid', 'res-1');
+
+        $response = $controller->retryClearance($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertFalse($data['success']);
+        $this->assertSame('failed', $data['status']);
+        $this->assertStringContainsString('National ID document expired', (string) $data['error']);
+
+        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_retry" AND entity_id = "res-1"');
+        $stmt->execute();
+        $log = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertNotFalse($log);
+    }
+
+    public function testRetryClearanceReturnsHtmxDrawerResponse(): void
+    {
+        $mockSync = $this->createMock(\OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('sync')
+            ->willReturn(new \OceanViewFlats\Domain\Fulfillment\CondominiumClearance(
+                reservationUid: 'res-1',
+                propertyId: '1606',
+                status: 'synced',
+                clearanceNumber: 'CLR-HTMX-123',
+                attempts: 1,
+                syncedAt: '2026-10-01 12:00:00'
+            ));
+
+        $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            search: $this->search,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient,
+            pdo: $this->pdo,
+            clearanceRepo: $clearanceRepo,
+            clearanceSync: $mockSync
+        );
+
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-1/clearance-retry',
+            server: [
+                'HTTP_HX_REQUEST' => 'true',
+                'HTTP_HX_CSRF_TOKEN' => 'test-csrf-token-xyz',
+            ]
+        ))->withAttribute('uid', 'res-1');
+
+        $response = $controller->retryClearance($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('reservationUpdated', $response->getHeader('HX-Trigger'));
+        $body = $response->getBody();
+        $this->assertStringContainsString('Condominium Clearance', $body);
+        $this->assertStringContainsString('Synced', $body);
+        $this->assertStringContainsString('#CLR-HTMX-123', $body);
+    }
+
     private function seedDatabase(): void
     {
         $this->pdo->exec("
