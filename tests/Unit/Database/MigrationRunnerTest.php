@@ -24,6 +24,7 @@ final class MigrationRunnerTest extends TestCase
         $this->assertContains('Table `reservations` verified/created.', $logs);
         $this->assertContains('Table `admin_users` verified/created.', $logs);
         $this->assertContains('Table `calendar_blocks` verified/created.', $logs);
+        $this->assertContains('Table `condominium_clearances` verified/created.', $logs);
 
         // Verify tables exist in SQLite master
         $stmt = $pdo->query("SELECT name FROM sqlite_master WHERE type='table'");
@@ -37,6 +38,20 @@ final class MigrationRunnerTest extends TestCase
         $this->assertContains('calendar_blocks', $tables);
         $this->assertContains('property_rates', $tables);
         $this->assertContains('reservation_refunds', $tables);
+        $this->assertContains('condominium_clearances', $tables);
+
+        // Verify columns in condominium_clearances table
+        $ccColsStmt = $pdo->query("PRAGMA table_info(condominium_clearances)");
+        $ccCols = $ccColsStmt !== false ? array_column($ccColsStmt->fetchAll(PDO::FETCH_ASSOC), 'name') : [];
+        $this->assertContains('reservation_uid', $ccCols);
+        $this->assertContains('property_id', $ccCols);
+        $this->assertContains('status', $ccCols);
+        $this->assertContains('clearance_number', $ccCols);
+        $this->assertContains('error_message', $ccCols);
+        $this->assertContains('request_payload', $ccCols);
+        $this->assertContains('attempts', $ccCols);
+        $this->assertContains('last_attempt_at', $ccCols);
+        $this->assertContains('synced_at', $ccCols);
 
         // Verify newly added columns in reservations table
         $colsStmt = $pdo->query("PRAGMA table_info(reservations)");
