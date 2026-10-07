@@ -341,7 +341,14 @@ export const dict = {
 			"Ensure the door is firmly closed and locked behind you.",
 		guideAdminFeeTitle: "Building Administration Fee",
 		guideAdminFeeDesc:
-			"Please note that the Salguero Sunset building administration charges a one-time guest registry/common areas fee of 20,000 COP per stay. This fee is paid in cash directly to the lobby receptionist upon arrival.",
+			"Please note that the Salguero Sunset building administration charges a one-time guest registry/common areas fee of 20,000 COP per person. This fee is paid directly to the lobby receptionist upon arrival.",
+		guideParkingTitle: "Assigned Parking Space",
+		guideParkingDesc:
+			"The building provides a private assigned parking space for your apartment. Gate security will authorize vehicular entry upon check-in. Please ensure you park exclusively in your assigned bay.",
+		guideParkingSpotLabel: "Assigned Spot",
+		guideParkingLockedNotice:
+			"Submit the guest registry to unlock your assigned parking space.",
+		guideParkingPlaceholder: "No assigned spot",
 		guideAssistanceTitle: "Need Assistance?",
 		guideAssistanceDesc:
 			"If you have any issues with the card or lock, contact us immediately. We can generate a new access code remotely to help you.",
@@ -765,7 +772,14 @@ export const dict = {
 			"Asegúrate de que la puerta quede bien cerrada al salir.",
 		guideAdminFeeTitle: "Tarifa de Administración del Edificio",
 		guideAdminFeeDesc:
-			"Ten en cuenta que la administración del Edificio Salguero Sunset cobra una tarifa única de registro y uso de áreas comunes de 20.000 COP por estadía, la cual se paga directamente en efectivo en la recepción de la portería al llegar.",
+			"Ten en cuenta que la administración del Edificio Salguero Sunset cobra una tarifa única de registro y uso de áreas comunes de 20.000 COP por persona, la cual se paga directamente en la recepción de la portería al llegar.",
+		guideParkingTitle: "Parqueadero Asignado",
+		guideParkingDesc:
+			"El edificio cuenta con un parqueadero privado asignado exclusivamente para tu apartamento. La portería autorizará el ingreso vehicular al llegar. Por favor estaciona únicamente en tu espacio asignado.",
+		guideParkingSpotLabel: "Espacio Asignado",
+		guideParkingLockedNotice:
+			"Completa el registro de huéspedes para desbloquear tu parqueadero asignado.",
+		guideParkingPlaceholder: "Sin parqueadero asignado",
 		guideAssistanceTitle: "Asistencia Importante",
 		guideAssistanceDesc:
 			"Si presentas cualquier inconveniente con la tarjeta o no logras ingresar al apartamento, por favor comunícate con nosotros de inmediato. Podemos generar una nueva clave de acceso de forma remota para ayudarte.",
@@ -1195,7 +1209,14 @@ export const dict = {
 			"Assurez-vous que la porte soit fermement fermée lors de votre départ.",
 		guideAdminFeeTitle: "Frais d'administration du bâtiment",
 		guideAdminFeeDesc:
-			"Veuillez noter que l'administration de l'immeuble Salguero Sunset facture des frais uniques d'enregistrement et d'utilisation des espaces communs de 20 000 COP par séjour. Ces frais sont payables en espèces directement à la réception du hall à votre arrivée.",
+			"Veuillez noter que l'administration de l'immeuble Salguero Sunset facture des frais uniques d'enregistrement et d'utilisation des espaces communs de 20 000 COP par personne, payables directement à la réception du hall à votre arrivée.",
+		guideParkingTitle: "Place de parking réservée",
+		guideParkingDesc:
+			"L'immeuble dispose d'une place de parking privée réservée à votre appartement. La sécurité autorisera l'accès des véhicules à votre arrivée. Veuillez stationner uniquement sur la place attribuée.",
+		guideParkingSpotLabel: "Place attribuée",
+		guideParkingLockedNotice:
+			"Complétez le registre des voyageurs pour débloquer votre place de parking.",
+		guideParkingPlaceholder: "Aucune place attribuée",
 		guideAssistanceTitle: "Besoin d'aide ?",
 		guideAssistanceDesc:
 			"Si vous rencontrez des problèmes avec la carte ou la serrure, contactez-nous immédiatement. Nous pouvons générer un nouveau code d'accès à distance pour vous aider.",
@@ -1618,7 +1639,14 @@ export const dict = {
 			"Assicurati che la porta rimanga ben chiusa quando esci.",
 		guideAdminFeeTitle: "Tassa di Amministrazione dell'Edificio",
 		guideAdminFeeDesc:
-			"Si prega di notare che l'amministrazione del Salguero Sunset addebita una quota di registrazione e uso delle aree comuni una tantum di 20.000 COP per soggiorno. Questa quota va pagata in contanti direttamente al receptionist della hall all'arrivo.",
+			"Si prega di notare che l'amministrazione del Salguero Sunset addebita una quota di registrazione e uso delle aree comuni una tantum di 20.000 COP a persona, da pagare direttamente alla reception all'arrivo.",
+		guideParkingTitle: "Posto Auto Riservato",
+		guideParkingDesc:
+			"L'edificio dispone di un posto auto privato assegnato esclusivamente al vostro appartamento. La portineria autorizzerà l'accesso dei veicoli all'arrivo. Si prega di parcheggiare esclusivamente nello spazio assegnato.",
+		guideParkingSpotLabel: "Posto assegnato",
+		guideParkingLockedNotice:
+			"Completa la registrazione degli ospiti per sbloccare il posto auto assegnato.",
+		guideParkingPlaceholder: "Nessun posto assegnato",
 		guideAssistanceTitle: "Hai bisogno di assistenza?",
 		guideAssistanceDesc:
 			"In caso di problemi con la tessera o la serratura, contattaci immediatamente. Possiamo generare un nuovo codice di accesso da remoto per aiutarti.",
@@ -2043,7 +2071,14 @@ export const dict = {
 			"Stellen Sie sicher, dass die Tür beim Verlassen fest verschlossen ist.",
 		guideAdminFeeTitle: "Verwaltungsgebühr des Gebäudes",
 		guideAdminFeeDesc:
-			"Bitte beachten Sie, dass die Verwaltung des Salguero Sunset Gebäudes eine einmalige Registrierungs- und Gemeinschaftsbereichsgebühr von 20.000 COP pro Aufenthalt erhebt. Diese Gebühr ist bei der Ankunft in bar direkt an den Rezeptionisten in der Lobby zu zahlen.",
+			"Bitte beachten Sie, dass die Verwaltung des Salguero Sunset Gebäudes eine einmalige Registrierungs- und Gemeinschaftsbereichsgebühr von 20.000 COP pro Person erhebt, die bei der Ankunft direkt an der Rezeption bezahlt wird.",
+		guideParkingTitle: "Zugewiesener Parkplatz",
+		guideParkingDesc:
+			"Das Gebäude verfügt über einen privaten Parkplatz, der exklusiv Ihrem Apartment zugewiesen ist. Der Sicherheitsdienst autorisiert die Zufahrt bei Ihrer Ankunft. Bitte parken Sie ausschließlich auf Ihrem zugewiesenen Stellplatz.",
+		guideParkingSpotLabel: "Zugewiesener Stellplatz",
+		guideParkingLockedNotice:
+			"Füllen Sie das Gästeregister aus, um Ihren zugewiesenen Parkplatz freizuschalten.",
+		guideParkingPlaceholder: "Kein Parkplatz zugewiesen",
 		guideAssistanceTitle: "Benötigen Sie Hilfe?",
 		guideAssistanceDesc:
 			"Wenn Sie Probleme mit der Karte oder dem Schloss haben, kontaktieren Sie uns bitte sofort. Wir können aus der Ferne einen neuen Zugangscode generieren, um Ihnen zu helfen.",
@@ -2467,7 +2502,14 @@ export const dict = {
 			"お部屋を出る際は、ドアがしっかりと閉まっていることをご確認ください。",
 		guideAdminFeeTitle: "マンション管理費（登録手数料）について",
 		guideAdminFeeDesc:
-			"Salguero Sunsetマンション管理組合の規則により、ご滞在1回につき登録・共用エリア使用料として20,000 COP（コロンビア・ペソ）の支払いが義務付けられています。ご到着の際、ロビー受付のスタッフに直接現金でお支払いください。",
+			"Salguero Sunsetマンション管理組合の規則により、共用施設利用およびゲスト登録料として1人あたり20,000 COP（コロンビア・ペソ）の支払いが義務付けられています。ご到着の際、ロビー受付のスタッフに直接お支払いください。",
+		guideParkingTitle: "専用駐車場",
+		guideParkingDesc:
+			"当建物には、各お部屋専用の駐車場が備わっています。ご到着時、警備員が車両の進入を確認・許可します。必ず指定された駐車スペースをご利用ください。",
+		guideParkingSpotLabel: "指定駐車番号",
+		guideParkingLockedNotice:
+			"宿泊者名簿を登録すると、指定駐車番号が表示されます。",
+		guideParkingPlaceholder: "割り当てなし",
 		guideAssistanceTitle: "お困りの場合",
 		guideAssistanceDesc:
 			"カードキーやお部屋の開錠に関して問題が発生した場合は、すぐに当方へご連絡ください。遠隔操作で新しいアクセスキーを発行し、サポートいたします。",
