@@ -153,6 +153,21 @@ final class AdminDatabaseTestHelper
                 payment_id TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE IF NOT EXISTS condominium_clearances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT UNIQUE NOT NULL,
+                property_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT "pending",
+                clearance_number TEXT DEFAULT NULL,
+                error_message TEXT DEFAULT NULL,
+                request_payload TEXT DEFAULT NULL,
+                attempts INTEGER DEFAULT 0,
+                last_attempt_at TEXT DEFAULT NULL,
+                synced_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         ');
     }
 

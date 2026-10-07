@@ -137,6 +137,19 @@ DB_PASS=local_db_password
 MERCADOPAGO_PUBLIC_KEY=APP_USR-xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 MERCADOPAGO_ACCESS_TOKEN=APP_USR-xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 MERCADOPAGO_SANDBOX=true
+
+# Property Access Fallbacks (Emergency Smart Lock PINs & Wi-Fi)
+PROPERTY_1606_DOOR_CODE=0160600#
+PROPERTY_1606_WIFI_SSID=APTO1606
+PROPERTY_1606_WIFI_PASSWORD=Invitado@1606@HN
+PROPERTY_1707_DOOR_CODE=0170700#
+PROPERTY_1707_WIFI_SSID=APTO1707
+PROPERTY_1707_WIFI_PASSWORD=Invitado@1707@HN
+
+# Condominium Administration Portal (Huésped Manager)
+HUESPED_MANAGER_BASE_URL=https://salguerosunset.huespedmanager.com.co/propietarios/production
+HUESPED_MANAGER_1707_CHECK=ep92449222
+HUESPED_MANAGER_1606_CHECK=ep24281580
 ```
 
 ---

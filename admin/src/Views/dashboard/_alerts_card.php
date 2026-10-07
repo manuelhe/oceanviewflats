@@ -92,6 +92,15 @@ $alertCount = count($alerts);
                                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                                 <span>Copy Invite</span>
                             </button>
+                        <?php elseif ($alert->type === AlertType::FAILED_CONDOMINIUM_CLEARANCE && !empty($alert->reservationUid)): ?>
+                            <a href="/reservations/<?= urlencode($alert->reservationUid) ?>"
+                               hx-get="/reservations/<?= urlencode($alert->reservationUid) ?>"
+                               hx-target="#drawer-container"
+                               hx-swap="innerHTML"
+                               role="button"
+                               class="px-2.5 py-1 bg-white border border-gray-300 text-gray-700 font-semibold rounded-md shadow-2xs hover:bg-gray-50 text-[11px] transition">
+                                Inspect
+                            </a>
                         <?php elseif ($alert->type === AlertType::UNONBOARDED_CHANNEL_BLOCK): ?>
                             <?php
                             $startDate = (string) ($alert->actionPayload['start_date'] ?? $alert->actionPayload['startDate'] ?? '');

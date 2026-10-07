@@ -102,6 +102,21 @@ final class GuestRegistryEndpointTest extends TestCase
                 user_agent TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             );
+
+            CREATE TABLE condominium_clearances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT UNIQUE NOT NULL,
+                property_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                clearance_number TEXT DEFAULT NULL,
+                error_message TEXT DEFAULT NULL,
+                request_payload TEXT DEFAULT NULL,
+                attempts INTEGER DEFAULT 0,
+                last_attempt_at TEXT DEFAULT NULL,
+                synced_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
         ");
     }
 
@@ -748,6 +763,176 @@ PHP;
         $this->assertIsArray($row);
         $this->assertSame(1, (int) $row['registry_completed']);
         $this->assertSame('0345678#', $row['door_code']);
+    }
+
+    public function testRegistryEndpointAcceptsStructuredGuestFields(): void
+    {
+        $captcha = $this->createValidCaptcha();
+        $payload = array_merge([
+            'reservation_code' => 'ovf_conf_100',
+            'property' => '1606',
+            'check_in' => '2026-11-15',
+            'check_out' => '2026-11-20',
+            'guest_count' => 2,
+            'guest_email_1' => 'lucia.mendez@example.com',
+            'guest_first_name_1' => 'Lucia',
+            'guest_last_name_1' => 'Mendez',
+            'guest_phone_1' => '+57 312 456 7890',
+            'guest_country_1' => 'COLOMBIA',
+            'guest_age_1' => 32,
+            'guest_doc_type_1' => 'Cédula de Ciudadanía',
+            'guest_doc_num_1' => 'CC52889900',
+            'guest_first_name_2' => 'Mateo',
+            'guest_last_name_2' => 'Mendez',
+            'guest_phone_2' => '+57 312 111 2233',
+            'guest_country_2' => 'COLOMBIA',
+            'guest_age_2' => 8,
+            'guest_doc_type_2' => 'Tarjeta de Identidad',
+            'guest_doc_num_2' => 'TI11223344',
+            'car_plates' => 'COL-999',
+            'car_model' => 'Renault Duster',
+            'lang' => 'es',
+        ], $captcha);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertArrayHasKey('door_code', $res['json']);
+
+        // Check occupants in SQLite database
+        $stmt = $this->pdo->prepare('SELECT guests_payload FROM guest_registries WHERE reservation_uid = :uid');
+        $stmt->execute([':uid' => 'ovf_conf_100']);
+        $jsonStr = $stmt->fetchColumn();
+        $this->assertIsString($jsonStr);
+        $occupants = json_decode($jsonStr, true);
+        $this->assertIsArray($occupants);
+        $this->assertCount(2, $occupants);
+        $this->assertSame('Lucia Mendez', $occupants[0]['name']);
+        $this->assertSame('+57 312 456 7890', $occupants[0]['phone']);
+        $this->assertSame('COLOMBIA', $occupants[0]['country']);
+    }
+
+    public function testRegistryEndpointRejectsStructuredGuestWhenPrimaryPhoneMissing(): void
+    {
+        $captcha = $this->createValidCaptcha();
+        $payload = array_merge([
+            'reservation_code' => 'ovf_conf_100',
+            'property' => '1606',
+            'check_in' => '2026-11-15',
+            'check_out' => '2026-11-20',
+            'guest_count' => 1,
+            'guest_email_1' => 'lucia.mendez@example.com',
+            'guest_first_name_1' => 'Lucia',
+            'guest_last_name_1' => 'Mendez',
+            // Missing guest_phone_1!
+            'guest_country_1' => 'COLOMBIA',
+            'guest_age_1' => 32,
+            'guest_doc_type_1' => 'Cédula de Ciudadanía',
+            'guest_doc_num_1' => 'CC52889900',
+            'lang' => 'en',
+        ], $captcha);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please provide a valid phone number for the primary guest.', $res['json']['error']);
+    }
+
+    public function testRegistryEndpointRejectsInvalidCompanionPhone(): void
+    {
+        $captcha = $this->createValidCaptcha();
+        $payload = array_merge([
+            'reservation_code' => 'ovf_conf_100',
+            'property' => '1606',
+            'check_in' => '2026-11-15',
+            'check_out' => '2026-11-20',
+            'guest_count' => 2,
+            'guest_email_1' => 'lucia.mendez@example.com',
+            'guest_first_name_1' => 'Lucia',
+            'guest_last_name_1' => 'Mendez',
+            'guest_phone_1' => '+57 312 456 7890',
+            'guest_country_1' => 'COLOMBIA',
+            'guest_age_1' => 32,
+            'guest_doc_type_1' => 'Passport',
+            'guest_doc_num_1' => 'P12345',
+            'guest_first_name_2' => 'Mateo',
+            'guest_last_name_2' => 'Mendez',
+            'guest_phone_2' => '12', // Invalid: too short (< 6 chars)
+            'guest_country_2' => 'COLOMBIA',
+            'guest_age_2' => 8,
+            'guest_doc_type_2' => 'Tarjeta de Identidad',
+            'guest_doc_num_2' => 'TI11223344',
+            'lang' => 'en',
+        ], $captcha);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertSame('Please enter a valid phone number for Guest 2 (6-30 characters).', $res['json']['error']);
+    }
+
+    public function testSuccessfulRegistrySubmissionCreatesCondominiumClearanceRecord(): void
+    {
+        $payload = $this->createValidRegistryData();
+
+        $autoloadPath = var_export(dirname(__DIR__, 3) . '/vendor/autoload.php', true);
+        $prependCode = "
+            require_once {$autoloadPath};
+            class IntegrationTestClearanceTransport implements \\OceanViewFlats\\Domain\\Fulfillment\\HttpTransportInterface {
+                public function post(string \$url, array|string \$data = [], array \$headers = [], array \$options = []): array {
+                    if (strpos(\$url, 'reg_guest_owner_pre.php') !== false) {
+                        return [
+                            'statusCode' => 200,
+                            'body' => json_encode(['status' => true, 'last_id' => 789]),
+                            'headers' => [],
+                            'cookies' => ['PHPSESSID' => 'test_sess_clearance'],
+                            'error' => null,
+                        ];
+                    }
+                    return [
+                        'statusCode' => 200,
+                        'body' => 'Registro exitoso',
+                        'headers' => [],
+                        'cookies' => [],
+                        'error' => null,
+                    ];
+                }
+            }
+            \$GLOBALS['TEST_CLEARANCE_TRANSPORT'] = new IntegrationTestClearanceTransport();
+        ";
+
+        $res = $this->callRegistryEndpoint(
+            $payload,
+            'POST',
+            [],
+            $prependCode
+        );
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertTrue($res['json']['success']);
+
+        // Assert clearance record was persisted in condominium_clearances table
+        $stmt = $this->pdo->prepare('SELECT * FROM condominium_clearances WHERE reservation_uid = :uid');
+        $stmt->execute([':uid' => 'ovf_conf_100']);
+        $clearanceRow = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $this->assertNotEmpty($clearanceRow);
+        $this->assertSame('ovf_conf_100', $clearanceRow['reservation_uid']);
+        $this->assertSame('1606', $clearanceRow['property_id']);
+        $this->assertSame('synced', $clearanceRow['status']);
+        $this->assertSame('789', $clearanceRow['clearance_number']);
+        $this->assertSame(1, (int) $clearanceRow['attempts']);
     }
 
     /**

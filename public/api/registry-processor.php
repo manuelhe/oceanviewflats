@@ -9,9 +9,13 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
+use OceanViewFlats\Domain\Fulfillment\CurlHttpTransport;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestRegistrySubmission;
+use OceanViewFlats\Domain\Fulfillment\HttpTransportInterface;
+use OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync;
+use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 
 // Enforce security headers & CORS policy dynamically
 enforce_security_headers_and_cors(['POST', 'OPTIONS']);
@@ -111,6 +115,52 @@ if ($primaryEmail === '' || !filter_var($primaryEmail, FILTER_VALIDATE_EMAIL) ||
 $data['guest_email_1'] = $primaryEmail;
 $data['primary_guest_email'] = $primaryEmail;
 
+// Extract & validate primary guest phone for modern structured form submissions
+$isStructuredSubmission = isset($data['guest_first_name_1']) || isset($data['guest_last_name_1']);
+$primaryPhone = trim((string) (
+    $data['guest_phone_1']
+    ?? $data['guest_phone']
+    ?? $data['phone']
+    ?? ($data['occupants'][0]['phone'] ?? '')
+));
+
+if ($isStructuredSubmission) {
+    if ($primaryPhone === '' || strlen($primaryPhone) < 6 || strlen($primaryPhone) > 30) {
+        http_response_code(400);
+        $phoneError = $t['err_guest_phone_primary'] ?? 'Please provide a valid phone number for the primary guest.';
+        send_json_response(false, $phoneError, [
+            'errors' => [$phoneError],
+        ]);
+    }
+} elseif ($primaryPhone !== '') {
+    if (strlen($primaryPhone) < 6 || strlen($primaryPhone) > 30) {
+        http_response_code(400);
+        $phoneError = sprintf($t['err_guest_phone'] ?? 'Please enter a valid phone number for Guest %d.', 1);
+        send_json_response(false, $phoneError, [
+            'errors' => [$phoneError],
+        ]);
+    }
+}
+
+if ($primaryPhone !== '') {
+    $data['guest_phone_1'] = $primaryPhone;
+    $data['phone'] = $primaryPhone;
+}
+
+// Validate companion phone numbers if provided
+$guestCountRaw = $data['guest_count'] ?? 1;
+$guestCount = min(6, max(1, (int)$guestCountRaw));
+for ($i = 2; $i <= $guestCount; $i++) {
+    $compPhone = trim((string)($data["guest_phone_{$i}"] ?? ''));
+    if ($compPhone !== '' && (strlen($compPhone) < 6 || strlen($compPhone) > 30)) {
+        http_response_code(400);
+        $phoneError = sprintf($t['err_guest_phone'] ?? 'Please enter a valid phone number for Guest %d.', $i);
+        send_json_response(false, $phoneError, [
+            'errors' => [$phoneError],
+        ]);
+    }
+}
+
 // Database & Service Resolution
 if (isset($GLOBALS['TEST_LIFECYCLE_SERVICE']) && $GLOBALS['TEST_LIFECYCLE_SERVICE'] instanceof GuestLifecycleFulfillmentServiceInterface) {
     $service = $GLOBALS['TEST_LIFECYCLE_SERVICE'];
@@ -121,7 +171,20 @@ if (isset($GLOBALS['TEST_LIFECYCLE_SERVICE']) && $GLOBALS['TEST_LIFECYCLE_SERVIC
         $config = require __DIR__ . '/config.php';
         $pdo = get_db_connection($config['db']);
     }
-    $service = GuestLifecycleFulfillmentService::createDefault($pdo);
+
+    $clearanceRepo = new PdoCondominiumClearanceRepository($pdo);
+    /** @var HttpTransportInterface $clearanceTransport */
+    $clearanceTransport = (isset($GLOBALS['TEST_CLEARANCE_TRANSPORT']) && $GLOBALS['TEST_CLEARANCE_TRANSPORT'] instanceof HttpTransportInterface)
+        ? $GLOBALS['TEST_CLEARANCE_TRANSPORT']
+        : new CurlHttpTransport();
+    $clearanceSync = new HuespedManagerClearanceSync(
+        repository: $clearanceRepo,
+        transport: $clearanceTransport
+    );
+
+    $service = GuestLifecycleFulfillmentService::createDefault($pdo, [
+        'condominium_clearance_sync' => $clearanceSync,
+    ]);
 }
 
 try {

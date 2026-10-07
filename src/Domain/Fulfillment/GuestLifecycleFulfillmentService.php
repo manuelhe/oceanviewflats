@@ -30,7 +30,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         private readonly ConfirmationEmailRendererInterface $confirmationEmailRenderer,
         private readonly string $hostNotificationEmail = 'rentals@oceanviewflats.com',
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
-        ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null
+        ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null,
+        private readonly ?CondominiumClearanceSyncInterface $condominiumClearanceSync = null
     ) {
         $this->accessDispatchRenderer = $accessDispatchRenderer ?? new AccessDispatchEmailRenderer($this->publicSiteUrl);
     }
@@ -70,6 +71,10 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         $confirmationEmailRenderer = $options['confirmation_email_renderer'] ?? new ConfirmationEmailRenderer($resolvedPublicSiteUrl);
         /** @var AccessDispatchEmailRendererInterface $accessDispatchRenderer */
         $accessDispatchRenderer = $options['access_dispatch_renderer'] ?? new AccessDispatchEmailRenderer($resolvedPublicSiteUrl);
+        /** @var ?CondominiumClearanceSyncInterface $condominiumClearanceSync */
+        $condominiumClearanceSync = array_key_exists('condominium_clearance_sync', $options)
+            ? $options['condominium_clearance_sync']
+            : HuespedManagerClearanceSync::createDefault($pdo);
 
         return new self(
             pdo: $pdo,
@@ -80,7 +85,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             confirmationEmailRenderer: $confirmationEmailRenderer,
             hostNotificationEmail: $resolvedHost,
             publicSiteUrl: $resolvedPublicSiteUrl,
-            accessDispatchRenderer: $accessDispatchRenderer
+            accessDispatchRenderer: $accessDispatchRenderer,
+            condominiumClearanceSync: $condominiumClearanceSync
         );
     }
 
@@ -245,6 +251,25 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             $hostReportSent = $this->emailSender->send($this->hostNotificationEmail, $subject, $html);
         } catch (Throwable) {
             $hostReportSent = false;
+        }
+
+        // Condominium clearance synchronization (out-of-band side effect, ADR 0008)
+        if ($this->condominiumClearanceSync !== null) {
+            try {
+                $notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $submission->carModel);
+
+                $this->condominiumClearanceSync->sync(
+                    reservationUid: $reservation->reservationUid,
+                    propertyId: $reservation->propertyId,
+                    checkIn: $reservation->checkIn,
+                    checkOut: $reservation->checkOut,
+                    guests: $submission->occupants,
+                    carPlates: $submission->carPlates,
+                    notes: $notes
+                );
+            } catch (Throwable $e) {
+                error_log('Condominium clearance synchronization failed for reservation ' . $reservation->reservationUid . ': ' . $e->getMessage());
+            }
         }
 
         // 8. Generate unlocked guide URL

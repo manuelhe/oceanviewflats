@@ -15,6 +15,7 @@ import {
 import React, { useEffect, useState } from "react";
 import { Footer } from "../components/Footer";
 import { Navigation } from "../components/Navigation";
+import { CONDOMINIUM_PORTAL_COUNTRIES } from "../constants/countries";
 import { dict } from "../i18n/dict";
 import type { AppProps } from "../types";
 
@@ -184,6 +185,7 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 							data-msg-not-found={t.registryLookupNotFound}
 							data-msg-already-completed={t.registryAlreadyCompleted}
 							data-msg-err-email={t.err_guest_email || t.errEmailInvalid}
+							data-msg-err-phone={t.registryErrPhoneRequired}
 							noValidate
 						>
 							{/* Hidden Stay Parameter Fields */}
@@ -247,13 +249,13 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 										</div>
 
 										<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-											{/* Name */}
+											{/* First Name */}
 											<div className="flex flex-col">
 												<label
-													htmlFor={`guest-name-${num}`}
+													htmlFor={`guest-first-name-${num}`}
 													className="text-xs font-bold text-slate-500 mb-1 flex justify-between"
 												>
-													<span>{t.registryGuestName}</span>
+													<span>{t.registryFirstName}</span>
 													{num === 1 && (
 														<span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">
 															{t.registryRequired}
@@ -262,13 +264,43 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 												</label>
 												<input
 													type="text"
-													id={`guest-name-${num}`}
-													name={`guest_name_${num}`}
+													id={`guest-first-name-${num}`}
+													name={`guest_first_name_${num}`}
 													required={num === 1}
-													placeholder={t.registryPlaceholderName}
+													placeholder={t.registryPlaceholderFirstName}
 													className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
 												/>
 											</div>
+
+											{/* Last Name */}
+											<div className="flex flex-col">
+												<label
+													htmlFor={`guest-last-name-${num}`}
+													className="text-xs font-bold text-slate-500 mb-1 flex justify-between"
+												>
+													<span>{t.registryLastName}</span>
+													{num === 1 && (
+														<span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">
+															{t.registryRequired}
+														</span>
+													)}
+												</label>
+												<input
+													type="text"
+													id={`guest-last-name-${num}`}
+													name={`guest_last_name_${num}`}
+													required={num === 1}
+													placeholder={t.registryPlaceholderLastName}
+													className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
+												/>
+											</div>
+
+											{/* Backwards-compatibility hidden name field */}
+											<input
+												type="hidden"
+												id={`guest-name-${num}`}
+												name={`guest_name_${num}`}
+											/>
 
 											{/* Primary Guest Email (Guest 1 only) */}
 											{num === 1 && (
@@ -295,6 +327,60 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 													/>
 												</div>
 											)}
+
+											{/* Phone Number */}
+											<div className="flex flex-col">
+												<label
+													htmlFor={`guest-phone-${num}`}
+													className="text-xs font-bold text-slate-500 mb-1 flex justify-between"
+												>
+													<span>
+														{num === 1 ? t.registryPhone : t.registryPhoneOpt}
+													</span>
+													{num === 1 && (
+														<span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">
+															{t.registryRequired}
+														</span>
+													)}
+												</label>
+												<input
+													type="tel"
+													id={`guest-phone-${num}`}
+													name={`guest_phone_${num}`}
+													required={num === 1}
+													placeholder={t.registryPlaceholderPhone}
+													className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:ring-2 focus:ring-[#FF5A5F]/15 focus:outline-none transition-all text-sm text-slate-800 placeholder-slate-400 bg-white"
+												/>
+											</div>
+
+											{/* Country of Nationality / Residence */}
+											<div className="flex flex-col">
+												<label
+													htmlFor={`guest-country-${num}`}
+													className="text-xs font-bold text-slate-500 mb-1 flex justify-between"
+												>
+													<span>{t.registryCountry}</span>
+													{num === 1 && (
+														<span className="text-[#FF5A5F] text-[10px] uppercase font-bold tracking-wider">
+															{t.registryRequired}
+														</span>
+													)}
+												</label>
+												<select
+													id={`guest-country-${num}`}
+													name={`guest_country_${num}`}
+													required={num === 1}
+													defaultValue="COLOMBIA"
+													className="px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-[#FF5A5F] focus:outline-none text-sm text-slate-700 bg-white cursor-pointer hover:bg-slate-50/50 transition-colors"
+												>
+													{CONDOMINIUM_PORTAL_COUNTRIES.map((c) => (
+														<option key={c.code} value={c.code}>
+															{(t as Record<string, string>)[c.dictKey] ??
+																c.code}
+														</option>
+													))}
+												</select>
+											</div>
 
 											{/* Age */}
 											<div className="flex flex-col">

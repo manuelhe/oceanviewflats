@@ -51,3 +51,6 @@ Options -Indexes
 # SetEnv MERCADOPAGO_PUBLIC_KEY "APP_USR-..."
 # SetEnv PROPERTY_ID "1"
 # SetEnv APP_ENV "production"
+# SetEnv HUESPED_MANAGER_BASE_URL "https://salguerosunset.huespedmanager.com.co/propietarios/production"
+# SetEnv HUESPED_MANAGER_1707_CHECK "ep92449222"
+# SetEnv HUESPED_MANAGER_1606_CHECK "ep24281580"

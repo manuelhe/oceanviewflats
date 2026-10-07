@@ -29,6 +29,21 @@ final class Response
         ], $headers));
     }
 
+    /**
+     * @param array<string, mixed> $data
+     * @param array<string, string> $headers
+     */
+    public static function json(array $data, int $statusCode = 200, array $headers = []): self
+    {
+        return new self(
+            $statusCode,
+            (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            array_merge([
+                'Content-Type' => 'application/json; charset=UTF-8',
+            ], $headers)
+        );
+    }
+
     public static function redirect(string $url, int $statusCode = 302): self
     {
         return new self($statusCode, '', [

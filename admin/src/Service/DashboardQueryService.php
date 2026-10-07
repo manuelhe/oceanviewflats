@@ -8,6 +8,8 @@ use DateTimeImmutable;
 use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
 use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
+use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceRepositoryInterface;
+use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
 use OceanViewFlats\Domain\Reservation\Dashboard\DashboardHubViewData;
@@ -21,13 +23,18 @@ use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 
 final class DashboardQueryService implements DashboardQueryServiceInterface
 {
+    private readonly CondominiumClearanceRepositoryInterface $clearanceRepo;
+
     public function __construct(
         private readonly AdminReservationRepository $reservationRepo,
         private readonly AdminCalendarBlockRepository $calendarBlockRepo,
         private readonly AdminRateRepository $rateRepo,
         private readonly InboundChannelSyncServiceInterface $channelSyncService,
-        private readonly ?ReservationLedgerInterface $ledger = null
-    ) {}
+        private readonly ?ReservationLedgerInterface $ledger = null,
+        ?CondominiumClearanceRepositoryInterface $clearanceRepo = null
+    ) {
+        $this->clearanceRepo = $clearanceRepo ?? new PdoCondominiumClearanceRepository($this->reservationRepo->getPdo());
+    }
 
     public function getDashboardHubData(
         string $propertyId = 'all',
@@ -73,6 +80,9 @@ final class DashboardQueryService implements DashboardQueryServiceInterface
         // Incomplete guest registries (up to 3 days lookahead + in-house)
         $registryAlerts = $this->reservationRepo->getIncompleteRegistryAlerts($propertyId, 3, $now);
 
+        // Failed condominium clearances
+        $clearanceAlerts = $this->clearanceRepo->getFailedClearanceAlerts($propertyId, $now);
+
         // Un-onboarded channel blocks
         /** @var list<ChannelBlock> $channelBlocks */
         $channelBlocks = [];
@@ -84,7 +94,7 @@ final class DashboardQueryService implements DashboardQueryServiceInterface
         }
         $channelAlerts = $this->reservationRepo->getUnonboardedChannelBlockAlerts($channelBlocks, $propertyId, $now);
 
-        $alerts = array_merge($registryAlerts, $channelAlerts);
+        $alerts = array_merge($registryAlerts, $clearanceAlerts, $channelAlerts);
         // Sort alerts by severity: CRITICAL, then WARNING, then INFO; then dueDate ASC
         usort($alerts, static function (OperationalAlert $a, OperationalAlert $b): int {
             $severityRank = [

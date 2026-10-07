@@ -312,6 +312,28 @@ final class MigrationRunner
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ");
         $logs[] = "Table `reservation_refunds` verified/created.";
+
+        // 9. condominium_clearances table
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `condominium_clearances` (
+              `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+              `reservation_uid` VARCHAR(36) NOT NULL UNIQUE,
+              `property_id` VARCHAR(16) NOT NULL,
+              `status` VARCHAR(16) NOT NULL DEFAULT 'pending',
+              `clearance_number` VARCHAR(32) DEFAULT NULL,
+              `error_message` TEXT DEFAULT NULL,
+              `request_payload` TEXT DEFAULT NULL,
+              `attempts` INT UNSIGNED NOT NULL DEFAULT 1,
+              `last_attempt_at` DATETIME NOT NULL,
+              `synced_at` DATETIME DEFAULT NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              INDEX `idx_cc_reservation_uid` (`reservation_uid`),
+              INDEX `idx_cc_status` (`status`),
+              INDEX `idx_cc_property_id` (`property_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $logs[] = "Table `condominium_clearances` verified/created.";
     }
 
     /**
@@ -478,5 +500,25 @@ final class MigrationRunner
             );
         ');
         $logs[] = "Table `reservation_refunds` verified/created.";
+
+        $pdo->exec('
+            CREATE TABLE IF NOT EXISTS condominium_clearances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reservation_uid TEXT NOT NULL UNIQUE,
+                property_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT "pending",
+                clearance_number TEXT DEFAULT NULL,
+                error_message TEXT DEFAULT NULL,
+                request_payload TEXT DEFAULT NULL,
+                attempts INTEGER NOT NULL DEFAULT 1,
+                last_attempt_at TEXT NOT NULL,
+                synced_at TEXT DEFAULT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+        ');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_cc_status ON condominium_clearances (status);');
+        $pdo->exec('CREATE INDEX IF NOT EXISTS idx_cc_property_id ON condominium_clearances (property_id);');
+        $logs[] = "Table `condominium_clearances` verified/created.";
     }
 }

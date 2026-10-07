@@ -26,6 +26,11 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Please enter a valid name for Guest %d (2-100 characters).',
+            'err_guest_first_name' => 'Please enter a valid first name for Guest %d (2-50 characters).',
+            'err_guest_last_name' => 'Please enter a valid last name for Guest %d (2-50 characters).',
+            'err_guest_phone' => 'Please enter a valid phone number for Guest %d (6-30 characters).',
+            'err_guest_phone_primary' => 'Please provide a valid phone number for the primary guest.',
+            'err_guest_country' => 'Please select a valid country of nationality for Guest %d.',
             'err_guest_email' => 'Please provide a valid email address for the primary guest.',
             'err_guest_age' => 'Please enter a valid age (0-120) for Guest %d.',
             'err_guest_doc' => 'Please enter a valid document number for Guest %d.',
@@ -169,6 +174,11 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Por favor, ingrese un nombre válido para el Huésped %d (2-100 caracteres).',
+            'err_guest_first_name' => 'Por favor ingrese un nombre válido para el Huésped %d (2-50 caracteres).',
+            'err_guest_last_name' => 'Por favor ingrese un apellido válido para el Huésped %d (2-50 caracteres).',
+            'err_guest_phone' => 'Por favor ingrese un número de teléfono válido para el Huésped %d (6-30 caracteres).',
+            'err_guest_phone_primary' => 'Por favor proporcione un número de teléfono válido para el huésped principal.',
+            'err_guest_country' => 'Por favor seleccione un país de nacionalidad válido para el Huésped %d.',
             'err_guest_email' => 'Por favor ingrese un correo electrónico válido para el huésped principal.',
             'err_guest_age' => 'Por favor, ingrese una edad válida (0-120) para el Huésped %d.',
             'err_guest_doc' => 'Por favor, ingrese un número de documento válido para el Huésped %d.',
@@ -312,6 +322,11 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Veuillez entrer un nom valide pour le client %d (2-100 caractères).',
+            'err_guest_first_name' => 'Veuillez saisir un prénom valide pour le client %d (2-50 caractères).',
+            'err_guest_last_name' => 'Veuillez saisir un nom de famille valide pour le client %d (2-50 caractères).',
+            'err_guest_phone' => 'Veuillez saisir un numéro de téléphone valide pour le client %d (6-30 caractères).',
+            'err_guest_phone_primary' => 'Veuillez fournir un numéro de téléphone valide pour le client principal.',
+            'err_guest_country' => 'Veuillez sélectionner un pays de nationalité valide pour le client %d.',
             'err_guest_email' => 'Veuillez fournir une adresse e-mail valide pour le client principal.',
             'err_guest_age' => 'Veuillez entrer un âge valide (0-120) pour le client %d.',
             'err_guest_doc' => 'Veuillez entrer un numéro de document valide pour le client %d.',
@@ -455,6 +470,11 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Inserisci un nome valido per l\'Ospite %d (2-100 caratteri).',
+            'err_guest_first_name' => 'Inserisci un nome valido per l\'Ospite %d (2-50 caratteri).',
+            'err_guest_last_name' => 'Inserisci un cognome valido per l\'Ospite %d (2-50 caratteri).',
+            'err_guest_phone' => 'Inserisci un numero di telefono valido per l\'Ospite %d (6-30 caratteri).',
+            'err_guest_phone_primary' => 'Si prega di fornire un numero di telefono valido per l\'ospite principale.',
+            'err_guest_country' => 'Seleziona un paese di nazionalità valido per l\'Ospite %d.',
             'err_guest_email' => 'Si prega di fornire un indirizzo email valido per l\'ospite principale.',
             'err_guest_age' => 'Inserisci un\'età valida (0-120) per l\'Ospite %d.',
             'err_guest_doc' => 'Inserisci un numero di documento valido per l\'Ospite %d.',
@@ -598,6 +618,11 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'Bitte geben Sie einen gültigen Namen für Gast %d ein (2-100 Zeichen).',
+            'err_guest_first_name' => 'Bitte geben Sie einen gültigen Vornamen für Gast %d ein (2-50 Zeichen).',
+            'err_guest_last_name' => 'Bitte geben Sie einen gültigen Nachnamen für Gast %d ein (2-50 Zeichen).',
+            'err_guest_phone' => 'Bitte geben Sie eine gültige Telefonnummer für Gast %d ein (6-30 Zeichen).',
+            'err_guest_phone_primary' => 'Bitte geben Sie eine gültige Telefonnummer für den Hauptgast an.',
+            'err_guest_country' => 'Bitte wählen Sie ein gültiges Land der Staatsangehörigkeit für Gast %d.',
             'err_guest_email' => 'Bitte geben Sie eine gültige E-Mail-Adresse für den Hauptgast an.',
             'err_guest_age' => 'Bitte geben Sie ein gültiges Alter (0-120) für Gast %d ein.',
             'err_guest_doc' => 'Bitte geben Sie eine gültige Dokumentennummer für Gast %d ein.',
@@ -741,6 +766,11 @@ return [
         // Guest Registry Processor
         'registry' => [
             'err_guest_name' => 'ゲスト %d の有効な名前を入力してください（2〜100文字）。',
+            'err_guest_first_name' => '宿泊者 %d の有効な名（2〜50文字）を入力してください。',
+            'err_guest_last_name' => '宿泊者 %d の有効な姓（2〜50文字）を入力してください。',
+            'err_guest_phone' => '宿泊者 %d の有効な電話番号（6〜30文字）を入力してください。',
+            'err_guest_phone_primary' => '代表宿泊者の有効な電話番号を入力してください。',
+            'err_guest_country' => '宿泊者 %d の有効な国籍を選択してください。',
             'err_guest_email' => '主ゲストの有効なメールアドレスを入力してください。',
             'err_guest_age' => 'ゲスト %d の有効な年齢を入力してください（0〜120）。',
             'err_guest_doc' => 'ゲスト %d の有効な身分証明書番号を入力してください。',

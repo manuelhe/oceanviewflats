@@ -9,11 +9,14 @@ use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
 use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
 use OceanViewFlats\Admin\Service\DashboardQueryService;
+use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceRepositoryInterface;
 use OceanViewFlats\Domain\Quote\PropertyRatesConfig;
 use OceanViewFlats\Domain\Reservation\ChannelBlock;
 use OceanViewFlats\Domain\Reservation\ChannelSyncStatus;
 use OceanViewFlats\Domain\Reservation\Dashboard\AlertSeverity;
+use OceanViewFlats\Domain\Reservation\Dashboard\AlertType;
 use OceanViewFlats\Domain\Reservation\Dashboard\MovementType;
+use OceanViewFlats\Domain\Reservation\Dashboard\OperationalAlert;
 use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 use PDO;
@@ -204,5 +207,59 @@ final class DashboardQueryServiceTest extends TestCase
         $this->assertSame(1, $viewData1606->activeStaysCount);
         $this->assertCount(1, $viewData1606->rateStatus);
         $this->assertArrayHasKey('1606', $viewData1606->rateStatus);
+    }
+
+    public function testFailedClearanceAlertsAreIntegratedAndSortedInDashboardHubData(): void
+    {
+        $now = new DateTimeImmutable('2026-10-10');
+
+        $syncService = $this->createMock(InboundChannelSyncServiceInterface::class);
+        $syncService->method('getAllStatuses')->willReturn([]);
+
+        $ledger = $this->createMock(ReservationLedgerInterface::class);
+        $ledger->method('getChannelBlocks')->willReturn([]);
+
+        $clearanceRepo = $this->createMock(CondominiumClearanceRepositoryInterface::class);
+        $clearanceRepo->expects($this->once())
+            ->method('getFailedClearanceAlerts')
+            ->with('all', $now)
+            ->willReturn([
+                new OperationalAlert(
+                    id: 'clearance_res_fail_critical',
+                    type: AlertType::FAILED_CONDOMINIUM_CLEARANCE,
+                    severity: AlertSeverity::CRITICAL,
+                    propertyId: '1606',
+                    title: 'Condominium Clearance Failed',
+                    description: 'Condominium Administration Portal synchronization failed: Portal connection timed out',
+                    dueDate: '2026-10-10',
+                    reservationUid: 'res_fail_critical',
+                    actionPayload: [
+                        'reservationUid' => 'res_fail_critical',
+                        'propertyId' => '1606',
+                        'errorMessage' => 'Portal connection timed out',
+                    ]
+                ),
+            ]);
+
+        $service = new DashboardQueryService(
+            reservationRepo: $this->reservationRepo,
+            calendarBlockRepo: $this->calendarBlockRepo,
+            rateRepo: $this->rateRepo,
+            channelSyncService: $syncService,
+            ledger: $ledger,
+            clearanceRepo: $clearanceRepo
+        );
+
+        $viewData = $service->getDashboardHubData('all', $now);
+
+        $clearanceAlerts = array_values(array_filter(
+            $viewData->alerts,
+            fn(OperationalAlert $a) => $a->type === AlertType::FAILED_CONDOMINIUM_CLEARANCE
+        ));
+
+        $this->assertCount(1, $clearanceAlerts);
+        $this->assertSame('clearance_res_fail_critical', $clearanceAlerts[0]->id);
+        $this->assertSame(AlertSeverity::CRITICAL, $clearanceAlerts[0]->severity);
+        $this->assertSame('res_fail_critical', $clearanceAlerts[0]->actionPayload['reservationUid']);
     }
 }

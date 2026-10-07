@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgNotFound = form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.';
     const msgAlreadyCompleted = form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.';
     const msgErrEmail = form.getAttribute('data-msg-err-email') || '';
+    const msgErrPhone = form.getAttribute('data-msg-err-phone') || '';
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');
@@ -165,8 +166,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     hiddenCheckOut.value = r.check_out;
                 }
                 const guest1NameInput = document.getElementById('guest-name-1');
-                if (guest1NameInput && !guest1NameInput.value && r.guest_name) {
-                    guest1NameInput.value = r.guest_name;
+                const guest1FnInput = document.getElementById('guest-first-name-1');
+                const guest1LnInput = document.getElementById('guest-last-name-1');
+                if (r.guest_name) {
+                    if (guest1NameInput && !guest1NameInput.value) {
+                        guest1NameInput.value = r.guest_name;
+                    }
+                    if (guest1FnInput && !guest1FnInput.value && guest1LnInput && !guest1LnInput.value) {
+                        const parts = r.guest_name.trim().split(/\s+/);
+                        if (parts.length > 1) {
+                            guest1FnInput.value = parts.slice(0, -1).join(' ');
+                            guest1LnInput.value = parts[parts.length - 1];
+                        } else if (parts.length === 1) {
+                            guest1FnInput.value = parts[0];
+                        }
+                    }
                 }
 
                 if (r.registry_completed) {
@@ -216,10 +230,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (num <= currentGuestCount) {
                 // Show card
                 card.classList.remove('hidden');
-                // Enable inputs & make them required (except guest 1 has age/name required by HTML already)
+                // Enable inputs & make them required (companion phone is optional, hidden legacy name is not required)
                 inputs.forEach(input => {
                     input.removeAttribute('disabled');
-                    input.setAttribute('required', 'required');
+                    const isCompanionPhone = input.id && input.id.startsWith('guest-phone-') && num > 1;
+                    const isHidden = input.type === 'hidden';
+                    if (!isCompanionPhone && !isHidden) {
+                        input.setAttribute('required', 'required');
+                    } else {
+                        input.removeAttribute('required');
+                    }
                 });
             } else {
                 // Hide card
@@ -228,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 inputs.forEach(input => {
                     input.setAttribute('disabled', 'disabled');
                     input.removeAttribute('required');
-                    if (input.tagName === 'INPUT') input.value = '';
+                    if (input.tagName === 'INPUT' && input.type !== 'hidden') input.value = '';
                 });
             }
         }
@@ -264,10 +284,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const numToRemove = parseInt(removeBtn.getAttribute('data-remove-guest'), 10);
         if (numToRemove && numToRemove > 1) {
-            // Shift values up if removing a guest in the middle
             for (let i = numToRemove; i < currentGuestCount; i++) {
+                const currentFirstName = document.getElementById(`guest-first-name-${i}`);
+                const nextFirstName = document.getElementById(`guest-first-name-${i+1}`);
+                const currentLastName = document.getElementById(`guest-last-name-${i}`);
+                const nextLastName = document.getElementById(`guest-last-name-${i+1}`);
                 const currentName = document.getElementById(`guest-name-${i}`);
                 const nextName = document.getElementById(`guest-name-${i+1}`);
+                const currentPhone = document.getElementById(`guest-phone-${i}`);
+                const nextPhone = document.getElementById(`guest-phone-${i+1}`);
+                const currentCountry = document.getElementById(`guest-country-${i}`);
+                const nextCountry = document.getElementById(`guest-country-${i+1}`);
                 const currentAge = document.getElementById(`guest-age-${i}`);
                 const nextAge = document.getElementById(`guest-age-${i+1}`);
                 const currentDocType = document.getElementById(`guest-doc-type-${i}`);
@@ -275,7 +302,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const currentDocNum = document.getElementById(`guest-doc-num-${i}`);
                 const nextDocNum = document.getElementById(`guest-doc-num-${i+1}`);
 
+                if (currentFirstName && nextFirstName) currentFirstName.value = nextFirstName.value;
+                if (currentLastName && nextLastName) currentLastName.value = nextLastName.value;
                 if (currentName && nextName) currentName.value = nextName.value;
+                if (currentPhone && nextPhone) currentPhone.value = nextPhone.value;
+                if (currentCountry && nextCountry) currentCountry.value = nextCountry.value;
                 if (currentAge && nextAge) currentAge.value = nextAge.value;
                 if (currentDocType && nextDocType) currentDocType.value = nextDocType.value;
                 if (currentDocNum && nextDocNum) currentDocNum.value = nextDocNum.value;
@@ -368,6 +399,44 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             showMsg(msgErrEmail, false);
             return;
+        }
+
+        // Validate Primary Guest Phone (guest_phone_1)
+        const phoneInput = document.getElementById('guest-phone-1');
+        if (!phoneInput || !phoneInput.value.trim() || phoneInput.value.trim().length < 6) {
+            if (phoneInput) {
+                phoneInput.classList.add('border-red-400');
+                phoneInput.addEventListener('input', function removeRed() {
+                    phoneInput.classList.remove('border-red-400');
+                    phoneInput.removeEventListener('input', removeRed);
+                });
+            }
+            showMsg(msgErrPhone || defaultErrorMsg, false);
+            return;
+        }
+
+        // Validate Companion Phones if provided (optional, but if filled must be >= 6 chars)
+        for (let num = 2; num <= currentGuestCount; num++) {
+            const cPhone = document.getElementById(`guest-phone-${num}`);
+            if (cPhone && cPhone.value.trim() && cPhone.value.trim().length < 6) {
+                cPhone.classList.add('border-red-400');
+                cPhone.addEventListener('input', function removeRed() {
+                    cPhone.classList.remove('border-red-400');
+                    cPhone.removeEventListener('input', removeRed);
+                });
+                showMsg(msgErrPhone || defaultErrorMsg, false);
+                return;
+            }
+        }
+
+        // Backwards compatibility: populate hidden guest_name_${num}
+        for (let num = 1; num <= currentGuestCount; num++) {
+            const fn = document.getElementById(`guest-first-name-${num}`);
+            const ln = document.getElementById(`guest-last-name-${num}`);
+            const legacyName = document.getElementById(`guest-name-${num}`);
+            if (fn && ln && legacyName) {
+                legacyName.value = `${fn.value.trim()} ${ln.value.trim()}`.trim();
+            }
         }
 
         // Prepare Form Data
