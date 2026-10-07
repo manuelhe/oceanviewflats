@@ -8,9 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const displayDoorCode = document.getElementById('display-door-code');
     const displayWifiSSID = document.getElementById('display-wifi-ssid');
     const displayWifiPassword = document.getElementById('display-wifi-password');
+    const displayParkingSpot = document.getElementById('display-parking-spot');
     const btnCopyDoorCode = document.getElementById('btn-copy-door-code');
     const btnCopyWifiSSID = document.getElementById('btn-copy-wifi-ssid');
     const btnCopyWifiPass = document.getElementById('btn-copy-wifi-pass');
+    const btnCopyParkingSpot = document.getElementById('btn-copy-parking-spot');
     const registryBanner = document.getElementById('guide-registry-banner');
     const registryLink = document.getElementById('registry-link');
     const credentialLockedNotice = document.getElementById('credential-locked-notice');
@@ -18,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const credentialLockedDesc = document.getElementById('credential-locked-desc');
     const credentialLockedBtn = document.getElementById('credential-locked-btn');
     const wifiLockedNotice = document.getElementById('wifi-locked-notice');
+    const parkingLockedNotice = document.getElementById('parking-locked-notice');
+    const parkingCard = document.getElementById('parking-card');
     const copyAlert = document.getElementById('copy-alert');
     const copyAlertText = document.getElementById('copy-alert-text');
     const doorCodeCard = document.getElementById('door-code-card');
@@ -30,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgVerifying = doorCodeCard?.getAttribute('data-msg-verifying') || 'Verifying access permissions...';
     const msgNotFound = doorCodeCard?.getAttribute('data-msg-not-found') || 'Please provide a valid reservation code or link from your confirmation email.';
     const msgCopied = doorCodeCard?.getAttribute('data-msg-copied') || 'Copied!';
+    const msgParkingPlaceholder = parkingCard?.getAttribute('data-msg-placeholder') || '--';
 
     const introTemplates = {
         en: "Welcome to your beachside home, {guestName}! We are absolutely thrilled to host you and hope you have a wonderful, relaxing, and unforgettable stay.",
@@ -117,9 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (displayWifiPassword) {
             displayWifiPassword.textContent = '••••••';
         }
+        if (displayParkingSpot) {
+            displayParkingSpot.textContent = '••••••';
+        }
 
         // Disable copy actions
-        [btnCopyDoorCode, btnCopyWifiSSID, btnCopyWifiPass].forEach(btn => {
+        [btnCopyDoorCode, btnCopyWifiSSID, btnCopyWifiPass, btnCopyParkingSpot].forEach(btn => {
             if (btn) {
                 btn.disabled = true;
                 btn.setAttribute('aria-disabled', 'true');
@@ -133,6 +141,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (wifiLockedNotice) {
             wifiLockedNotice.classList.remove('hidden');
+        }
+        if (parkingLockedNotice) {
+            parkingLockedNotice.classList.remove('hidden');
         }
         if (credentialLockedDesc && reasonMsg) {
             credentialLockedDesc.textContent = reasonMsg;
@@ -161,6 +172,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (displayWifiPassword && credentials && credentials.wifi_password) {
             displayWifiPassword.textContent = credentials.wifi_password;
         }
+        if (displayParkingSpot) {
+            if (credentials && credentials.parking_spot) {
+                const spot = credentials.parking_spot;
+                displayParkingSpot.textContent = spot.startsWith('#') ? spot : `#${spot}`;
+                if (btnCopyParkingSpot) {
+                    btnCopyParkingSpot.disabled = false;
+                    btnCopyParkingSpot.removeAttribute('aria-disabled');
+                    btnCopyParkingSpot.classList.remove('opacity-40', 'cursor-not-allowed');
+                }
+            } else {
+                displayParkingSpot.textContent = msgParkingPlaceholder;
+                if (btnCopyParkingSpot) {
+                    btnCopyParkingSpot.disabled = true;
+                    btnCopyParkingSpot.setAttribute('aria-disabled', 'true');
+                    btnCopyParkingSpot.classList.add('opacity-40', 'cursor-not-allowed');
+                }
+            }
+        }
 
         // Enable copy actions
         [btnCopyDoorCode, btnCopyWifiSSID, btnCopyWifiPass].forEach(btn => {
@@ -177,6 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (wifiLockedNotice) {
             wifiLockedNotice.classList.add('hidden');
+        }
+        if (parkingLockedNotice) {
+            parkingLockedNotice.classList.add('hidden');
         }
 
         // Hide registry callout banner since guest registry is already completed
@@ -260,7 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyButtons = [
         btnCopyDoorCode,
         btnCopyWifiSSID,
-        btnCopyWifiPass
+        btnCopyWifiPass,
+        btnCopyParkingSpot
     ];
 
     copyButtons.forEach(btn => {
@@ -276,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!targetEl) return;
 
             const textToCopy = targetEl.textContent.trim();
-            if (textToCopy === '--' || textToCopy === '••••••') {
+            if (textToCopy === '--' || textToCopy === '••••••' || textToCopy === msgParkingPlaceholder) {
                 return;
             }
 
