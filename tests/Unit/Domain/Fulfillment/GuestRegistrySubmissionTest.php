@@ -337,4 +337,123 @@ final class GuestRegistrySubmissionTest extends TestCase
         $this->assertSame('primary@example.com', $subDirect->occupants[0]->email);
         $this->assertNull($subDirect->occupants[1]->email);
     }
+
+    public function testReconstructionPreservesStructuredOccupantFields(): void
+    {
+        $occ1 = new OccupantDetails(
+            index: 1,
+            firstName: 'Ana',
+            lastName: 'Gomez',
+            middleName: 'Maria',
+            secondLastName: 'Lopez',
+            age: 29,
+            docType: 'Passport',
+            docNum: 'PA987654',
+            phone: '+57 311 000 1122',
+            country: 'COLOMBIA'
+        );
+        $occ2 = new OccupantDetails(
+            index: 2,
+            firstName: 'Pedro',
+            lastName: 'Gomez',
+            age: 31,
+            docType: 'Passport',
+            docNum: 'PA987655',
+            email: 'pedro@example.com',
+            phone: '+57 311 000 3344',
+            country: 'COLOMBIA'
+        );
+
+        $submission = new GuestRegistrySubmission(
+            reservationCode: 'res_struct_test',
+            propertyId: '1606',
+            checkIn: '2026-10-01',
+            checkOut: '2026-10-05',
+            occupants: [$occ1, $occ2],
+            primaryGuestEmail: 'ana.gomez@example.com'
+        );
+
+        $p1 = $submission->occupants[0];
+        $this->assertSame('ana.gomez@example.com', $p1->email);
+        $this->assertSame('Ana', $p1->firstName);
+        $this->assertSame('Gomez', $p1->lastName);
+        $this->assertSame('Maria', $p1->middleName);
+        $this->assertSame('Lopez', $p1->secondLastName);
+        $this->assertSame('+57 311 000 1122', $p1->phone);
+        $this->assertSame('COLOMBIA', $p1->country);
+
+        $p2 = $submission->occupants[1];
+        $this->assertNull($p2->email);
+        $this->assertSame('Pedro', $p2->firstName);
+        $this->assertSame('Gomez', $p2->lastName);
+        $this->assertSame('+57 311 000 3344', $p2->phone);
+        $this->assertSame('COLOMBIA', $p2->country);
+    }
+
+    public function testFromArrayExtractsStructuredOccupantFields(): void
+    {
+        $submission = GuestRegistrySubmission::fromArray([
+            'reservation_code' => 'res_struct_form',
+            'property_id' => '1606',
+            'check_in' => '2026-10-01',
+            'check_out' => '2026-10-05',
+            'guest_email_1' => 'ana@example.com',
+            'guest_first_name_1' => 'Ana',
+            'guest_last_name_1' => 'Silva',
+            'guest_phone_1' => '+57 300 123 4567',
+            'guest_country_1' => 'COLOMBIA',
+            'guest_age_1' => 30,
+            'guest_doc_type_1' => 'Passport',
+            'guest_doc_num_1' => 'PA123456',
+            'guest_first_name_2' => 'Mateo',
+            'guest_last_name_2' => 'Silva',
+            'guest_phone_2' => '+57 300 765 4321',
+            'guest_country_2' => 'COLOMBIA',
+            'guest_age_2' => 8,
+            'guest_doc_type_2' => 'Tarjeta de Identidad',
+            'guest_doc_num_2' => 'TI998877',
+            'guest_count' => 2,
+        ]);
+
+        $this->assertSame(2, $submission->getGuestCount());
+
+        $g1 = $submission->occupants[0];
+        $this->assertSame('Ana Silva', $g1->name);
+        $this->assertSame('Ana', $g1->firstName);
+        $this->assertSame('Silva', $g1->lastName);
+        $this->assertSame('+57 300 123 4567', $g1->phone);
+        $this->assertSame('COLOMBIA', $g1->country);
+        $this->assertSame('PA', $g1->getPortalDocType());
+
+        $g2 = $submission->occupants[1];
+        $this->assertSame('Mateo Silva', $g2->name);
+        $this->assertSame('Mateo', $g2->firstName);
+        $this->assertSame('Silva', $g2->lastName);
+        $this->assertSame('+57 300 765 4321', $g2->phone);
+        $this->assertSame('COLOMBIA', $g2->country);
+        $this->assertSame('TI', $g2->getPortalDocType());
+    }
+
+    public function testFromArrayFallsBackToRootPhoneAndCountry(): void
+    {
+        $submission = GuestRegistrySubmission::fromArray([
+            'reservation_code' => 'res_fallback',
+            'property_id' => '1606',
+            'check_in' => '2026-10-01',
+            'check_out' => '2026-10-05',
+            'primary_guest_email' => 'root@example.com',
+            'phone' => '+1 415 555 2671',
+            'country' => 'ESTADOS UNIDOS',
+            'guest_first_name_1' => 'John',
+            'guest_last_name_1' => 'Smith',
+            'guest_age_1' => 40,
+            'guest_doc_type_1' => 'Passport',
+            'guest_doc_num_1' => 'US123456',
+            'guest_count' => 1,
+        ]);
+
+        $g1 = $submission->occupants[0];
+        $this->assertSame('+1 415 555 2671', $g1->phone);
+        $this->assertSame('ESTADOS UNIDOS', $g1->country);
+    }
 }

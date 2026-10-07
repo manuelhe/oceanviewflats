@@ -55,7 +55,13 @@ final class GuestRegistrySubmission
                             age: $occupant->age,
                             docType: $occupant->docType,
                             docNum: $occupant->docNum,
-                            email: $this->primaryGuestEmail
+                            email: $this->primaryGuestEmail,
+                            firstName: $occupant->firstName,
+                            lastName: $occupant->lastName,
+                            phone: $occupant->phone,
+                            country: $occupant->country,
+                            middleName: $occupant->middleName,
+                            secondLastName: $occupant->secondLastName
                         );
                     } catch (InvalidArgumentException) {
                         $ref = new \ReflectionClass($occupant);
@@ -73,7 +79,13 @@ final class GuestRegistrySubmission
                         age: $occupant->age,
                         docType: $occupant->docType,
                         docNum: $occupant->docNum,
-                        email: null
+                        email: null,
+                        firstName: $occupant->firstName,
+                        lastName: $occupant->lastName,
+                        phone: $occupant->phone,
+                        country: $occupant->country,
+                        middleName: $occupant->middleName,
+                        secondLastName: $occupant->secondLastName
                     );
                 }
             }
@@ -168,10 +180,39 @@ final class GuestRegistrySubmission
             $guestCountRaw = $data['guest_count'] ?? 1;
             $guestCount = min(6, max(1, (int)$guestCountRaw));
             for ($i = 1; $i <= $guestCount; $i++) {
-                if (isset($data["guest_name_{$i}"])) {
+                $hasName = isset($data["guest_first_name_{$i}"])
+                    || isset($data["guest_name_{$i}"])
+                    || isset($data["guest_last_name_{$i}"]);
+
+                if ($hasName) {
+                    $firstName = isset($data["guest_first_name_{$i}"])
+                        ? (string)$data["guest_first_name_{$i}"]
+                        : null;
+                    $lastName = isset($data["guest_last_name_{$i}"])
+                        ? (string)$data["guest_last_name_{$i}"]
+                        : null;
+                    $middleName = isset($data["guest_middle_name_{$i}"])
+                        ? (string)$data["guest_middle_name_{$i}"]
+                        : null;
+                    $secondLastName = isset($data["guest_second_last_name_{$i}"])
+                        ? (string)$data["guest_second_last_name_{$i}"]
+                        : null;
+                    $phone = isset($data["guest_phone_{$i}"])
+                        ? (string)$data["guest_phone_{$i}"]
+                        : ($i === 1 && isset($data['phone']) ? (string)$data['phone'] : null);
+                    $country = isset($data["guest_country_{$i}"])
+                        ? (string)$data["guest_country_{$i}"]
+                        : ($i === 1 && isset($data['country']) ? (string)$data['country'] : null);
+
                     $occupants[] = OccupantDetails::fromArray([
                         'index' => $i,
                         'name' => (string)($data["guest_name_{$i}"] ?? ''),
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                        'middle_name' => $middleName,
+                        'second_last_name' => $secondLastName,
+                        'phone' => $phone,
+                        'country' => $country,
                         'age' => (int)($data["guest_age_{$i}"] ?? 0),
                         'doc_type' => (string)($data["guest_doc_type_{$i}"] ?? 'Other ID'),
                         'doc_num' => (string)($data["guest_doc_num_{$i}"] ?? ''),
