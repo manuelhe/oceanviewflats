@@ -31,11 +31,14 @@ use OceanViewFlats\Admin\Views\ViewRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceRepositoryInterface;
+use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\ConfirmationEmailRendererInterface;
+use OceanViewFlats\Domain\Fulfillment\CurlHttpTransport;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentService;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
+use OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync;
 use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\CsvRateSource;
@@ -169,6 +172,17 @@ final class AdminApp
         /** @var PublicUrlBuilder $urlBuilder */
         $urlBuilder = $options['public_url_builder'] ?? new PublicUrlBuilder($publicSiteUrl);
 
+        /** @var CondominiumClearanceRepositoryInterface $clearanceRepo */
+        $clearanceRepo = $options['condominium_clearance_repository']
+            ?? new PdoCondominiumClearanceRepository($pdo);
+
+        /** @var CondominiumClearanceSyncInterface $clearanceSync */
+        $clearanceSync = $options['condominium_clearance_sync']
+            ?? new HuespedManagerClearanceSync(
+                repository: $clearanceRepo,
+                transport: $options['condominium_clearance_transport'] ?? new CurlHttpTransport()
+            );
+
         $reservationController = new ReservationController(
             repository: $reservationRepository,
             search: $reservationSearch,
@@ -182,7 +196,9 @@ final class AdminApp
             refundClient: $refundClient,
             cancellationEmailRenderer: $cancellationEmailRenderer,
             pdo: $pdo,
-            urlBuilder: $urlBuilder
+            urlBuilder: $urlBuilder,
+            clearanceRepo: $clearanceRepo,
+            clearanceSync: $clearanceSync
         );
 
         // 6. Rates Repository & Controller
@@ -225,8 +241,6 @@ final class AdminApp
             ?? new AdminCalendarBlockRepository($calendarBlockRepo instanceof PdoMaintenanceBlockRepository ? $calendarBlockRepo : $pdo);
         $adminRateRepo = $options['admin_rate_repository']
             ?? new AdminRateRepository($pdo, $ratesConfig, $rateRepo);
-        $clearanceRepo = $options['condominium_clearance_repository']
-            ?? new PdoCondominiumClearanceRepository($pdo);
 
         /** @var DashboardQueryServiceInterface $dashboardQueryService */
         $dashboardQueryService = $options['dashboard_query_service'] ?? new DashboardQueryService(
@@ -271,6 +285,7 @@ final class AdminApp
             ->get('/reservations/{uid}', [$reservationController, 'show'])
             ->get('/reservations/{uid}/registry', [$reservationController, 'showRegistry'])
             ->post('/reservations/{uid}/registry/complete', [$reservationController, 'completeRegistry'])
+            ->post('/reservations/{uid}/clearance-retry', [$reservationController, 'retryClearance'])
             ->post('/reservations/{uid}/door-code/override', [$reservationController, 'overrideDoorCode'])
             ->post('/reservations/{uid}/door-code/regenerate', [$reservationController, 'regenerateDoorCode'])
             ->get('/reservations/{uid}/cancel-modal', [$reservationController, 'cancelModal'])

@@ -3,11 +3,13 @@
  * @var array<string, mixed> $reservation
  * @var list<array<string, mixed>> $auditLogs
  * @var list<array<string, mixed>>|null $refunds
+ * @var \OceanViewFlats\Domain\Fulfillment\CondominiumClearance|null $condominiumClearance
  * @var string $csrfToken
  * @var string $publicSiteUrl
  * @var \OceanViewFlats\Admin\Service\PublicUrlBuilder $urlBuilder
  */
 
+$condominiumClearance = $condominiumClearance ?? null;
 $urlBuilder = (isset($urlBuilder) && $urlBuilder instanceof \OceanViewFlats\Admin\Service\PublicUrlBuilder)
     ? $urlBuilder
     : new \OceanViewFlats\Admin\Service\PublicUrlBuilder($publicSiteUrl);
@@ -365,6 +367,121 @@ window.copyDispatchSnippet = window.copyDispatchSnippet || function(uid) {
                                 <?php endif; ?>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Condominium Clearance Card -->
+                    <div class="p-4 rounded-xl border border-gray-200 bg-white shadow-2xs space-y-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <span class="block text-xs text-gray-500 font-medium mb-0.5">Condominium Clearance</span>
+                                <span class="text-[11px] text-gray-400">Huésped Manager HOA registration & building entry clearance</span>
+                            </div>
+                            <div>
+                                <?php if ($condominiumClearance !== null && $condominiumClearance->isSynced()): ?>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <svg class="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        Synced
+                                    </span>
+                                <?php elseif ($condominiumClearance !== null && $condominiumClearance->isFailed()): ?>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                        <svg class="w-3.5 h-3.5 text-rose-600" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        Failed
+                                    </span>
+                                <?php elseif ($condominiumClearance !== null && $condominiumClearance->isPending()): ?>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                        <svg class="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        Pending Sync
+                                    </span>
+                                <?php elseif ($registryCompleted): ?>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                        Awaiting Initial Clearance Sync
+                                    </span>
+                                <?php else: ?>
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200">
+                                        Awaiting Guest Registry
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <?php if ($condominiumClearance !== null && $condominiumClearance->isSynced()): ?>
+                            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-gray-600">
+                                <div>
+                                    <span class="text-gray-400 mr-1">Clearance #:</span>
+                                    <span class="font-mono font-bold text-gray-900 text-sm">#<?= htmlspecialchars((string) $condominiumClearance->clearanceNumber, ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                                <?php if ($condominiumClearance->syncedAt): ?>
+                                    <div>
+                                        <span class="text-gray-400 mr-1">Synced:</span>
+                                        <span class="font-medium text-gray-700"><?= htmlspecialchars(date('M j, Y H:i', strtotime($condominiumClearance->syncedAt)), ENT_QUOTES, 'UTF-8') ?></span>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if ($condominiumClearance->attempts > 1): ?>
+                                    <div>
+                                        <span class="text-gray-400 mr-1">Attempts:</span>
+                                        <span class="text-gray-500"><?= (int) $condominiumClearance->attempts ?></span>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php elseif ($condominiumClearance !== null && $condominiumClearance->isFailed()): ?>
+                            <div class="space-y-2">
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                                    <div>
+                                        <span class="text-gray-400 mr-1">Attempts:</span>
+                                        <span class="font-semibold text-rose-600"><?= (int) $condominiumClearance->attempts ?></span>
+                                    </div>
+                                    <?php if ($condominiumClearance->lastAttemptAt): ?>
+                                        <div>
+                                            <span class="text-gray-400 mr-1">Last Attempt:</span>
+                                            <span class="text-gray-700"><?= htmlspecialchars(date('M j, Y H:i', strtotime($condominiumClearance->lastAttemptAt)), ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="p-3 bg-rose-50/80 border border-rose-100 rounded-lg text-xs text-rose-700 font-mono break-all">
+                                    <span class="block font-semibold uppercase tracking-wider text-[10px] text-rose-800 mb-0.5">Error details:</span>
+                                    <?= htmlspecialchars((string) ($condominiumClearance->errorMessage ?? 'Unknown clearance synchronization error'), ENT_QUOTES, 'UTF-8') ?>
+                                </div>
+                            </div>
+                        <?php elseif ($condominiumClearance !== null && $condominiumClearance->isPending()): ?>
+                            <div class="text-xs text-gray-500">
+                                Clearance is queued or awaiting response from Huésped Manager.
+                                <?php if ($condominiumClearance->attempts > 0): ?>
+                                    Attempts: <?= (int) $condominiumClearance->attempts ?>.
+                                <?php endif; ?>
+                            </div>
+                        <?php elseif ($registryCompleted): ?>
+                            <div class="text-xs text-gray-500">
+                                Guest registry is verified. Clearance can now be synchronized with Huésped Manager.
+                            </div>
+                        <?php else: ?>
+                            <div class="text-xs text-gray-400 italic">
+                                Clearance synchronization is blocked until the guest completes their check-in registry.
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($registryCompleted && ($condominiumClearance === null || $condominiumClearance->isFailed() || $condominiumClearance->isPending())): ?>
+                            <div class="pt-2 border-t border-gray-100 flex items-center justify-between">
+                                <button type="button"
+                                        hx-post="/reservations/<?= urlencode($uid) ?>/clearance-retry"
+                                        hx-target="#drawer-container"
+                                        hx-swap="innerHTML"
+                                        hx-disabled-elt="this"
+                                        hx-headers='{"X-CSRF-Token": "<?= htmlspecialchars($csrfToken, ENT_QUOTES, 'UTF-8') ?>"}'
+                                        class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition cursor-pointer disabled:opacity-50">
+                                    <svg class="w-3.5 h-3.5 mr-1.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <span><?= ($condominiumClearance !== null && $condominiumClearance->isFailed()) ? 'Retry Condominium Clearance' : 'Sync Condominium Clearance' ?></span>
+                                </button>
+                                <span class="text-[11px] text-gray-400">1-click sync retry via Huésped Manager</span>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
