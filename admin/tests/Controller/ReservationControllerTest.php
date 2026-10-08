@@ -419,6 +419,103 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('min="2026-11-11"', $body);
     }
 
+    public function testCreateModalRendersSubmitButtonInitiallyDisabledWithHelper(): void
+    {
+        // 1. Default / Direct manual reservation modal
+        $request = new Request('GET', '/reservations/new', server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Submit button initially disabled with aria-disabled and Tailwind disabled styling
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*\bdisabled\b/', $body);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*aria-disabled="true"/', $body);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*opacity-50 cursor-not-allowed/', $body);
+
+        // Submit helper element initially instructs date selection
+        $this->assertStringContainsString('id="create-submit-helper"', $body);
+        $this->assertStringContainsString('Select available dates to enable creation', $body);
+
+        // 2. Airbnb onboarding modal variant
+        $airbnbRequest = new Request('GET', '/reservations/new', query: ['source' => 'airbnb'], server: ['HTTP_HX_REQUEST' => 'true']);
+        $airbnbResponse = $this->controller->newReservation($airbnbRequest, $this->session);
+
+        $this->assertSame(200, $airbnbResponse->getStatusCode());
+        $airbnbBody = $airbnbResponse->getBody();
+
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*\bdisabled\b/', $airbnbBody);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*aria-disabled="true"/', $airbnbBody);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*opacity-50 cursor-not-allowed/', $airbnbBody);
+        $this->assertStringContainsString('data-default-text="Onboard &amp; Generate Dispatch"', $airbnbBody);
+        $this->assertStringContainsString('id="create-submit-helper"', $airbnbBody);
+        $this->assertStringContainsString('Select available dates to enable creation', $airbnbBody);
+    }
+
+    public function testCreateModalIncludesReactiveValidationMatrixScript(): void
+    {
+        $request = new Request('GET', '/reservations/new', server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Matrix runner functions
+        $this->assertStringContainsString('function getUnmetRequirement()', $body);
+        $this->assertStringContainsString('function validateForm()', $body);
+
+        // Property validation (1606 or 1707)
+        $this->assertStringContainsString("propVal !== '1606' && propVal !== '1707'", $body);
+        $this->assertStringContainsString('Select a valid property', $body);
+
+        // Date range validation
+        $this->assertStringContainsString('!checkInVal || !checkOutVal', $body);
+        $this->assertStringContainsString('Select available dates to enable creation', $body);
+        $this->assertStringContainsString('checkOutVal <= checkInVal', $body);
+        $this->assertStringContainsString('Check-out date must be after check-in date', $body);
+
+        // Availability check & conflict guidance
+        $this->assertStringContainsString('!isAvailable', $body);
+        $this->assertStringContainsString('Resolve date conflict above to proceed', $body);
+
+        // Total price validation
+        $this->assertStringContainsString('priceVal === \'\' || isNaN(Number(priceVal)) || Number(priceVal) < 0', $body);
+        $this->assertStringContainsString('Total price cannot be negative', $body);
+
+        // Source-dependent validation rules
+        // Airbnb: external confirmation code required
+        $this->assertStringContainsString("currentSource === 'airbnb'", $body);
+        $this->assertStringContainsString('!airbnbCode', $body);
+        $this->assertStringContainsString('Airbnb confirmation code required', $body);
+
+        // Direct stays: guest name, email regex, phone length (7-25 chars)
+        $this->assertStringContainsString('Guest name and email required', $body);
+        $this->assertStringContainsString('phoneVal.length < 7 || phoneVal.length > 25', $body);
+        $this->assertStringContainsString('Guest phone number must be 7-25 characters', $body);
+
+        // Unlocking when valid / locking when invalid
+        $this->assertStringContainsString("btn.setAttribute('aria-disabled', 'false')", $body);
+        $this->assertStringContainsString("btn.classList.remove('opacity-50', 'cursor-not-allowed')", $body);
+        $this->assertStringContainsString("btn.setAttribute('aria-disabled', 'true')", $body);
+        $this->assertStringContainsString("btn.classList.add('opacity-50', 'cursor-not-allowed')", $body);
+
+        // Event listeners: availabilityChecked, htmx:afterSwap, form input & change
+        $this->assertStringContainsString("addEventListener('availabilityChecked'", $body);
+        $this->assertStringContainsString("addEventListener('htmx:afterSwap'", $body);
+        $this->assertStringContainsString("addEventListener('input'", $body);
+        $this->assertStringContainsString("addEventListener('change'", $body);
+
+        // Enter keypress and submit event prevention
+        $this->assertStringContainsString("addEventListener('keydown'", $body);
+        $this->assertStringContainsString("evt.key === 'Enter'", $body);
+        $this->assertStringContainsString("addEventListener('submit'", $body);
+        $this->assertStringContainsString('evt.preventDefault()', $body);
+
+        // Immediate initial run
+        $this->assertStringContainsString('syncAvailabilityFromDom()', $body);
+        $this->assertStringContainsString('validateForm()', $body);
+    }
+
     public function testCreateManualReservationValidatesInputAndReturns422(): void
     {
         // Bad dates: checkout <= checkin
