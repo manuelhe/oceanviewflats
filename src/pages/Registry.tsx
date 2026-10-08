@@ -184,6 +184,7 @@ export default function Registry({ lang, assetPrefix = "../" }: AppProps) {
 							data-msg-loading={t.registryLookupLoading}
 							data-msg-not-found={t.registryLookupNotFound}
 							data-msg-already-completed={t.registryAlreadyCompleted}
+							data-msg-concluded={t.registryConcluded}
 							data-msg-err-email={t.err_guest_email || t.errEmailInvalid}
 							data-msg-err-phone={t.registryErrPhoneRequired}
 							noValidate

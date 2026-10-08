@@ -100,6 +100,10 @@ switch ($result->status) {
         http_response_code(404);
         send_json_response(false, $result->message, $result->toArray());
 
+    case 'concluded':
+        http_response_code(403);
+        send_json_response(false, $result->message, $result->toArray());
+
     case 'unauthorized':
         http_response_code(403);
         send_json_response(false, $result->message, $result->toArray());

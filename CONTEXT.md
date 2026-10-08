@@ -97,6 +97,10 @@ _Avoid_: Paid Booking, Finalized Reservation
 A previously held or confirmed Reservation that has been voided, releasing the dates back to general availability.
 _Avoid_: Void Booking, Expired Hold
 
+**Concluded Reservation**:
+A Confirmed Reservation whose stay duration has completed past 23:59:59 COT on the Check-out Date. Concluded Reservations permanently invalidate and suppress public Guest Guide credentials and Guest Registry access, redacting all personal guest identity and stay details to prevent data information leaks.
+_Avoid_: Ended Reservation, Expired Reservation, Finished Booking, Past Booking
+
 **Primary Guest**:
 The individual who initiates and pays for the Reservation, holds legal and financial responsibility for the stay, and is contractually required to be one of the staying occupants.
 _Avoid_: Booker, Lead Guest, Main Guest, Customer, Client

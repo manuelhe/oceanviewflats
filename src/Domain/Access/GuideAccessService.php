@@ -52,6 +52,16 @@ final class GuideAccessService implements GuideAccessServiceInterface
             );
         }
 
+        if ($reservation->isConcluded()) {
+            return AccessVerificationResult::concluded(
+                $this->getMessage(
+                    $lang,
+                    'msg_concluded',
+                    'This reservation has concluded and its details are no longer accessible.'
+                )
+            );
+        }
+
         if (!$reservation->registryCompleted) {
             $cleanBase = rtrim($this->baseUrl, '/');
             $registryPath = '/registry/';

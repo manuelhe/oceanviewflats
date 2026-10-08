@@ -33,10 +33,19 @@ final class GuideAccessServiceTest extends TestCase
                 'wifi_password' => 'Secret1606',
             ],
         ]);
+        $rawTranslations = require dirname(__DIR__, 4) . '/public/api/translations.php';
+        $guideTranslations = [];
+        foreach (['en', 'es', 'fr', 'it', 'de', 'ja'] as $loc) {
+            if (isset($rawTranslations[$loc]['guide'])) {
+                $guideTranslations[$loc] = $rawTranslations[$loc]['guide'];
+            }
+        }
+
         $this->service = new GuideAccessService(
             repository: $this->repository,
             credentialsProvider: $this->credentialsProvider,
-            baseUrl: 'https://www.oceanviewflats.com'
+            baseUrl: 'https://www.oceanviewflats.com',
+            translations: $guideTranslations
         );
     }
 
@@ -44,7 +53,9 @@ final class GuideAccessServiceTest extends TestCase
         string $uid = 'ovf_test_001',
         string $property = '1707',
         ReservationStatus $status = ReservationStatus::CONFIRMED,
-        bool $registryCompleted = false
+        bool $registryCompleted = false,
+        string $checkIn = '2026-11-10',
+        string $checkOut = '2026-11-15'
     ): Reservation {
         return new Reservation(
             reservationUid: $uid,
@@ -52,8 +63,8 @@ final class GuideAccessServiceTest extends TestCase
             guestName: 'Carlos Valderrama',
             guestEmail: 'carlos@example.com',
             guestPhone: '+57 300 111 2233',
-            checkIn: '2026-11-10',
-            checkOut: '2026-11-15',
+            checkIn: $checkIn,
+            checkOut: $checkOut,
             totalPrice: 2500000.0,
             status: $status,
             paymentMethodId: 'card',
@@ -233,5 +244,117 @@ final class GuideAccessServiceTest extends TestCase
 
         $array = $result->toArray();
         $this->assertSame('0654321#', $array['credentials']['door_code']);
+    }
+
+    public function testVerifyAccessReturnsConcludedForReservationPastCheckout(): void
+    {
+        $reservation = $this->createReservation(
+            uid: 'ovf_concluded_1',
+            property: '1707',
+            status: ReservationStatus::CONFIRMED,
+            registryCompleted: true,
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05'
+        );
+        $this->repository->save($reservation);
+
+        $result = $this->service->verifyAccess('ovf_concluded_1', 'en');
+
+        $this->assertFalse($result->verified);
+        $this->assertSame('concluded', $result->status);
+        $this->assertSame('concluded', $result->reason);
+        $this->assertNull($result->credentials);
+        $this->assertNull($result->reservation);
+        $this->assertNull($result->registryUrl);
+        $this->assertSame('This reservation has concluded and its details are no longer accessible.', $result->message);
+
+        // Zero credentials & zero reservation disclosure contract
+        $array = $result->toArray();
+        $this->assertFalse($array['verified']);
+        $this->assertSame('concluded', $array['status']);
+        $this->assertSame('concluded', $array['reason']);
+        $this->assertArrayNotHasKey('credentials', $array);
+        $this->assertArrayNotHasKey('reservation', $array);
+        $this->assertArrayNotHasKey('registry_url', $array);
+    }
+
+    public function testVerifyAccessReturnsConcludedEvenWhenRegistryWasNeverCompleted(): void
+    {
+        $reservation = $this->createReservation(
+            uid: 'ovf_concluded_unregistered',
+            property: '1606',
+            status: ReservationStatus::CONFIRMED,
+            registryCompleted: false,
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05'
+        );
+        $this->repository->save($reservation);
+
+        $result = $this->service->verifyAccess('ovf_concluded_unregistered', 'es');
+
+        $this->assertFalse($result->verified);
+        $this->assertSame('concluded', $result->status);
+        $this->assertSame('concluded', $result->reason);
+        $this->assertNull($result->credentials);
+        $this->assertNull($result->reservation);
+        $this->assertNull($result->registryUrl);
+        $this->assertSame('Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.', $result->message);
+
+        $array = $result->toArray();
+        $this->assertArrayNotHasKey('credentials', $array);
+        $this->assertArrayNotHasKey('reservation', $array);
+        $this->assertArrayNotHasKey('registry_url', $array);
+    }
+
+    public function testVerifyAccessReturnsLocalizedConcludedMessages(): void
+    {
+        $reservation = $this->createReservation(
+            uid: 'ovf_concluded_i18n',
+            property: '1707',
+            status: ReservationStatus::CONFIRMED,
+            registryCompleted: true,
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05'
+        );
+        $this->repository->save($reservation);
+
+        $locales = [
+            'en' => 'This reservation has concluded and its details are no longer accessible.',
+            'es' => 'Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.',
+            'fr' => 'Cette réservation est terminée et ses détails ne sont plus accessibles.',
+            'it' => 'Questa prenotazione è conclusa e i suoi dettagli non sono più accessibili.',
+            'de' => 'Diese Reservierung ist abgeschlossen und ihre Details sind nicht mehr zugänglich.',
+            'ja' => 'この予約はすでに終了しており、詳細は表示されません。',
+        ];
+
+        foreach ($locales as $lang => $expectedMessage) {
+            $result = $this->service->verifyAccess('ovf_concluded_i18n', $lang);
+            $this->assertSame('concluded', $result->status);
+            $this->assertSame($expectedMessage, $result->message);
+        }
+    }
+
+    public function testAccessVerificationResultConcludedFactory(): void
+    {
+        $defaultResult = \OceanViewFlats\Domain\Access\AccessVerificationResult::concluded();
+        $this->assertSame('This reservation has concluded and its details are no longer accessible.', $defaultResult->message);
+
+        $result = \OceanViewFlats\Domain\Access\AccessVerificationResult::concluded('Custom concluded notice');
+
+        $this->assertFalse($result->verified);
+        $this->assertSame('concluded', $result->status);
+        $this->assertSame('concluded', $result->reason);
+        $this->assertSame('Custom concluded notice', $result->message);
+        $this->assertNull($result->credentials);
+        $this->assertNull($result->reservation);
+        $this->assertNull($result->registryUrl);
+
+        $array = $result->toArray();
+        $this->assertSame('concluded', $array['status']);
+        $this->assertSame('concluded', $array['reason']);
+        $this->assertSame('Custom concluded notice', $array['message']);
+        $this->assertArrayNotHasKey('credentials', $array);
+        $this->assertArrayNotHasKey('reservation', $array);
+        $this->assertArrayNotHasKey('registry_url', $array);
     }
 }

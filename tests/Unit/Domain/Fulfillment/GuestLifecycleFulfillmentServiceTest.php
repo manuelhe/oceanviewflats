@@ -132,7 +132,9 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         string $uid = 'ovf_sample_100',
         ReservationStatus $status = ReservationStatus::CONFIRMED,
         ?string $doorCode = null,
-        bool $registryCompleted = false
+        bool $registryCompleted = false,
+        string $checkIn = '2026-11-15',
+        string $checkOut = '2026-11-20'
     ): Reservation {
         $reservation = new Reservation(
             reservationUid: $uid,
@@ -140,8 +142,8 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             guestName: 'Jane Smith',
             guestEmail: 'jane.smith@example.com',
             guestPhone: '+57 300 123 4567',
-            checkIn: '2026-11-15',
-            checkOut: '2026-11-20',
+            checkIn: $checkIn,
+            checkOut: $checkOut,
             totalPrice: 1800000.0,
             status: $status,
             paymentMethodId: 'card_visa',
@@ -392,6 +394,26 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
 
         $this->assertFalse($result->success);
         $this->assertContains('Cannot register guests for a cancelled reservation.', $result->errors);
+    }
+
+    public function testSubmitRegistryRejectsConcludedReservation(): void
+    {
+        $this->createSampleReservation(
+            uid: 'ovf_concluded',
+            status: ReservationStatus::CONFIRMED,
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05'
+        );
+        $submission = $this->createSubmission(
+            code: 'ovf_concluded',
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05'
+        );
+
+        $result = $this->service->submitRegistry($submission);
+
+        $this->assertFalse($result->success);
+        $this->assertContains('Cannot submit guest registry for a concluded reservation.', $result->errors);
     }
 
     public function testSubmitRegistryRollsBackTransactionOnDbFailure(): void

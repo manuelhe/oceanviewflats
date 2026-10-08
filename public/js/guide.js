@@ -34,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgVerifying = doorCodeCard?.getAttribute('data-msg-verifying') || 'Verifying access permissions...';
     const msgNotFound = doorCodeCard?.getAttribute('data-msg-not-found') || 'Please provide a valid reservation code or link from your confirmation email.';
     const msgCopied = doorCodeCard?.getAttribute('data-msg-copied') || 'Copied!';
+    const msgConcluded = doorCodeCard?.getAttribute('data-msg-concluded') || 'This reservation has concluded. Property access credentials and guide details are no longer active.';
+    const msgConcludedBadge = doorCodeCard?.getAttribute('data-msg-concluded-badge') || '';
     const msgParkingPlaceholder = parkingCard?.getAttribute('data-msg-placeholder') || '--';
 
     const introTemplates = {
@@ -44,6 +46,30 @@ document.addEventListener('DOMContentLoaded', () => {
         de: "Herzlich willkommen in Ihrem Zuhause am Meer, {guestName}! Wir freuen uns sehr, Sie als Gast zu haben, und wünschen Ihnen einen wunderbaren, erholsamen und unvergesslichen Aufenthalt.",
         ja: "{guestName}様、海辺のマイホームへようこそ！ご宿泊いただき大変嬉しく思います。リラックスできる素晴らしい、忘れられない滞在となりますように。"
     };
+
+    function getGenericGreeting(langCode) {
+        const template = introTemplates[langCode] || introTemplates.en;
+        return template
+            .replace(', {guestName}', '')
+            .replace(' {guestName} !', ' !')
+            .replace('{guestName}様、', '')
+            .replace('{guestName}', '')
+            .trim();
+    }
+
+    function getTodayCotDateString() {
+        try {
+            const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Bogota',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            return formatter.format(new Date());
+        } catch (_) {
+            return new Date().toISOString().slice(0, 10);
+        }
+    }
 
     // 3. Read Query Parameters (Strictly reservation identifiers, no sensitive plaintext passwords)
     const urlParams = new URLSearchParams(window.location.search);
@@ -233,7 +259,85 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 5. Populate initial display from URL parameters
+    function displayConcludedState(message) {
+        const doorCard = doorCodeCard;
+        const concludedBadge = (doorCard?.getAttribute('data-msg-concluded-badge') || msgConcludedBadge || '').trim();
+        const concludedText = message || msgConcluded;
+
+        // Mask/reset stay dates and placeholders to --
+        if (displayCheckIn) displayCheckIn.textContent = '--';
+        if (displayCheckOut) displayCheckOut.textContent = '--';
+        if (displayApartment) displayApartment.textContent = 'OceanViewFlats --';
+        if (displayDoorCode) displayDoorCode.textContent = '--';
+        if (displayWifiSSID) displayWifiSSID.textContent = '--';
+        if (displayWifiPassword) displayWifiPassword.textContent = '--';
+        if (displayParkingSpot) displayParkingSpot.textContent = '--';
+
+        // Fall back to generic greeting (suppress prefilling guest name)
+        if (greetingBox) {
+            greetingBox.textContent = getGenericGreeting(lang);
+        }
+
+        // Hide mandatory registry banner
+        if (registryBanner) {
+            registryBanner.style.display = 'none';
+        }
+
+        // Hide locked notices if open
+        if (credentialLockedNotice) credentialLockedNotice.classList.add('hidden');
+        if (wifiLockedNotice) wifiLockedNotice.classList.add('hidden');
+        if (parkingLockedNotice) parkingLockedNotice.classList.add('hidden');
+
+        // Disable copy triggers/buttons
+        [btnCopyDoorCode, btnCopyWifiSSID, btnCopyWifiPass, btnCopyParkingSpot].forEach(btn => {
+            if (btn) {
+                btn.disabled = true;
+                btn.setAttribute('aria-disabled', 'true');
+                btn.classList.add('opacity-40', 'cursor-not-allowed');
+            }
+        });
+
+        // Render distinct amber/slate concluded notification in place of credentials card
+        if (doorCodeCard) {
+            doorCodeCard.className = 'bg-gradient-to-br from-amber-500/10 via-slate-900/5 to-slate-900/10 rounded-3xl p-5 md:p-6 border border-amber-500/20 flex flex-col justify-between text-slate-800 shadow-sm';
+            doorCodeCard.innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex items-center space-x-2 text-amber-800 font-bold text-xs uppercase tracking-wider">
+                        <span class="p-1.5 bg-amber-500/15 text-amber-700 rounded-lg shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                        </span>
+                        <span id="concluded-badge-text"></span>
+                    </div>
+                    <div class="p-4 bg-slate-900 text-slate-100 rounded-2xl border border-slate-800">
+                        <p id="concluded-body-text" class="text-xs leading-relaxed text-slate-300 font-medium"></p>
+                    </div>
+                </div>
+                <div class="mt-4 pt-3 border-t border-amber-500/15 text-[11px] text-slate-500 font-semibold flex items-center justify-between">
+                    <span>OceanViewFlats</span>
+                    <span id="concluded-footer-badge" class="text-amber-700/80"></span>
+                </div>
+            `;
+            const badgeEl = doorCodeCard.querySelector('#concluded-badge-text');
+            const bodyEl = doorCodeCard.querySelector('#concluded-body-text');
+            const footerBadgeEl = doorCodeCard.querySelector('#concluded-footer-badge');
+
+            if (badgeEl) badgeEl.textContent = concludedBadge || concludedText;
+            if (bodyEl) bodyEl.textContent = concludedText;
+            if (footerBadgeEl && concludedBadge) footerBadgeEl.textContent = `• ${concludedBadge}`;
+        }
+    }
+
+    // 5. Check if URL check-out parameter indicates a concluded reservation in COT (America/Bogota)
+    const todayCot = getTodayCotDateString();
+    const isUrlCheckOutConcluded = Boolean(rawCheckOut && /^\d{4}-\d{2}-\d{2}$/.test(rawCheckOut) && rawCheckOut < todayCot);
+
+    if (isUrlCheckOutConcluded) {
+        // Defense-in-depth: Suppress prefilling guest name into greeting, mask stay dates, hide registry banner, disable copy triggers, and render concluded notification
+        displayConcludedState(msgConcluded);
+        return;
+    }
+
+    // Populate initial display from URL parameters
     setInitialDisplayDetails(rawGuestName, rawCheckIn, rawCheckOut, propertyNumber);
 
     // Initial state: locked by default until verified
@@ -260,7 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }));
         })
         .then(({ status, data }) => {
-            if (status === 200 && data.verified && data.credentials) {
+            if (status === 403 && data.status === 'concluded') {
+                displayConcludedState(data.message || msgConcluded);
+            } else if (status === 200 && data.verified && data.credentials) {
                 // Access granted: Registry verified and reservation confirmed
                 setUnlockedState(data.credentials, data.reservation);
             } else if (data.status === 'registry_required') {

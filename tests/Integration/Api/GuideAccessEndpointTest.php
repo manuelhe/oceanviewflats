@@ -48,6 +48,10 @@ $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, 
     VALUES ('ovf_completed_1', '1707', 'Completed Guest', 'completed@example.com', '2026-12-01', '2026-12-05', 2200000, 'confirmed', 1, datetime('now'), datetime('now'))");
 $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, registry_completed, registry_completed_at, door_code, created_at)
     VALUES ('ovf_dynamic_1', '1606', 'Dynamic Guest', 'dynamic@example.com', '2026-12-10', '2026-12-15', 2500000, 'confirmed', 1, datetime('now'), '0876543#', datetime('now'))");
+$pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, registry_completed, registry_completed_at, door_code, created_at)
+    VALUES ('ovf_concluded_1', '1606', 'Concluded Past Guest', 'past@example.com', '2020-01-01', '2020-01-05', 1200000, 'confirmed', 1, datetime('now'), '0987654#', datetime('now'))");
+$pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, check_in, check_out, total_price, status, registry_completed, created_at)
+    VALUES ('ovf_concluded_unregistered', '1707', 'Unregistered Concluded Guest', 'unreg_past@example.com', '2020-02-01', '2020-02-05', 1300000, 'confirmed', 0, datetime('now'))");
 $GLOBALS['TEST_PDO'] = $pdo;
 PHP;
     }
@@ -155,6 +159,63 @@ PHP;
         $resJa = $this->callEndpoint(['code' => 'ovf_unregistered_1', 'lang' => 'ja'], $this->getSqliteSetupCode());
         $this->assertSame(0, $resJa['exitCode'], $resJa['stderr']);
         $this->assertStringContainsString('名簿登録', $resJa['json']['message']);
+    }
+
+    public function testGuideAccessEndpointReturns403AndConcludedStatusForConcludedReservation(): void
+    {
+        // 1. English localized response
+        $resEn = $this->callEndpoint(['code' => 'ovf_concluded_1', 'lang' => 'en'], $this->getSqliteSetupCode());
+
+        $this->assertSame(0, $resEn['exitCode'], $resEn['stderr']);
+        $this->assertIsArray($resEn['json']);
+        $this->assertFalse($resEn['json']['success']);
+        $this->assertFalse($resEn['json']['verified']);
+        $this->assertSame('concluded', $resEn['json']['status']);
+        $this->assertSame('concluded', $resEn['json']['reason']);
+        $this->assertSame('This reservation has concluded and its details are no longer accessible.', $resEn['json']['message']);
+
+        // Zero credentials & zero reservation disclosure contract
+        $this->assertArrayNotHasKey('credentials', $resEn['json']);
+        $this->assertArrayNotHasKey('reservation', $resEn['json']);
+        $this->assertArrayNotHasKey('registry_url', $resEn['json']);
+        $this->assertStringNotContainsString('0987654#', $resEn['stdout']);
+        $this->assertStringNotContainsString('APTO1606', $resEn['stdout']);
+        $this->assertStringNotContainsString('Invitado@1606@HN', $resEn['stdout']);
+
+        // 2. Spanish localized response
+        $resEs = $this->callEndpoint(['code' => 'ovf_concluded_1', 'lang' => 'es'], $this->getSqliteSetupCode());
+        $this->assertSame(0, $resEs['exitCode'], $resEs['stderr']);
+        $this->assertIsArray($resEs['json']);
+        $this->assertFalse($resEs['json']['success']);
+        $this->assertSame('concluded', $resEs['json']['status']);
+        $this->assertSame('Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.', $resEs['json']['message']);
+        $this->assertArrayNotHasKey('credentials', $resEs['json']);
+        $this->assertArrayNotHasKey('reservation', $resEs['json']);
+
+        // 3. Japanese localized response
+        $resJa = $this->callEndpoint(['code' => 'ovf_concluded_1', 'lang' => 'ja'], $this->getSqliteSetupCode());
+        $this->assertSame(0, $resJa['exitCode'], $resJa['stderr']);
+        $this->assertIsArray($resJa['json']);
+        $this->assertFalse($resJa['json']['success']);
+        $this->assertSame('concluded', $resJa['json']['status']);
+        $this->assertSame('この予約はすでに終了しており、詳細は表示されません。', $resJa['json']['message']);
+        $this->assertArrayNotHasKey('credentials', $resJa['json']);
+        $this->assertArrayNotHasKey('reservation', $resJa['json']);
+    }
+
+    public function testGuideAccessEndpointReturnsConcludedEvenWhenRegistryWasNeverCompleted(): void
+    {
+        $res = $this->callEndpoint(['code' => 'ovf_concluded_unregistered', 'lang' => 'en'], $this->getSqliteSetupCode());
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertFalse($res['json']['verified']);
+        $this->assertSame('concluded', $res['json']['status']);
+        $this->assertSame('concluded', $res['json']['reason']);
+        $this->assertArrayNotHasKey('credentials', $res['json']);
+        $this->assertArrayNotHasKey('reservation', $res['json']);
+        $this->assertArrayNotHasKey('registry_url', $res['json']);
     }
 
     protected function setUp(): void

@@ -165,6 +165,12 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             ]);
         }
 
+        if ($reservation->isConcluded()) {
+            return RegistryFulfillmentResult::validationFailure([
+                'Cannot submit guest registry for a concluded reservation.',
+            ]);
+        }
+
         // 5. Generate algorithmic PIN per ADR 0001
         $primary = $submission->getPrimaryOccupant();
         $primaryDoc = $primary !== null ? $primary->docNum : '';

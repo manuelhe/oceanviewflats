@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgLoading = form.getAttribute('data-msg-loading') || 'Loading...';
     const msgNotFound = form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.';
     const msgAlreadyCompleted = form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.';
+    const msgConcluded = form.getAttribute('data-msg-concluded') || 'This reservation has concluded. Access to guest registration is no longer active.';
     const msgErrEmail = form.getAttribute('data-msg-err-email') || '';
     const msgErrPhone = form.getAttribute('data-msg-err-phone') || '';
 
@@ -98,6 +99,54 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkOutVal = urlParams.get('check_out') || '';
     const propertyVal = urlParams.get('property') || '';
     const reservationCodeVal = urlParams.get('code') || urlParams.get('reservation_code') || '';
+
+    function getTodayCotDateString() {
+        try {
+            const formatter = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Bogota',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            });
+            return formatter.format(new Date());
+        } catch (_) {
+            return new Date().toISOString().slice(0, 10);
+        }
+    }
+
+    function displayConcludedState(message) {
+        if (displayProperty) displayProperty.textContent = '--';
+        if (displayCheckIn) displayCheckIn.textContent = '--';
+        if (displayCheckOut) displayCheckOut.textContent = '--';
+        if (hiddenProperty) hiddenProperty.value = '';
+        if (hiddenCheckIn) hiddenCheckIn.value = '';
+        if (hiddenCheckOut) hiddenCheckOut.value = '';
+        if (hiddenReservationCode) hiddenReservationCode.value = '';
+
+        const guest1NameInput = document.getElementById('guest-name-1');
+        if (guest1NameInput) guest1NameInput.value = '';
+        const guest1FnInput = document.getElementById('guest-first-name-1');
+        if (guest1FnInput) guest1FnInput.value = '';
+        const guest1LnInput = document.getElementById('guest-last-name-1');
+        if (guest1LnInput) guest1LnInput.value = '';
+
+        if (form) form.classList.add('hidden');
+        if (successOverlay) successOverlay.classList.add('hidden');
+
+        if (msgBox) {
+            msgBox.textContent = message || msgConcluded;
+            msgBox.className = 'p-5 rounded-2xl text-sm font-medium mb-6 bg-amber-50 text-amber-800 border border-amber-200';
+            msgBox.classList.remove('hidden');
+        }
+    }
+
+    const todayCot = getTodayCotDateString();
+    const isUrlCheckOutConcluded = Boolean(checkOutVal && /^\d{4}-\d{2}-\d{2}$/.test(checkOutVal) && checkOutVal < todayCot);
+
+    if (isUrlCheckOutConcluded) {
+        displayConcludedState(msgConcluded);
+        return;
+    }
 
     // Show details to user and populate hidden form fields
     if (hiddenReservationCode && reservationCodeVal) {
@@ -196,6 +245,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     form.classList.add('hidden');
                     successOverlay.classList.remove('hidden');
                 }
+            } else if ((res.status === 403 || !data.success) && data.status === 'concluded') {
+                displayConcludedState(data.message || msgConcluded);
             } else if (res.status === 404 || res.status === 403) {
                 if (!hiddenCheckIn.value) displayCheckIn.textContent = defaultDateMsg;
                 if (!hiddenCheckOut.value) displayCheckOut.textContent = defaultDateMsg;
