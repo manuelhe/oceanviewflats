@@ -57,7 +57,7 @@ final class GuideAccessService implements GuideAccessServiceInterface
                 $this->getMessage(
                     $lang,
                     'msg_concluded',
-                    'This reservation has concluded and registration is closed.'
+                    'This reservation has concluded and its details are no longer accessible.'
                 )
             );
         }

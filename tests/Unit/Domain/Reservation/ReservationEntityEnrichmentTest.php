@@ -429,7 +429,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
             guestPhone: '+57 300 111 2233',
             checkIn: '2026-05-01',
             checkOut: '2026-05-05',
-            totalPrice: 1000000.0
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED
         );
 
         $nowAfterCheckout = new DateTimeImmutable('2026-05-06 00:00:00', new \DateTimeZone('America/Bogota'));
@@ -446,7 +447,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
             guestPhone: '+57 300 111 2233',
             checkIn: '2026-12-01',
             checkOut: '2026-12-05',
-            totalPrice: 1000000.0
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED
         );
 
         $nowBeforeCheckout = new DateTimeImmutable('2026-12-03 14:00:00', new \DateTimeZone('America/Bogota'));
@@ -463,7 +465,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
             guestPhone: '+57 300 111 2233',
             checkIn: '2026-10-01',
             checkOut: '2026-10-05',
-            totalPrice: 1000000.0
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED
         );
 
         $timezone = new \DateTimeZone('America/Bogota');
@@ -487,7 +490,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
             guestPhone: '+57 300 111 2233',
             checkIn: '2026-10-01',
             checkOut: '2026-10-05',
-            totalPrice: 1000000.0
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED
         );
 
         // 2026-10-05 23:59:59 COT is 2026-10-06 04:59:59 UTC
@@ -509,7 +513,8 @@ final class ReservationEntityEnrichmentTest extends TestCase
             guestPhone: '+57 300 111 2233',
             checkIn: '2020-01-01',
             checkOut: '2020-01-05',
-            totalPrice: 1000000.0
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED
         );
         $this->assertTrue($pastReservation->isConcluded());
 
@@ -521,8 +526,44 @@ final class ReservationEntityEnrichmentTest extends TestCase
             guestPhone: '+57 300 111 2233',
             checkIn: '2030-01-01',
             checkOut: '2030-01-05',
-            totalPrice: 1000000.0
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CONFIRMED
         );
         $this->assertFalse($futureReservation->isConcluded());
+    }
+
+    public function testIsConcludedReturnsFalseForCancelledAndPendingReservationsWithPastCheckout(): void
+    {
+        $now = new DateTimeImmutable('2026-06-01 12:00:00', new \DateTimeZone('America/Bogota'));
+
+        // Cancelled reservation with past checkout must return false (remains cancelled)
+        $cancelledReservation = new Reservation(
+            reservationUid: 'ovf_cancelled_past',
+            propertyId: '1606',
+            guestName: 'Cancelled Guest',
+            guestEmail: 'cancelled@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2026-05-01',
+            checkOut: '2026-05-05',
+            totalPrice: 1000000.0,
+            status: ReservationStatus::CANCELLED
+        );
+        $this->assertFalse($cancelledReservation->isConcluded($now));
+        $this->assertFalse($cancelledReservation->isConcluded());
+
+        // Pending payment reservation with past checkout must return false (remains pending)
+        $pendingReservation = new Reservation(
+            reservationUid: 'ovf_pending_past',
+            propertyId: '1606',
+            guestName: 'Pending Guest',
+            guestEmail: 'pending@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2026-05-01',
+            checkOut: '2026-05-05',
+            totalPrice: 1000000.0,
+            status: ReservationStatus::PENDING_PAYMENT
+        );
+        $this->assertFalse($pendingReservation->isConcluded($now));
+        $this->assertFalse($pendingReservation->isConcluded());
     }
 }

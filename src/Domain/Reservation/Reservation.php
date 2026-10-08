@@ -256,11 +256,17 @@ final class Reservation
 
     /**
      * Identifies if this reservation has concluded past 23:59:59 COT on its check-out date (ADR 0009).
+     * Strictly verifies that the reservation is confirmed. Cancelled or pending bookings with past
+     * checkout dates return false (they remain cancelled or pending).
      *
      * @param DateTimeImmutable|null $now Optional reference time for testing or deterministic evaluation.
      */
     public function isConcluded(?DateTimeImmutable $now = null): bool
     {
+        if ($this->status !== ReservationStatus::CONFIRMED) {
+            return false;
+        }
+
         $timezone = new DateTimeZone('America/Bogota');
         $referenceTime = $now ?? new DateTimeImmutable('now', $timezone);
         $concludedThreshold = new DateTimeImmutable($this->checkOut . ' 23:59:59', $timezone);

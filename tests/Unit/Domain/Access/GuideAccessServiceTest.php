@@ -266,7 +266,7 @@ final class GuideAccessServiceTest extends TestCase
         $this->assertNull($result->credentials);
         $this->assertNull($result->reservation);
         $this->assertNull($result->registryUrl);
-        $this->assertSame('This reservation has concluded and registration is closed.', $result->message);
+        $this->assertSame('This reservation has concluded and its details are no longer accessible.', $result->message);
 
         // Zero credentials & zero reservation disclosure contract
         $array = $result->toArray();
@@ -298,7 +298,7 @@ final class GuideAccessServiceTest extends TestCase
         $this->assertNull($result->credentials);
         $this->assertNull($result->reservation);
         $this->assertNull($result->registryUrl);
-        $this->assertSame('Esta reserva ha concluido y el registro se encuentra cerrado.', $result->message);
+        $this->assertSame('Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.', $result->message);
 
         $array = $result->toArray();
         $this->assertArrayNotHasKey('credentials', $array);
@@ -319,12 +319,12 @@ final class GuideAccessServiceTest extends TestCase
         $this->repository->save($reservation);
 
         $locales = [
-            'en' => 'This reservation has concluded and registration is closed.',
-            'es' => 'Esta reserva ha concluido y el registro se encuentra cerrado.',
-            'fr' => 'Ce séjour est terminé et l\'enregistrement est fermé.',
-            'it' => 'Questa prenotazione si è conclusa e la registrazione è chiusa.',
-            'de' => 'Diese Reservierung ist abgeschlossen und die Registrierung ist geschlossen.',
-            'ja' => 'この宿泊予約は終了しており、宿泊者登録は締め切られました。',
+            'en' => 'This reservation has concluded and its details are no longer accessible.',
+            'es' => 'Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.',
+            'fr' => 'Cette réservation est terminée et ses détails ne sont plus accessibles.',
+            'it' => 'Questa prenotazione è conclusa e i suoi dettagli non sono più accessibili.',
+            'de' => 'Diese Reservierung ist abgeschlossen und ihre Details sind nicht mehr zugänglich.',
+            'ja' => 'この予約はすでに終了しており、詳細は表示されません。',
         ];
 
         foreach ($locales as $lang => $expectedMessage) {
@@ -336,6 +336,9 @@ final class GuideAccessServiceTest extends TestCase
 
     public function testAccessVerificationResultConcludedFactory(): void
     {
+        $defaultResult = \OceanViewFlats\Domain\Access\AccessVerificationResult::concluded();
+        $this->assertSame('This reservation has concluded and its details are no longer accessible.', $defaultResult->message);
+
         $result = \OceanViewFlats\Domain\Access\AccessVerificationResult::concluded('Custom concluded notice');
 
         $this->assertFalse($result->verified);

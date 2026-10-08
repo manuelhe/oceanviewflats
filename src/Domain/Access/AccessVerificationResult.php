@@ -80,7 +80,7 @@ final class AccessVerificationResult
         );
     }
 
-    public static function concluded(string $message = 'This reservation has concluded and registration is closed.'): self
+    public static function concluded(string $message = 'This reservation has concluded and its details are no longer accessible.'): self
     {
         return new self(
             verified: false,

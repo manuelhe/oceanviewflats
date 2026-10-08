@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const msgNotFound = doorCodeCard?.getAttribute('data-msg-not-found') || 'Please provide a valid reservation code or link from your confirmation email.';
     const msgCopied = doorCodeCard?.getAttribute('data-msg-copied') || 'Copied!';
     const msgConcluded = doorCodeCard?.getAttribute('data-msg-concluded') || 'This reservation has concluded. Property access credentials and guide details are no longer active.';
+    const msgConcludedBadge = doorCodeCard?.getAttribute('data-msg-concluded-badge') || '';
     const msgParkingPlaceholder = parkingCard?.getAttribute('data-msg-placeholder') || '--';
 
     const introTemplates = {
@@ -259,6 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayConcludedState(message) {
+        const doorCard = doorCodeCard;
+        const concludedBadge = (doorCard?.getAttribute('data-msg-concluded-badge') || msgConcludedBadge || '').trim();
         const concludedText = message || msgConcluded;
 
         // Mask/reset stay dates and placeholders to --
@@ -303,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="p-1.5 bg-amber-500/15 text-amber-700 rounded-lg shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
                         </span>
-                        <span>${concludedText}</span>
+                        <span>${concludedBadge || concludedText}</span>
                     </div>
                     <div class="p-4 bg-slate-900 text-slate-100 rounded-2xl border border-slate-800">
                         <p class="text-xs leading-relaxed text-slate-300 font-medium">
@@ -313,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="mt-4 pt-3 border-t border-amber-500/15 text-[11px] text-slate-500 font-semibold flex items-center justify-between">
                     <span>OceanViewFlats</span>
-                    <span class="text-amber-700/80">&bull; Concluded Stay</span>
+                    <span class="text-amber-700/80">${concludedBadge ? `&bull; ${concludedBadge}` : ''}</span>
                 </div>
             `;
         }
@@ -356,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }));
         })
         .then(({ status, data }) => {
-            if (status === 403 || data.status === 'concluded') {
+            if (status === 403 && data.status === 'concluded') {
                 displayConcludedState(data.message || msgConcluded);
             } else if (status === 200 && data.verified && data.credentials) {
                 // Access granted: Registry verified and reservation confirmed

@@ -100,8 +100,7 @@ return [
             'err_payment_pending' => 'Reservation payment is pending verification. Access credentials unlock upon confirmed payment and registry completion.',
             'err_registry_required' => 'Guest registry must be submitted before access credentials are released (ADR 0001).',
             'msg_verified' => 'Access credentials verified successfully.',
-            'msg_concluded' => 'This reservation has concluded and registration is closed.',
-            'err_reservation_concluded' => 'Cannot submit guest registry for a concluded reservation.',
+            'msg_concluded' => 'This reservation has concluded and its details are no longer accessible.',
         ],
         // Cancellation Notice (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -253,8 +252,7 @@ return [
             'err_payment_pending' => 'El pago de la reserva está pendiente de verificación. Las credenciales se liberan tras confirmar el pago y el registro.',
             'err_registry_required' => 'El registro de huéspedes debe completarse antes de liberar las credenciales de acceso (ADR 0001).',
             'msg_verified' => 'Credenciales de acceso verificadas exitosamente.',
-            'msg_concluded' => 'Esta reserva ha concluido y el registro se encuentra cerrado.',
-            'err_reservation_concluded' => 'No es posible enviar el registro de huéspedes para una reserva concluida.',
+            'msg_concluded' => 'Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.',
         ],
         // Notificación de Cancelación (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -406,8 +404,7 @@ return [
             'err_payment_pending' => 'Le paiement est en attente de vérification. Les identifiants sont délivrés après paiement et enregistrement.',
             'err_registry_required' => 'Le registre des voyageurs doit être rempli avant la délivrance des identifiants d\'accès (ADR 0001).',
             'msg_verified' => 'Identifiants d\'accès vérifiés avec succès.',
-            'msg_concluded' => 'Ce séjour est terminé et l\'enregistrement est fermé.',
-            'err_reservation_concluded' => 'Impossible de soumettre le registre des voyageurs pour une réservation terminée.',
+            'msg_concluded' => 'Cette réservation est terminée et ses détails ne sont plus accessibles.',
         ],
         // Notification d'Annulation (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -559,8 +556,7 @@ return [
             'err_payment_pending' => 'Il pagamento è in attesa di verifica. Le credenziali vengono sbloccate dopo il pagamento e la registrazione.',
             'err_registry_required' => 'Il registro degli ospiti deve essere completato prima di rilasciare le credenziali di accesso (ADR 0001).',
             'msg_verified' => 'Credenziali di accesso verificate con successo.',
-            'msg_concluded' => 'Questa prenotazione si è conclusa e la registrazione è chiusa.',
-            'err_reservation_concluded' => 'Impossibile inviare la registrazione degli ospiti per una prenotazione conclusa.',
+            'msg_concluded' => 'Questa prenotazione è conclusa e i suoi dettagli non sono più accessibili.',
         ],
         // Notifica di Cancellazione (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -712,8 +708,7 @@ return [
             'err_payment_pending' => 'Zahlungsüberprüfung ausstehend. Zugangsdaten werden nach Zahlung und Registrierung freigeschaltet.',
             'err_registry_required' => 'Das Gästeregister muss vor Freigabe der Zugangsdaten übermittelt werden (ADR 0001).',
             'msg_verified' => 'Zugangsdaten erfolgreich bestätigt.',
-            'msg_concluded' => 'Diese Reservierung ist abgeschlossen und die Registrierung ist geschlossen.',
-            'err_reservation_concluded' => 'Gästeregistrierung für eine abgeschlossene Reservierung kann nicht übermittelt werden.',
+            'msg_concluded' => 'Diese Reservierung ist abgeschlossen und ihre Details sind nicht mehr zugänglich.',
         ],
         // Stornierungsbenachrichtigung (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -865,8 +860,7 @@ return [
             'err_payment_pending' => 'お支払いの確認中です。確認および宿泊者登録完了後にアクセス情報が開示されます。',
             'err_registry_required' => 'アクセス情報を確認する前に宿泊者名簿登録が必要です (ADR 0001)。',
             'msg_verified' => 'アクセス情報が正常に確認されました。',
-            'msg_concluded' => 'この宿泊予約は終了しており、宿泊者登録は締め切られました。',
-            'err_reservation_concluded' => '終了した宿泊予約に対して宿泊者登録を送信することはできません。',
+            'msg_concluded' => 'この予約はすでに終了しており、詳細は表示されません。',
         ],
         // キャンセル通知 (CancellationEmailRenderer.php)
         'cancellation' => [

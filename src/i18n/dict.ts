@@ -369,6 +369,7 @@ export const dict = {
 			"Please provide a valid reservation code or link from your confirmation email.",
 		guideConcluded:
 			"This reservation has concluded. Property access credentials and guide details are no longer active.",
+		guideConcludedBadge: "Concluded Stay",
 		registryBtnViewGuide: "Access Guest Guide & Door Codes",
 		registryLookupLoading: "Looking up reservation details...",
 		registryLookupNotFound:
@@ -804,6 +805,7 @@ export const dict = {
 			"Por favor proporciona un código de reserva válido o usa el enlace de tu correo de confirmación.",
 		guideConcluded:
 			"Esta reserva ha concluido. Las credenciales de acceso y la información de la guía ya no están activas.",
+		guideConcludedBadge: "Estancia Concluida",
 		registryBtnViewGuide: "Acceder a la Guía del Huésped y Códigos",
 		registryLookupLoading: "Buscando detalles de la reserva...",
 		registryLookupNotFound:
@@ -1245,6 +1247,7 @@ export const dict = {
 			"Veuillez fournir un code de réservation valide ou utiliser le lien reçu par e-mail.",
 		guideConcluded:
 			"Ce séjour est terminé. Les identifiants d'accès et les détails du guide ne sont plus actifs.",
+		guideConcludedBadge: "Séjour Terminé",
 		registryBtnViewGuide: "Accéder au Guide des Voyageurs et Codes",
 		registryLookupLoading: "Recherche des détails de la réservation...",
 		registryLookupNotFound:
@@ -1679,6 +1682,7 @@ export const dict = {
 			"Fornisci un codice di prenotazione valido o utilizza il link ricevuto via email.",
 		guideConcluded:
 			"Questa prenotazione si è conclusa. Le credenziali di accesso e i dettagli della guida non sono più attivi.",
+		guideConcludedBadge: "Soggiorno Concluso",
 		registryBtnViewGuide: "Accedi alla Guida per gli Ospiti e Codici",
 		registryLookupLoading: "Ricerca dei dettagli della prenotazione...",
 		registryLookupNotFound:
@@ -2115,6 +2119,7 @@ export const dict = {
 			"Bitte geben Sie einen gültigen Reservierungscode an oder nutzen Sie den Link aus Ihrer Bestätigungs-E-Mail.",
 		guideConcluded:
 			"Diese Reservierung ist abgeschlossen. Die Zugangsdaten und die Informationen im Gästehandbuch sind nicht mehr aktiv.",
+		guideConcludedBadge: "Abgeschlossener Aufenthalt",
 		registryBtnViewGuide: "Zum Gästehandbuch & Tür-Codes",
 		registryLookupLoading: "Reservierungsdetails werden geladen...",
 		registryLookupNotFound:
@@ -2550,6 +2555,7 @@ export const dict = {
 			"有効な予約コードを入力するか、予約確認メールのリンクをご利用ください。",
 		guideConcluded:
 			"この宿泊予約は終了しました。物件の暗証番号およびガイド情報はご利用いただけません。",
+		guideConcludedBadge: "滞在終了",
 		registryBtnViewGuide: "ゲストガイドと暗証番号を確認する",
 		registryLookupLoading: "予約情報を確認中...",
 		registryLookupNotFound:

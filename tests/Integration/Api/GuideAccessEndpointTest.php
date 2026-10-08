@@ -172,7 +172,7 @@ PHP;
         $this->assertFalse($resEn['json']['verified']);
         $this->assertSame('concluded', $resEn['json']['status']);
         $this->assertSame('concluded', $resEn['json']['reason']);
-        $this->assertSame('This reservation has concluded and registration is closed.', $resEn['json']['message']);
+        $this->assertSame('This reservation has concluded and its details are no longer accessible.', $resEn['json']['message']);
 
         // Zero credentials & zero reservation disclosure contract
         $this->assertArrayNotHasKey('credentials', $resEn['json']);
@@ -188,7 +188,7 @@ PHP;
         $this->assertIsArray($resEs['json']);
         $this->assertFalse($resEs['json']['success']);
         $this->assertSame('concluded', $resEs['json']['status']);
-        $this->assertSame('Esta reserva ha concluido y el registro se encuentra cerrado.', $resEs['json']['message']);
+        $this->assertSame('Esta reservación ha concluido y sus detalles ya no se encuentran disponibles.', $resEs['json']['message']);
         $this->assertArrayNotHasKey('credentials', $resEs['json']);
         $this->assertArrayNotHasKey('reservation', $resEs['json']);
 
@@ -198,7 +198,7 @@ PHP;
         $this->assertIsArray($resJa['json']);
         $this->assertFalse($resJa['json']['success']);
         $this->assertSame('concluded', $resJa['json']['status']);
-        $this->assertSame('この宿泊予約は終了しており、宿泊者登録は締め切られました。', $resJa['json']['message']);
+        $this->assertSame('この予約はすでに終了しており、詳細は表示されません。', $resJa['json']['message']);
         $this->assertArrayNotHasKey('credentials', $resJa['json']);
         $this->assertArrayNotHasKey('reservation', $resJa['json']);
     }
