@@ -8,6 +8,7 @@ use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Admin\Auth\AuthService;
 use OceanViewFlats\Admin\Auth\FileIpRateLimiter;
 use OceanViewFlats\Admin\Auth\IpRateLimiterInterface;
+use OceanViewFlats\Admin\Controller\AuditLogController;
 use OceanViewFlats\Admin\Controller\AuthController;
 use OceanViewFlats\Admin\Controller\CalendarBlockController;
 use OceanViewFlats\Admin\Controller\ChannelSyncController;
@@ -20,6 +21,7 @@ use OceanViewFlats\Admin\Http\Router;
 use OceanViewFlats\Admin\Middleware\AuthMiddleware;
 use OceanViewFlats\Admin\Middleware\CsrfMiddleware;
 use OceanViewFlats\Admin\Middleware\SessionMiddleware;
+use OceanViewFlats\Admin\Repository\AdminAuditLogRepository;
 use OceanViewFlats\Admin\Repository\AdminCalendarBlockRepository;
 use OceanViewFlats\Admin\Repository\AdminRateRepository;
 use OceanViewFlats\Admin\Repository\AdminReservationRepository;
@@ -258,7 +260,15 @@ final class AdminApp
             dashboardQueryService: $dashboardQueryService
         );
 
-        // 9. Security Middlewares & Router (immutable internal security pipeline)
+        // 9. Audit Log Repository & Controller
+        $adminAuditLogRepo = $options['admin_audit_log_repository']
+            ?? new AdminAuditLogRepository($pdo);
+        $auditLogController = new AuditLogController(
+            repository: $adminAuditLogRepo,
+            viewRenderer: $viewRenderer
+        );
+
+        // 10. Security Middlewares & Router (immutable internal security pipeline)
         $sessionMiddleware = new SessionMiddleware();
         $csrfMiddleware = new CsrfMiddleware();
         $authMiddleware = new AuthMiddleware();
@@ -269,7 +279,7 @@ final class AdminApp
             authMiddleware: $authMiddleware
         );
 
-        // 10. Register Declarative Administrative Routes
+        // 11. Register Declarative Administrative Routes
         $router->get('/login', [$authController, 'showLogin'])
             ->post('/login', [$authController, 'login'])
             ->get('/logout', [$authController, 'logout'])
@@ -302,7 +312,9 @@ final class AdminApp
             ->post('/calendar-blocks', [$calendarBlockController, 'create'])
             ->delete('/calendar-blocks/{id}', [$calendarBlockController, 'delete'])
             ->post('/calendar-blocks/{id}/delete', [$calendarBlockController, 'delete'])
-            ->post('/calendar-blocks/{id}/release', [$calendarBlockController, 'delete']);
+            ->post('/calendar-blocks/{id}/release', [$calendarBlockController, 'delete'])
+            ->get('/audit-logs', [$auditLogController, 'index'])
+            ->get('/audit-logs/{id}', [$auditLogController, 'show']);
 
         return new self($router);
     }
