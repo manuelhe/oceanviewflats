@@ -278,20 +278,42 @@ final class ReservationController
         $checkIn = trim((string) ($body['check_in'] ?? ''));
         $checkOut = trim((string) ($body['check_out'] ?? ''));
         $source = trim((string) ($body['source'] ?? 'manual_override'));
-        if ($source === '') {
-            $source = 'manual';
-        }
         $totalPriceRaw = $body['total_price'] ?? null;
         $guestName = trim((string) ($body['guest_name'] ?? ''));
         $guestEmail = trim((string) ($body['guest_email'] ?? ''));
         $guestPhone = trim((string) ($body['guest_phone'] ?? ''));
         $notes = trim((string) ($body['notes'] ?? ''));
-        $preMarkRegistry = isset($body['pre_mark_registry']) && (string) $body['pre_mark_registry'] === '1';
-        $sendConfirmationEmail = isset($body['send_confirmation_email']) && (string) $body['send_confirmation_email'] === '1';
+        $preMarkRegistry = isset($body['pre_mark_registry']) && in_array((string) $body['pre_mark_registry'], ['1', 'true', 'on'], true);
+        $sendConfirmationEmail = isset($body['send_confirmation_email']) && in_array((string) $body['send_confirmation_email'], ['1', 'true', 'on'], true);
         $externalConfirmationCode = trim((string) ($body['external_confirmation_code'] ?? ''));
         $channelBlockUid = trim((string) ($body['channel_block_uid'] ?? '')) ?: null;
 
-        $isAirbnb = (strtolower($source) === 'airbnb');
+        // Validation: Property
+        if (!in_array($propertyId, ['1606', '1707'], true)) {
+            return $this->renderCreateError($request, 'Please select a valid property (1606 or 1707).');
+        }
+
+        // Validation: Dates format (strict Y-m-d)
+        $checkInDate = DateTimeImmutable::createFromFormat('Y-m-d', $checkIn);
+        $checkOutDate = DateTimeImmutable::createFromFormat('Y-m-d', $checkOut);
+        $isValidCheckIn = ($checkInDate !== false) && ($checkInDate->format('Y-m-d') === $checkIn);
+        $isValidCheckOut = ($checkOutDate !== false) && ($checkOutDate->format('Y-m-d') === $checkOut);
+
+        if (!$isValidCheckIn || !$isValidCheckOut) {
+            return $this->renderCreateError($request, 'Check-in and check-out dates must be valid dates in Y-m-d format.');
+        }
+
+        if ($checkIn >= $checkOut) {
+            return $this->renderCreateError($request, 'Check-out date must be strictly after check-in date.');
+        }
+
+        // Validation: Source whitelist
+        $allowedSources = ['airbnb', 'bank_transfer', 'cash', 'owner_stay', 'manual_override'];
+        if (!in_array($source, $allowedSources, true)) {
+            return $this->renderCreateError($request, 'Invalid booking source.');
+        }
+
+        $isAirbnb = ($source === 'airbnb');
 
         if ($isAirbnb) {
             $airbnbResult = $this->normalizeAirbnbInputs($externalConfirmationCode, $totalPriceRaw, $guestEmail, $guestPhone, $sendConfirmationEmail);
@@ -303,15 +325,7 @@ final class ReservationController
             $totalPrice = is_numeric($totalPriceRaw) ? (float) $totalPriceRaw : -1.0;
         }
 
-        // Validation
-        if (!in_array($propertyId, ['1606', '1707'], true)) {
-            return $this->renderCreateError($request, 'Please select a valid property (1606 or 1707).');
-        }
-
-        if ($checkIn === '' || $checkOut === '' || $checkIn >= $checkOut) {
-            return $this->renderCreateError($request, 'Check-out date must be strictly after check-in date.');
-        }
-
+        // Validation: Guest details
         if ($guestName === '') {
             return $this->renderCreateError($request, 'Guest name is required.');
         }
@@ -320,8 +334,8 @@ final class ReservationController
             return $this->renderCreateError($request, 'A valid guest email address is required.');
         }
 
-        if ($guestPhone === '') {
-            return $this->renderCreateError($request, 'Guest phone number is required.');
+        if (!$isAirbnb && (strlen($guestPhone) < 7 || strlen($guestPhone) > 25)) {
+            return $this->renderCreateError($request, 'Guest phone number must be between 7 and 25 characters.');
         }
 
         if ($totalPrice < 0.0) {
@@ -331,7 +345,11 @@ final class ReservationController
         // Ledger conflict check (absorbs matching external channel block if source is airbnb per ADR 0007)
         $absorbingSource = $isAirbnb ? 'airbnb' : null;
         if (!$this->ledger->isAvailable($propertyId, $checkIn, $checkOut, null, $absorbingSource)) {
-            return $this->renderCreateError($request, 'Selected dates conflict with an existing reservation or channel block.');
+            $conflictReasons = $this->ledger->getConflictReasons($propertyId, $checkIn, $checkOut, null, $absorbingSource);
+            $errorMessage = !empty($conflictReasons)
+                ? 'Selected dates conflict: ' . implode('; ', $conflictReasons)
+                : 'Selected dates conflict with an existing reservation or channel block.';
+            return $this->renderCreateError($request, $errorMessage);
         }
 
         // Generate UID and random Door Code
@@ -1065,18 +1083,18 @@ final class ReservationController
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_create_modal.php', [
             'errorMessage' => $errorMessage,
             'propertyId' => (string) ($body['property_id'] ?? ''),
+            'source' => (string) ($body['source'] ?? 'manual_override'),
             'checkIn' => (string) ($body['check_in'] ?? ''),
             'checkOut' => (string) ($body['check_out'] ?? ''),
-            'source' => (string) ($body['source'] ?? 'manual_override'),
-            'channelBlockUid' => (string) ($body['channel_block_uid'] ?? ''),
-            'externalConfirmationCode' => (string) ($body['external_confirmation_code'] ?? ''),
+            'totalPrice' => isset($body['total_price']) ? (string) $body['total_price'] : '',
             'guestName' => (string) ($body['guest_name'] ?? ''),
             'guestEmail' => (string) ($body['guest_email'] ?? ''),
             'guestPhone' => (string) ($body['guest_phone'] ?? ''),
-            'totalPrice' => (string) ($body['total_price'] ?? ''),
             'notes' => (string) ($body['notes'] ?? ''),
-            'preMarkRegistry' => isset($body['pre_mark_registry']),
-            'sendConfirmationEmail' => isset($body['send_confirmation_email']),
+            'preMarkRegistry' => isset($body['pre_mark_registry']) && in_array((string) $body['pre_mark_registry'], ['1', 'true', 'on'], true),
+            'sendConfirmationEmail' => isset($body['send_confirmation_email']) && in_array((string) $body['send_confirmation_email'], ['1', 'true', 'on'], true),
+            'externalConfirmationCode' => (string) ($body['external_confirmation_code'] ?? ''),
+            'channelBlockUid' => (string) ($body['channel_block_uid'] ?? ''),
         ]);
 
         return Response::html($modalHtml, 422);
