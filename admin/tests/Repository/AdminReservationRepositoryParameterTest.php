@@ -109,7 +109,7 @@ final class AdminReservationRepositoryParameterTest extends TestCase
     {
         $repo = new AdminReservationRepository($this->pdo);
         $block = new ChannelBlock('1606', '2026-10-05', '2026-10-08', 'airbnb', 'Airbnb hold');
-        $alerts = $repo->getUnonboardedChannelBlockAlerts([$block]);
+        $alerts = $repo->getUnonboardedChannelBlockAlerts([$block], 'all', new \DateTimeImmutable('2026-10-06'));
         $this->assertCount(1, $alerts);
     }
 }
