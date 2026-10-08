@@ -483,10 +483,16 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Total price cannot be negative', $body);
 
         // Source-dependent validation rules
-        // Airbnb: external confirmation code required
+        // Universal guest name requirement
+        $this->assertStringContainsString('Guest name is required', $body);
+        $this->assertStringContainsString('Airbnb (External Reservation)', $body);
+        $this->assertStringContainsString('var airbnbContainer =', $body);
+
+        // Airbnb: external confirmation code required and conditional email validation
         $this->assertStringContainsString("currentSource === 'airbnb'", $body);
         $this->assertStringContainsString('!airbnbCode', $body);
         $this->assertStringContainsString('Airbnb confirmation code required', $body);
+        $this->assertStringContainsString('Valid guest email required when sending confirmation', $body);
 
         // Direct stays: guest name, email regex, phone length (7-25 chars)
         $this->assertStringContainsString('Guest name and email required', $body);
@@ -625,7 +631,7 @@ final class ReservationControllerTest extends TestCase
         ]);
         $response = $this->controller->createManual($request, $this->session);
         $this->assertSame(422, $response->getStatusCode());
-        $this->assertStringContainsString('Invalid booking source', $response->getBody());
+        $this->assertStringContainsString('Invalid reservation source', $response->getBody());
     }
 
     public function testCreateManualReservationRejectsInvalidPhoneLengthForNonAirbnbWith422(): void

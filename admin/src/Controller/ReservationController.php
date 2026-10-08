@@ -283,8 +283,8 @@ final class ReservationController
         $guestEmail = trim((string) ($body['guest_email'] ?? ''));
         $guestPhone = trim((string) ($body['guest_phone'] ?? ''));
         $notes = trim((string) ($body['notes'] ?? ''));
-        $preMarkRegistry = isset($body['pre_mark_registry']) && in_array((string) $body['pre_mark_registry'], ['1', 'true', 'on'], true);
-        $sendConfirmationEmail = isset($body['send_confirmation_email']) && in_array((string) $body['send_confirmation_email'], ['1', 'true', 'on'], true);
+        $preMarkRegistry = $this->parseCheckbox($body['pre_mark_registry'] ?? null);
+        $sendConfirmationEmail = $this->parseCheckbox($body['send_confirmation_email'] ?? null);
         $externalConfirmationCode = trim((string) ($body['external_confirmation_code'] ?? ''));
         $channelBlockUid = trim((string) ($body['channel_block_uid'] ?? '')) ?: null;
 
@@ -310,7 +310,7 @@ final class ReservationController
         // Validation: Source whitelist
         $allowedSources = ['airbnb', 'bank_transfer', 'cash', 'owner_stay', 'manual_override'];
         if (!in_array($source, $allowedSources, true)) {
-            return $this->renderCreateError($request, 'Invalid booking source.');
+            return $this->renderCreateError($request, 'Invalid reservation source.');
         }
 
         $isAirbnb = ($source === 'airbnb');
@@ -1091,13 +1091,18 @@ final class ReservationController
             'guestEmail' => (string) ($body['guest_email'] ?? ''),
             'guestPhone' => (string) ($body['guest_phone'] ?? ''),
             'notes' => (string) ($body['notes'] ?? ''),
-            'preMarkRegistry' => isset($body['pre_mark_registry']) && in_array((string) $body['pre_mark_registry'], ['1', 'true', 'on'], true),
-            'sendConfirmationEmail' => isset($body['send_confirmation_email']) && in_array((string) $body['send_confirmation_email'], ['1', 'true', 'on'], true),
+            'preMarkRegistry' => $this->parseCheckbox($body['pre_mark_registry'] ?? null),
+            'sendConfirmationEmail' => $this->parseCheckbox($body['send_confirmation_email'] ?? null),
             'externalConfirmationCode' => (string) ($body['external_confirmation_code'] ?? ''),
             'channelBlockUid' => (string) ($body['channel_block_uid'] ?? ''),
         ]);
 
         return Response::html($modalHtml, 422);
+    }
+
+    private function parseCheckbox(mixed $val): bool
+    {
+        return $val !== null && in_array((string) $val, ['1', 'true', 'on'], true);
     }
 
     /**

@@ -111,13 +111,13 @@ $submitLabel = $isAirbnb ? 'Onboard & Generate Dispatch' : 'Create Reservation';
                         <select name="source"
                                 id="create-source"
                                 required
-                                onchange="var ab = document.getElementById('airbnb-fields-container'); if(this.value === 'airbnb') { ab.classList.remove('hidden'); } else { ab.classList.add('hidden'); }"
+                                onchange="var airbnbContainer = document.getElementById('airbnb-fields-container'); if(this.value === 'airbnb') { airbnbContainer.classList.remove('hidden'); } else { airbnbContainer.classList.add('hidden'); }"
                                 hx-post="/reservations/quote-preview"
                                 hx-trigger="change"
                                 hx-target="#quote-preview-container"
                                 hx-include="#create-reservation-form"
                                 class="w-full text-xs bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="airbnb" <?= $isAirbnb ? 'selected' : '' ?>>Airbnb (External Booking)</option>
+                            <option value="airbnb" <?= $isAirbnb ? 'selected' : '' ?>>Airbnb (External Reservation)</option>
                             <option value="bank_transfer" <?= $sourceVal === 'bank_transfer' ? 'selected' : '' ?>>Direct Bank Transfer / Wire</option>
                             <option value="cash" <?= $sourceVal === 'cash' ? 'selected' : '' ?>>Cash / In-Person</option>
                             <option value="owner_stay" <?= $sourceVal === 'owner_stay' ? 'selected' : '' ?>>Owner Occupancy ($0.00)</option>
@@ -441,6 +441,12 @@ $submitLabel = $isAirbnb ? 'Onboard & Generate Dispatch' : 'Create Reservation';
                         return 'Total price must be zero or greater';
                     }
 
+                    // Guest name: required for all reservations
+                    var nameVal = guestNameInput ? guestNameInput.value.trim() : '';
+                    if (!nameVal) {
+                        return 'Guest name is required';
+                    }
+
                     // Source-specific rules
                     var currentSource = sourceSelect ? sourceSelect.value : 'manual_override';
                     if (currentSource === 'airbnb') {
@@ -448,13 +454,20 @@ $submitLabel = $isAirbnb ? 'Onboard & Generate Dispatch' : 'Create Reservation';
                         if (!airbnbCode) {
                             return 'Airbnb confirmation code required';
                         }
+                        var sendEmailCheckbox = document.getElementById('create-send-email');
+                        var emailVal = guestEmailInput ? guestEmailInput.value.trim() : '';
+                        var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (sendEmailCheckbox && sendEmailCheckbox.checked) {
+                            if (!emailVal || !emailRegex.test(emailVal)) {
+                                return 'Valid guest email required when sending confirmation';
+                            }
+                        }
                     } else {
-                        var nameVal = guestNameInput ? guestNameInput.value.trim() : '';
                         var emailVal = guestEmailInput ? guestEmailInput.value.trim() : '';
                         var phoneVal = guestPhoneInput ? guestPhoneInput.value.trim() : '';
                         var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-                        if (!nameVal || !emailVal || !emailRegex.test(emailVal)) {
+                        if (!emailVal || !emailRegex.test(emailVal)) {
                             return 'Guest name and email required';
                         }
                         if (phoneVal.length < 7 || phoneVal.length > 25) {
