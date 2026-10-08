@@ -301,6 +301,10 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Available (3 Nights)', $body);
         $this->assertStringContainsString('$1,750,000 COP', $body);
         $this->assertStringContainsString('$1,500,000', $body);
+        $this->assertStringContainsString('data-available="true"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":true', $body);
+        $this->assertStringContainsString('"defaultPrice":1750000', $body);
     }
 
     public function testQuotePreviewForOwnerStayZeroesTotal(): void
@@ -333,6 +337,10 @@ final class ReservationControllerTest extends TestCase
         $body = $response->getBody();
         $this->assertStringContainsString('$0 COP', $body);
         $this->assertStringContainsString('Owner Stay automatically zeroes total pricing', $body);
+        $this->assertStringContainsString('data-available="true"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":true', $body);
+        $this->assertStringContainsString('"defaultPrice":0', $body);
     }
 
     public function testQuotePreviewReturnsConflictWarningWhenUnavailable(): void
@@ -352,6 +360,166 @@ final class ReservationControllerTest extends TestCase
         $body = $response->getBody();
         $this->assertStringContainsString('Selected Dates Are Unavailable', $body);
         $this->assertStringContainsString('href="/reservations/res-1"', $body);
+        $this->assertStringContainsString('data-available="false"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":false', $body);
+        $this->assertStringContainsString('Direct reservation conflict: res-1', $body);
+    }
+
+    public function testQuotePreviewReturnsDataAvailableFalseWhenDatesInvalid(): void
+    {
+        $request = new Request('POST', '/reservations/quote-preview', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-05',
+            'check_out' => '2026-11-01',
+        ]);
+        $response = $this->controller->quotePreview($request);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('data-available="false"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":false', $body);
+        $this->assertStringContainsString('check-out must be after check-in', $body);
+    }
+
+    public function testCreateModalRendersDateSynchronizationAndHtmxLifecycleScript(): void
+    {
+        $request = new Request('GET', '/reservations/new', server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Date inputs and submit button presence
+        $this->assertStringContainsString('id="create-check-in"', $body);
+        $this->assertStringContainsString('id="create-check-out"', $body);
+        $this->assertStringContainsString('id="create-submit-btn"', $body);
+        $this->assertStringContainsString('data-default-text="Create Reservation"', $body);
+
+        // Date synchronization logic
+        $this->assertStringContainsString('syncMinEndDate', $body);
+        $this->assertStringContainsString('checkOutInput.min = minEndStr', $body);
+
+        // HTMX lifecycle listeners for quote preview
+        $this->assertStringContainsString('htmx:beforeRequest', $body);
+        $this->assertStringContainsString('htmx:afterRequest', $body);
+        $this->assertStringContainsString('Checking availability...', $body);
+    }
+
+    public function testCreateModalWithPrefilledCheckInSetsMinCheckOut(): void
+    {
+        $request = new Request('GET', '/reservations/new', query: ['check_in' => '2026-11-10'], server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('value="2026-11-10"', $body);
+        $this->assertStringContainsString('min="2026-11-11"', $body);
+    }
+
+    public function testCreateModalRendersSubmitButtonInitiallyDisabledWithHelper(): void
+    {
+        // 1. Default / Direct manual reservation modal
+        $request = new Request('GET', '/reservations/new', server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Submit button initially disabled with aria-disabled and Tailwind disabled styling
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*\bdisabled\b/', $body);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*aria-disabled="true"/', $body);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*opacity-50 cursor-not-allowed/', $body);
+
+        // Submit helper element initially instructs date selection
+        $this->assertStringContainsString('id="create-submit-helper"', $body);
+        $this->assertStringContainsString('Select available dates to enable creation', $body);
+
+        // 2. Airbnb onboarding modal variant
+        $airbnbRequest = new Request('GET', '/reservations/new', query: ['source' => 'airbnb'], server: ['HTTP_HX_REQUEST' => 'true']);
+        $airbnbResponse = $this->controller->newReservation($airbnbRequest, $this->session);
+
+        $this->assertSame(200, $airbnbResponse->getStatusCode());
+        $airbnbBody = $airbnbResponse->getBody();
+
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*\bdisabled\b/', $airbnbBody);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*aria-disabled="true"/', $airbnbBody);
+        $this->assertMatchesRegularExpression('/id="create-submit-btn"[^>]*opacity-50 cursor-not-allowed/', $airbnbBody);
+        $this->assertStringContainsString('data-default-text="Onboard &amp; Generate Dispatch"', $airbnbBody);
+        $this->assertStringContainsString('id="create-submit-helper"', $airbnbBody);
+        $this->assertStringContainsString('Select available dates to enable creation', $airbnbBody);
+    }
+
+    public function testCreateModalIncludesReactiveValidationMatrixScript(): void
+    {
+        $request = new Request('GET', '/reservations/new', server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Matrix runner functions
+        $this->assertStringContainsString('function getUnmetRequirement()', $body);
+        $this->assertStringContainsString('function validateForm()', $body);
+
+        // Property validation (1606 or 1707)
+        $this->assertStringContainsString("propVal !== '1606' && propVal !== '1707'", $body);
+        $this->assertStringContainsString('Select a valid property', $body);
+
+        // Date range validation
+        $this->assertStringContainsString('!checkInVal || !checkOutVal', $body);
+        $this->assertStringContainsString('Select available dates to enable creation', $body);
+        $this->assertStringContainsString('checkOutVal <= checkInVal', $body);
+        $this->assertStringContainsString('Check-out date must be after check-in date', $body);
+
+        // Availability check & conflict guidance
+        $this->assertStringContainsString('!isAvailable', $body);
+        $this->assertStringContainsString('Resolve date conflict above to proceed', $body);
+
+        // Total price validation
+        $this->assertStringContainsString('priceVal === \'\' || isNaN(Number(priceVal)) || Number(priceVal) < 0', $body);
+        $this->assertStringContainsString('Total price cannot be negative', $body);
+
+        // Source-dependent validation rules
+        // Universal guest name requirement
+        $this->assertStringContainsString('Guest name is required', $body);
+        $this->assertStringContainsString('Airbnb (External Reservation)', $body);
+        $this->assertStringContainsString('var airbnbContainer =', $body);
+
+        // Airbnb: external confirmation code required and conditional email validation
+        $this->assertStringContainsString("currentSource === 'airbnb'", $body);
+        $this->assertStringContainsString('!airbnbCode', $body);
+        $this->assertStringContainsString('Airbnb confirmation code required', $body);
+        $this->assertStringContainsString('Valid guest email required when sending confirmation', $body);
+
+        // Direct stays: guest name, email regex, phone length (7-25 chars)
+        $this->assertStringContainsString('Guest name and email required', $body);
+        $this->assertStringContainsString('phoneVal.length < 7 || phoneVal.length > 25', $body);
+        $this->assertStringContainsString('Guest phone number must be 7-25 characters', $body);
+
+        // Unlocking when valid / locking when invalid
+        $this->assertStringContainsString("btn.setAttribute('aria-disabled', 'false')", $body);
+        $this->assertStringContainsString("btn.classList.remove('opacity-50', 'cursor-not-allowed')", $body);
+        $this->assertStringContainsString("btn.setAttribute('aria-disabled', 'true')", $body);
+        $this->assertStringContainsString("btn.classList.add('opacity-50', 'cursor-not-allowed')", $body);
+
+        // Event listeners: availabilityChecked, htmx:afterSwap, form input & change
+        $this->assertStringContainsString("addEventListener('availabilityChecked'", $body);
+        $this->assertStringContainsString("addEventListener('htmx:afterSwap'", $body);
+        $this->assertStringContainsString("addEventListener('input'", $body);
+        $this->assertStringContainsString("addEventListener('change'", $body);
+
+        // Enter keypress and submit event prevention
+        $this->assertStringContainsString("addEventListener('keydown'", $body);
+        $this->assertStringContainsString("evt.key === 'Enter'", $body);
+        $this->assertStringContainsString("addEventListener('submit'", $body);
+        $this->assertStringContainsString('evt.preventDefault()', $body);
+
+        // Immediate initial run
+        $this->assertStringContainsString('syncAvailabilityFromDom()', $body);
+        $this->assertStringContainsString('validateForm()', $body);
     }
 
     public function testCreateManualReservationValidatesInputAndReturns422(): void
@@ -402,6 +570,195 @@ final class ReservationControllerTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertStringContainsString('Selected dates conflict', $response->getBody());
+    }
+
+    public function testCreateManualReservationRejectsInvalidDateFormatWith422(): void
+    {
+        // Invalid check-in format
+        $request1 = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026/11/01',
+            'check_out' => '2026-11-05',
+            'total_price' => 1000000,
+            'guest_name' => 'John Doe',
+            'guest_email' => 'john@example.com',
+            'guest_phone' => '+573001234567',
+        ]);
+        $response1 = $this->controller->createManual($request1, $this->session);
+        $this->assertSame(422, $response1->getStatusCode());
+        $this->assertStringContainsString('valid dates in Y-m-d format', $response1->getBody());
+
+        // Non-existent calendar day (e.g. Feb 30)
+        $request2 = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-02-30',
+            'check_out' => '2026-03-05',
+            'total_price' => 1000000,
+            'guest_name' => 'John Doe',
+            'guest_email' => 'john@example.com',
+            'guest_phone' => '+573001234567',
+        ]);
+        $response2 = $this->controller->createManual($request2, $this->session);
+        $this->assertSame(422, $response2->getStatusCode());
+        $this->assertStringContainsString('valid dates in Y-m-d format', $response2->getBody());
+
+        // Invalid check-out format
+        $request3 = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-01',
+            'check_out' => 'not-a-date',
+            'total_price' => 1000000,
+            'guest_name' => 'John Doe',
+            'guest_email' => 'john@example.com',
+            'guest_phone' => '+573001234567',
+        ]);
+        $response3 = $this->controller->createManual($request3, $this->session);
+        $this->assertSame(422, $response3->getStatusCode());
+        $this->assertStringContainsString('valid dates in Y-m-d format', $response3->getBody());
+    }
+
+    public function testCreateManualReservationRejectsInvalidSourceWith422(): void
+    {
+        $request = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'source' => 'unknown_source',
+            'total_price' => 1000000,
+            'guest_name' => 'John Doe',
+            'guest_email' => 'john@example.com',
+            'guest_phone' => '+573001234567',
+        ]);
+        $response = $this->controller->createManual($request, $this->session);
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Invalid reservation source', $response->getBody());
+    }
+
+    public function testCreateManualReservationRejectsInvalidPhoneLengthForNonAirbnbWith422(): void
+    {
+        // Too short (< 7 characters)
+        $request1 = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'source' => 'bank_transfer',
+            'total_price' => 1000000,
+            'guest_name' => 'John Doe',
+            'guest_email' => 'john@example.com',
+            'guest_phone' => '12345',
+        ]);
+        $response1 = $this->controller->createManual($request1, $this->session);
+        $this->assertSame(422, $response1->getStatusCode());
+        $this->assertStringContainsString('Guest phone number must be between 7 and 25 characters', $response1->getBody());
+
+        // Too long (> 25 characters)
+        $request2 = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'source' => 'cash',
+            'total_price' => 1000000,
+            'guest_name' => 'John Doe',
+            'guest_email' => 'john@example.com',
+            'guest_phone' => str_repeat('9', 26),
+        ]);
+        $response2 = $this->controller->createManual($request2, $this->session);
+        $this->assertSame(422, $response2->getStatusCode());
+        $this->assertStringContainsString('Guest phone number must be between 7 and 25 characters', $response2->getBody());
+    }
+
+    public function testCreateManualReservationRejectsLedgerConflictWithItemizedReasons(): void
+    {
+        $this->ledger->method('isAvailable')->willReturn(false);
+        $this->ledger->method('getConflictReasons')->willReturn([
+            'Direct reservation conflict: res-man-abc123',
+            'Channel block: airbnb-block-xyz789',
+        ]);
+
+        $request = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-10-01',
+            'check_out' => '2026-10-05',
+            'total_price' => 1200000,
+            'guest_name' => 'Overlapping Stay',
+            'guest_email' => 'overlap@example.com',
+            'guest_phone' => '+573009998877',
+        ]);
+        $response = $this->controller->createManual($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('Selected dates conflict: Direct reservation conflict: res-man-abc123; Channel block: airbnb-block-xyz789', $body);
+    }
+
+    public function testCreateManualReservation422PreservesAllSubmittedFormFields(): void
+    {
+        $request = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '1707',
+            'source' => 'bank_transfer',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'total_price' => '1850000',
+            'guest_name' => 'Alejandro Morales',
+            'guest_email' => 'invalid-email-syntax', // Triggers 422
+            'guest_phone' => '+573001234567',
+            'notes' => 'VIP guest requesting early check-in at 1pm',
+            'pre_mark_registry' => '1',
+            'send_confirmation_email' => '1',
+            'external_confirmation_code' => 'CONF-777',
+            'channel_block_uid' => 'BLOCK-888',
+        ]);
+
+        $response = $this->controller->createManual($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Property 1707 selected
+        $this->assertStringContainsString('<option value="1707" selected>', $body);
+        // Source bank_transfer selected
+        $this->assertStringContainsString('<option value="bank_transfer" selected>', $body);
+        // Dates preserved
+        $this->assertStringContainsString('value="2026-11-01"', $body);
+        $this->assertStringContainsString('value="2026-11-05"', $body);
+        // Total price preserved
+        $this->assertStringContainsString('value="1850000"', $body);
+        // Guest contact info preserved
+        $this->assertStringContainsString('value="Alejandro Morales"', $body);
+        $this->assertStringContainsString('value="invalid-email-syntax"', $body);
+        $this->assertStringContainsString('value="+573001234567"', $body);
+        // Notes preserved in textarea
+        $this->assertStringContainsString('VIP guest requesting early check-in at 1pm', $body);
+        // Checkboxes preserved as checked
+        $this->assertMatchesRegularExpression('/name="pre_mark_registry"[^>]*checked/', $body);
+        $this->assertMatchesRegularExpression('/name="send_confirmation_email"[^>]*checked/', $body);
+        // External platform codes preserved
+        $this->assertStringContainsString('value="CONF-777"', $body);
+        $this->assertStringContainsString('value="BLOCK-888"', $body);
+    }
+
+    public function testCreateManualReservation422PreservesUncheckedCheckboxesAndPropertyDefault(): void
+    {
+        $request = new Request('POST', '/reservations/create-manual', post: [
+            'property_id' => '',
+            'check_in' => '2026-11-01',
+            'check_out' => '2026-11-05',
+            'guest_name' => 'Carlos Santana',
+            'guest_email' => 'invalid-email-syntax', // Triggers 422
+            'guest_phone' => '+573001234567',
+            // Checkboxes explicitly omitted
+        ]);
+
+        $response = $this->controller->createManual($request, $this->session);
+
+        $this->assertSame(422, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Property cleanly defaults to 1606
+        $this->assertStringContainsString('<option value="1606" selected>', $body);
+        // Checkboxes preserved as unchecked
+        $this->assertDoesNotMatchRegularExpression('/name="pre_mark_registry"[^>]*checked/', $body);
+        $this->assertDoesNotMatchRegularExpression('/name="send_confirmation_email"[^>]*checked/', $body);
     }
 
     public function testCreateManualReservationSuccessDispatchesEmailRendersOobDrawerAndClosesModal(): void
