@@ -109,34 +109,67 @@ All operational mutations must:
 
 ## 4. Workflow 3: Creating Manual Reservations (Payment Bypass)
 
+### Modal Lifecycle & Reactive Validation Matrix
+The manual reservation creation modal (`_create_modal.php`) enforces client-side reactive gating and real-time operator feedback before any form submission can occur:
+1. **Initial Submit Lock**:
+   * The submit button (`#create-submit-btn`) is initialized in a disabled state (`disabled`, `aria-disabled="true"`, `class="... opacity-50 cursor-not-allowed"`).
+   * A dynamic guidance element (`#create-submit-helper`) is rendered directly below the action buttons, initially prompting `"Select available dates to enable creation"`.
+2. **Date Range Auto-Synchronization**:
+   * Changing `#create-check-in` dynamically adjusts `#create-check-out.min` to `check_in + 1 day`.
+   * If `#create-check-out` has a value on or before `#create-check-in`, it is auto-advanced to `check_in + 1 day`.
+3. **Asynchronous Availability Signaling**:
+   * Changing property, check-in, or check-out triggers an HTMX POST to `/reservations/quote-preview`.
+   * HTMX lifecycle listeners update the submit button to `"Checking availability..."` (disabled) during the in-flight request.
+   * The quote preview partial (`_quote_preview.php`) wraps its output in `#quote-preview-result` with declarative metadata `data-available="true"` or `data-available="false"`.
+   * An inline script dispatches the `availabilityChecked` custom DOM event on `#create-reservation-form` containing `{ available: bool, conflictReasons: array, defaultPrice: float|null }`.
+4. **Source-Dependent Validation Matrix**:
+   * An input listener across `#create-reservation-form` re-evaluates the validation matrix:
+     * **Property**: Must be `'1606'` or `'1707'`.
+     * **Dates**: `check_in` and `check_out` must be present and `check_out > check_in`.
+     * **Availability**: Must be confirmed available (`isAvailable === true`). If conflicting, helper indicates `"Resolve date conflict above to proceed"`.
+     * **Price**: `total_price` must be numeric and `>= 0`.
+     * **Source-Specific Rules**:
+       * **Airbnb (`source=airbnb`)**: Requires non-empty `external_confirmation_code` (`"Airbnb confirmation code required"`). Guest email and phone are optional.
+       * **Direct Stays (`bank_transfer`, `cash`, `owner_stay`, `manual_override`)**: Requires non-empty `guest_name`, valid email regex (`"Guest name and email required"`), and phone length between 7 and 25 characters (`"Guest phone number must be 7-25 characters"`).
+   * When all validations pass, the submit button is unlocked (`disabled = false`, `aria-disabled="false"`, `opacity-50 cursor-not-allowed` removed), and `#create-submit-helper` is hidden.
+   * `keydown` (Enter key) and `submit` events are intercepted via `preventDefault()` when `validateForm()` fails, eliminating accidental blank or conflicting submissions.
+
 ### Controller Endpoints
-* **`GET /reservations/new`**: Renders modal creation dialog `_create_modal.php`.
+* **`GET /reservations/new`**: Renders modal creation dialog `_create_modal.php`. Supports query parameters `source` (defaulting to direct or `airbnb`), `property_id`, and prefilled dates.
 * **`POST /reservations/quote-preview`**:
   * Validates date availability via `ReservationLedger->getConflictReasons()`.
   * Calculates suggested total price via `QuoteEngine`.
-  * Returns quote preview partial `_quote_preview.php`.
+  * Returns quote preview partial `_quote_preview.php` with `data-available` attribute and `availabilityChecked` event dispatch.
 * **`POST /reservations/create-manual`**:
   * **Payload**:
     * `property_id`: `'1606' | '1707'`
-    * `check_in`: `YYYY-MM-DD`
-    * `check_out`: `YYYY-MM-DD`
+    * `check_in`: `YYYY-MM-DD` (strict date format validation)
+    * `check_out`: `YYYY-MM-DD` (strict date format validation, strictly after `check_in`)
     * `guest_name`: string (2-120 chars)
-    * `guest_email`: valid email
-    * `guest_phone`: string (7-25 chars)
+    * `guest_email`: valid email (optional for Airbnb)
+    * `guest_phone`: string (7-25 chars, optional for Airbnb)
     * `total_price`: decimal >= 0.00
-    * `source`: `'cash' | 'bank_transfer' | 'owner_stay' | 'manual_override'`
+    * `source`: `'airbnb' | 'cash' | 'bank_transfer' | 'owner_stay' | 'manual_override'` (strict whitelist validation)
+    * `external_confirmation_code`: string (required if `source === 'airbnb'`)
+    * `channel_block_uid`: optional string (for linking/absorbing existing iCal calendar blocks)
     * `notes`: optional text
+    * `pre_mark_registry`: boolean (if checked, marks guest registry completed immediately)
     * `send_confirmation_email`: boolean
   * **Execution**:
-    1. Acquire atomic transaction.
-    2. Check `ReservationLedger->isAvailable($propertyId, $checkIn, $checkOut)`. If false, abort with HTTP 422: "Selected dates conflict with an existing hold or maintenance block."
-    3. Generate `reservation_uid = uuid_v4()`.
-    4. Set `status = 'confirmed'`, `payment_status = 'approved'`, `source = :source`.
-    5. Generate initial door code via `DoorCodeGenerator`.
-    6. Commit transaction.
-    7. Emit `admin_audit_logs` entry.
-    8. Send email if requested.
-    9. Return `HX-Redirect: /reservations/{uid}` or row prepend with success toast.
+    1. Validate input strictly: date format `Y-m-d`, source whitelist, email regex (for direct stays), phone length (for direct stays), Airbnb confirmation code (for Airbnb stays).
+    2. Check `ReservationLedger->isAvailable($propertyId, $checkIn, $checkOut, null, $absorbingSource)`.
+       * If false, invoke `$this->ledger->getConflictReasons(...)` to extract specific itemized conflicting reservation UIDs or block labels.
+       * Re-render `_create_modal.php` with HTTP 422: displaying the specific conflict banner and **preserving 100% of operator input across all submitted fields** (`renderCreateError`).
+    3. Acquire atomic database transaction.
+    4. Generate `reservation_uid` (`res-abnb-*` for Airbnb, `res-man-*` for manual/direct).
+    5. Set `status = 'confirmed'`, `payment_status = 'approved'`, `source = :source`.
+    6. If `channel_block_uid` is provided, absorb/delete the corresponding channel block to prevent double-counting.
+    7. Generate initial door code via `DoorCodeGenerator`.
+    8. Commit transaction.
+    9. Emit `admin_audit_logs` entry.
+    10. Send confirmation email if requested.
+    11. Return `HX-Redirect: /reservations/{uid}` or row prepend with success toast.
+
 
 ---
 
