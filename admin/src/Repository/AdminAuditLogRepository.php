@@ -252,6 +252,9 @@ class AdminAuditLogRepository
             FROM admin_users 
             ORDER BY name ASC
         ');
+        if ($stmt === false) {
+            return [];
+        }
 
         /** @var list<array{id: int, name: string, email: string, role: string}> $users */
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -270,6 +273,9 @@ class AdminAuditLogRepository
             FROM admin_audit_logs 
             ORDER BY entity_type ASC
         ');
+        if ($stmt === false) {
+            return [];
+        }
 
         /** @var list<string> $types */
         $types = $stmt->fetchAll(PDO::FETCH_COLUMN);

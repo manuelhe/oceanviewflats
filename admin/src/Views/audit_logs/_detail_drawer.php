@@ -55,7 +55,7 @@ foreach ($allKeys as $key) {
                 'after' => $payloadAfter[$key],
             ];
         }
-    } elseif ($inBefore && !$inAfter) {
+    } elseif ($inBefore) {
         $diffKeys[$key] = [
             'type' => 'removed',
             'before' => $payloadBefore[$key],
