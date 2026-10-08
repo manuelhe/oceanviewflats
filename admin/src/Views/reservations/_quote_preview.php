@@ -8,7 +8,7 @@
  */
 
 $isFullyAvailable = ($isAvailable === true && $quote !== null);
-$reasons = array_values($conflictReasons ?? []);
+$reasons = $conflictReasons;
 if (!$isFullyAvailable && empty($reasons)) {
     $reasons = ['Selected dates are not available.'];
 }
@@ -21,7 +21,7 @@ $eventDetail = [
 ?>
 
 <div id="quote-preview-result" data-available="<?= $isFullyAvailable ? 'true' : 'false' ?>" class="w-full">
-    <?php if (!$isFullyAvailable): ?>
+    <?php if (!$isFullyAvailable || $quote === null): ?>
         <div class="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1.5 shadow-2xs">
             <div class="font-bold flex items-center text-rose-900">
                 <svg class="w-4 h-4 mr-1.5 text-rose-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
