@@ -11,6 +11,7 @@ use OceanViewFlats\Domain\Access\PropertyCredentialsProviderInterface;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+use OceanViewFlats\Domain\Support\PublicUrlBuilder;
 use PDO;
 use Throwable;
 
@@ -23,6 +24,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
 {
     private readonly AccessDispatchEmailRendererInterface $accessDispatchRenderer;
     private readonly PropertyCredentialsProviderInterface $credentialsProvider;
+    private readonly PublicUrlBuilder $urlBuilder;
 
     public function __construct(
         private readonly PDO $pdo,
@@ -35,10 +37,12 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null,
         private readonly ?CondominiumClearanceSyncInterface $condominiumClearanceSync = null,
-        ?PropertyCredentialsProviderInterface $credentialsProvider = null
+        ?PropertyCredentialsProviderInterface $credentialsProvider = null,
+        ?PublicUrlBuilder $urlBuilder = null
     ) {
         $this->accessDispatchRenderer = $accessDispatchRenderer ?? new AccessDispatchEmailRenderer($this->publicSiteUrl);
         $this->credentialsProvider = $credentialsProvider ?? new ConfigPropertyCredentialsProvider();
+        $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->publicSiteUrl);
     }
 
     /**
@@ -82,6 +86,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             : HuespedManagerClearanceSync::createDefault($pdo);
         /** @var PropertyCredentialsProviderInterface $credentialsProvider */
         $credentialsProvider = $options['credentials_provider'] ?? new ConfigPropertyCredentialsProvider();
+        /** @var PublicUrlBuilder $urlBuilder */
+        $urlBuilder = $options['public_url_builder'] ?? new PublicUrlBuilder($resolvedPublicSiteUrl);
 
         return new self(
             pdo: $pdo,
@@ -94,7 +100,8 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             publicSiteUrl: $resolvedPublicSiteUrl,
             accessDispatchRenderer: $accessDispatchRenderer,
             condominiumClearanceSync: $condominiumClearanceSync,
-            credentialsProvider: $credentialsProvider
+            credentialsProvider: $credentialsProvider,
+            urlBuilder: $urlBuilder
         );
     }
 
@@ -287,7 +294,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         }
 
         // 8. Generate unlocked guide URL
-        $guideUrl = rtrim($this->publicSiteUrl, '/') . '/guide/?code=' . urlencode($reservation->reservationUid) . '&lang=' . urlencode($submission->lang);
+        $guideUrl = $this->urlBuilder->buildGuideUrl($submission->lang, $reservation->reservationUid);
 
         // 9. Dispatch Access Credentials email to Primary Guest (ADR 0001, Ticket #131)
         $accessDispatchSent = false;
@@ -410,7 +417,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         }
 
         $lang = $submission !== null ? $submission->lang : $reservation->lang;
-        $guideUrl = rtrim($this->publicSiteUrl, '/') . '/guide/?code=' . urlencode($reservationUid) . '&lang=' . urlencode($lang);
+        $guideUrl = $this->urlBuilder->buildGuideUrl($lang, $reservationUid);
 
         $freshReservation = $this->reservationRepository->findByUid($reservationUid)
             ?? $reservation->withRegistryCompleted(new DateTimeImmutable(), $doorCode);

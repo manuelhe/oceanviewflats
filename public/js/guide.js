@@ -107,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildRegistryUrl(codeOverride) {
         const regParams = new URLSearchParams();
         regParams.set('property', propertyNumber);
-        regParams.set('lang', lang);
         if (codeOverride || reservationCode) {
             regParams.set('code', codeOverride || reservationCode);
         }

@@ -11,7 +11,7 @@ interface ConfirmationEmailRendererInterface
     /**
      * Renders the localized HTML confirmation email for the Primary Guest.
      * Strictly enforces ADR 0001: withholds door codes, Wi-Fi credentials, and direct Guide URLs.
-     * Provides a direct, localized invitation link to the Guest Registry page (/registry/).
+     * Provides a direct, localized invitation link to the Guest Registry page (/registry/index.html, /registry/es.html, etc.).
      */
     public function renderGuestConfirmationHtml(Reservation $reservation): string;
 

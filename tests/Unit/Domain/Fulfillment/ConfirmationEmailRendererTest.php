@@ -54,8 +54,9 @@ final class ConfirmationEmailRendererTest extends TestCase
         $this->assertStringNotContainsString('wifi', strtolower($html));
 
         // Registry link and invitations must be present
-        $expectedRegistryUrl = 'https://www.oceanviewflats.com/registry/?property=1606&check_in=2026-11-20&check_out=2026-11-23&code=ovf_test_abc123&lang=en';
+        $expectedRegistryUrl = 'https://www.oceanviewflats.com/registry/index.html?property=1606&check_in=2026-11-20&check_out=2026-11-23&code=ovf_test_abc123';
         $this->assertStringContainsString($expectedRegistryUrl, $html);
+        $this->assertStringNotContainsString('lang=', $expectedRegistryUrl);
         $this->assertStringContainsString('Complete Guest Registry', $html);
         $this->assertStringContainsString('Colombian statutory hospitality regulations', $html);
         $this->assertStringContainsString('ovf_test_abc123', $html);
@@ -70,7 +71,9 @@ final class ConfirmationEmailRendererTest extends TestCase
         $html = $this->renderer->renderGuestConfirmationHtml($reservation);
 
         $this->assertStringNotContainsString('/guide/', $html);
-        $this->assertStringContainsString('https://www.oceanviewflats.com/registry/?property=1606&check_in=2026-11-20&check_out=2026-11-23&code=ovf_test_abc123&lang=es', $html);
+        $expectedRegistryUrl = 'https://www.oceanviewflats.com/registry/es.html?property=1606&check_in=2026-11-20&check_out=2026-11-23&code=ovf_test_abc123';
+        $this->assertStringContainsString($expectedRegistryUrl, $html);
+        $this->assertStringNotContainsString('lang=', $expectedRegistryUrl);
         $this->assertStringContainsString('Completar Registro de Huéspedes', $html);
         $this->assertStringContainsString('normas legales de hotelería en Colombia', $html);
         $this->assertStringContainsString('3 noches', $html);
@@ -85,7 +88,9 @@ final class ConfirmationEmailRendererTest extends TestCase
         $html = $this->renderer->renderGuestConfirmationHtml($reservation);
 
         $this->assertStringNotContainsString('/guide/', $html);
-        $this->assertStringContainsString('https://www.oceanviewflats.com/registry/?property=1606&check_in=2026-11-20&check_out=2026-11-23&code=ovf_test_abc123&lang=ja', $html);
+        $expectedRegistryUrl = 'https://www.oceanviewflats.com/registry/ja.html?property=1606&check_in=2026-11-20&check_out=2026-11-23&code=ovf_test_abc123';
+        $this->assertStringContainsString($expectedRegistryUrl, $html);
+        $this->assertStringNotContainsString('lang=', $expectedRegistryUrl);
         $this->assertStringContainsString('宿泊者名簿に登録する', $html);
         $this->assertStringContainsString('コロンビアの宿泊施設関連法規', $html);
 
@@ -99,7 +104,8 @@ final class ConfirmationEmailRendererTest extends TestCase
         $reservation = $this->createReservation('', 'maria@example.com.co');
         $html = $this->renderer->renderGuestConfirmationHtml($reservation);
 
-        $this->assertStringContainsString('lang=es', $html);
+        $this->assertStringContainsString('/registry/es.html', $html);
+        $this->assertStringNotContainsString('lang=es', $html);
         $this->assertStringContainsString('Completar Registro de Huéspedes', $html);
     }
 

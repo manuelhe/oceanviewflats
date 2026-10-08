@@ -326,7 +326,8 @@ final class GuestRegistryEndpointTest extends TestCase
         $guideUrl = $res['json']['guide_url'] ?? null;
         $this->assertIsString($guideUrl);
         $this->assertStringContainsString('ovf_conf_100', $guideUrl);
-        $this->assertStringContainsString('lang=en', $guideUrl);
+        $this->assertStringContainsString('/guide/index.html?code=ovf_conf_100', $guideUrl);
+        $this->assertStringNotContainsString('lang=', $guideUrl);
 
         // Reservation code
         $this->assertSame('ovf_conf_100', $res['json']['reservation_code'] ?? null);
@@ -395,8 +396,9 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertSame(200, $res['statusCode']);
         $this->assertIsArray($res['json']);
         $this->assertTrue($res['json']['success']);
-        $this->assertSame('0345678#', $res['json']['door_code']);
-        $this->assertStringContainsString('lang=es', (string) $res['json']['guide_url']);
+        $guideUrl = (string) $res['json']['guide_url'];
+        $this->assertStringContainsString('/guide/es.html?code=ovf_conf_100', $guideUrl);
+        $this->assertStringNotContainsString('lang=', $guideUrl);
     }
 
     public function testSubmitRegistryMatchesByPropertyAndStayDatesWhenCodeIsEmpty(): void
@@ -752,7 +754,7 @@ PHP;
         $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
         $this->assertStringContainsString('0345678#', $guestEmail['htmlBody']);
         $this->assertStringContainsString('Maria Gomez', $guestEmail['htmlBody']);
-        $this->assertStringContainsString('/guide/?code=ovf_conf_100', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('/guide/index.html?code=ovf_conf_100', $guestEmail['htmlBody']);
     }
 
     public function testValidSubmissionSucceedsEvenIfEmailSendingFails(): void

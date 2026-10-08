@@ -97,7 +97,7 @@ if ($reservation->isConcluded()) {
 }
 
 // Build sanitized public stay payload (Principle of Least Privilege: NO credentials, NO pricing, NO notes, NO phone/email)
-$guideUrl = ($lang === 'en' ? 'guide/' : "guide/{$lang}.html") . '?code=' . rawurlencode($reservation->reservationUid);
+$guideUrl = ($lang === 'en' ? 'guide/index.html' : "guide/{$lang}.html") . '?code=' . rawurlencode($reservation->reservationUid);
 
 http_response_code(200);
 send_json_response(true, 'Reservation details retrieved successfully.', [

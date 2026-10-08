@@ -6,6 +6,7 @@ namespace OceanViewFlats\Domain\Access;
 
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
+use OceanViewFlats\Domain\Support\PublicUrlBuilder;
 
 /**
  * Domain service enforcing ADR 0001: Access Credentials and the Guest Guide are strictly
@@ -13,12 +14,17 @@ use OceanViewFlats\Domain\Reservation\ReservationStatus;
  */
 final class GuideAccessService implements GuideAccessServiceInterface
 {
+    private readonly PublicUrlBuilder $urlBuilder;
+
     public function __construct(
         private readonly ReservationRepositoryInterface $repository,
         private readonly PropertyCredentialsProviderInterface $credentialsProvider,
         private readonly string $baseUrl = '',
-        private readonly array $translations = []
-    ) {}
+        private readonly array $translations = [],
+        ?PublicUrlBuilder $urlBuilder = null
+    ) {
+        $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->baseUrl);
+    }
 
     public function verifyAccess(string $reservationUid, string $lang = 'en'): AccessVerificationResult
     {
@@ -63,18 +69,12 @@ final class GuideAccessService implements GuideAccessServiceInterface
         }
 
         if (!$reservation->registryCompleted) {
-            $cleanBase = rtrim($this->baseUrl, '/');
-            $registryPath = '/registry/';
-            $registryUrl = sprintf(
-                '%s%s?property=%s&check_in=%s&check_out=%s&code=%s&lang=%s',
-                $cleanBase,
-                $registryPath,
-                rawurlencode($reservation->propertyId),
-                rawurlencode($reservation->checkIn),
-                rawurlencode($reservation->checkOut),
-                rawurlencode($reservation->reservationUid),
-                rawurlencode($lang)
-            );
+            $registryUrl = $this->urlBuilder->buildRegistryUrl($lang, [
+                'property' => $reservation->propertyId,
+                'check_in' => $reservation->checkIn,
+                'check_out' => $reservation->checkOut,
+                'code' => $reservation->reservationUid,
+            ]);
 
             return AccessVerificationResult::registryRequired(
                 reservation: $reservation,
