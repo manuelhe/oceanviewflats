@@ -6,6 +6,7 @@ namespace OceanViewFlats\Domain\Fulfillment;
 
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Support\PathResolver;
+use OceanViewFlats\Domain\Support\PublicUrlBuilder;
 
 final class AccessDispatchEmailRenderer implements AccessDispatchEmailRendererInterface
 {
@@ -13,15 +14,18 @@ final class AccessDispatchEmailRenderer implements AccessDispatchEmailRendererIn
      * @var array<string, array<string, mixed>>
      */
     private array $translations;
+    private readonly PublicUrlBuilder $urlBuilder;
 
     /**
      * @param array<string, array<string, mixed>>|null $translations
      */
     public function __construct(
         private readonly string $baseUrl = 'https://www.oceanviewflats.com',
-        ?array $translations = null
+        ?array $translations = null,
+        ?PublicUrlBuilder $urlBuilder = null
     ) {
         $this->translations = $translations ?? PathResolver::loadTranslations();
+        $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->baseUrl);
     }
 
     public function renderSubject(Reservation $reservation, ?string $lang = null): string
@@ -258,12 +262,8 @@ HTML;
     public function buildGuideUrl(Reservation $reservation, ?string $lang = null): string
     {
         $resolvedLang = $this->resolveLanguage($reservation, $lang);
-        $params = http_build_query([
-            'code' => $reservation->reservationUid,
-            'lang' => $resolvedLang,
-        ]);
 
-        return rtrim($this->baseUrl, '/') . '/guide/?' . $params;
+        return $this->urlBuilder->buildGuideUrl($resolvedLang, $reservation->reservationUid);
     }
 
     private function resolveLanguage(Reservation $reservation, ?string $explicitLang = null): string

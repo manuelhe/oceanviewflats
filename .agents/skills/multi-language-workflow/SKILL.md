@@ -119,13 +119,13 @@ const formData = new FormData(formElement);
 formData.append('lang', document.documentElement.lang || 'en');
 ```
 
-### 3. Preserving Language context in Redirections
-When redirecting users or building dynamic links (such as navigating from the Guest Welcome Guide to the Guest Registry), ensure the language is preserved as a query parameter or directory route:
+### 3. Preserving Language Context in Redirections
+When redirecting users or building dynamic links (such as navigating from the Guest Welcome Guide to the Guest Registry), ensure the language is preserved via the static localized page route without adding redundant `lang` query parameters:
 ```javascript
 const pageName = lang === 'en' ? 'registry/index.html' : `registry/${lang}.html`;
 const regParams = new URLSearchParams();
-regParams.set('lang', lang);
-registryLink.href = `${pathPrefix}${pageName}?${regParams.toString()}`;
+if (reservationCode) regParams.set('code', reservationCode);
+registryLink.href = `${pathPrefix}${pageName}${regParams.toString() ? '?' + regParams.toString() : ''}`;
 ```
 
 ---

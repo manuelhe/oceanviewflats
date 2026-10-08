@@ -7,6 +7,7 @@ namespace OceanViewFlats\Domain\Fulfillment;
 use DateTimeImmutable;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Support\PathResolver;
+use OceanViewFlats\Domain\Support\PublicUrlBuilder;
 
 final class ConfirmationEmailRenderer implements ConfirmationEmailRendererInterface
 {
@@ -14,12 +15,15 @@ final class ConfirmationEmailRenderer implements ConfirmationEmailRendererInterf
      * @var array<string, array<string, mixed>>
      */
     private readonly array $translations;
+    private readonly PublicUrlBuilder $urlBuilder;
 
     public function __construct(
         private readonly string $baseUrl = 'https://www.oceanviewflats.com',
-        ?array $translations = null
+        ?array $translations = null,
+        ?PublicUrlBuilder $urlBuilder = null
     ) {
         $this->translations = $translations ?? PathResolver::loadTranslations();
+        $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->baseUrl);
     }
 
     public function renderGuestConfirmationHtml(Reservation $reservation): string
@@ -189,15 +193,13 @@ HTML;
     public function buildRegistryUrl(Reservation $reservation, ?string $lang = null): string
     {
         $lang = $lang ?? $this->resolveLanguage($reservation);
-        $params = http_build_query([
+
+        return $this->urlBuilder->buildRegistryUrl($lang, [
             'property' => $reservation->propertyId,
             'check_in' => $reservation->checkIn,
             'check_out' => $reservation->checkOut,
             'code' => $reservation->reservationUid,
-            'lang' => $lang,
         ]);
-
-        return rtrim($this->baseUrl, '/') . '/registry/?' . $params;
     }
 
     private function resolveLanguage(Reservation $reservation): string

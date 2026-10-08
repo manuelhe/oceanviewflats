@@ -148,12 +148,12 @@ final class GuideAccessServiceTest extends TestCase
         $this->assertNotNull($result->registryUrl);
 
         // Verify registry URL contains necessary parameters
-        $this->assertStringContainsString('/registry/?', $result->registryUrl);
+        $this->assertStringContainsString('/registry/es.html?', $result->registryUrl);
         $this->assertStringContainsString('property=1707', $result->registryUrl);
         $this->assertStringContainsString('check_in=2026-11-10', $result->registryUrl);
         $this->assertStringContainsString('check_out=2026-11-15', $result->registryUrl);
         $this->assertStringContainsString('code=ovf_confirmed_noreg', $result->registryUrl);
-        $this->assertStringContainsString('lang=es', $result->registryUrl);
+        $this->assertStringNotContainsString('lang=', $result->registryUrl);
 
         // Ensure serialized array NEVER leaks credentials
         $array = $result->toArray();

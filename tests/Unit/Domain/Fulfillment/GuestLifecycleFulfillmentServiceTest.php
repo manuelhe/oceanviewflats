@@ -221,7 +221,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $expectedDoorCode = '0345678#';
         $this->assertSame($expectedDoorCode, $result->doorCode);
         $this->assertSame($expectedDoorCode, $result->reservation->doorCode);
-        $this->assertSame('https://oceanviewflats.com/guide/?code=ovf_sample_100&lang=en', $result->guideUrl);
+        $this->assertSame('https://oceanviewflats.com/guide/index.html?code=ovf_sample_100', $result->guideUrl);
         $this->assertTrue($result->hostReportDispatched);
         $this->assertTrue($result->spreadsheetSynced);
         $this->assertTrue($result->accessDispatchDispatched);
@@ -274,7 +274,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('jane.smith@example.com', $guestEmail['to']);
         $this->assertStringContainsString('Access Credentials & Arrival Guide', $guestEmail['subject']);
         $this->assertStringContainsString($expectedDoorCode, $guestEmail['htmlBody']);
-        $this->assertStringContainsString('/guide/?code=ovf_sample_100', $guestEmail['htmlBody']);
+        $this->assertStringContainsString('/guide/index.html?code=ovf_sample_100', $guestEmail['htmlBody']);
         $this->assertStringContainsString('Assigned Parking', $guestEmail['htmlBody']);
         $this->assertStringContainsString('#87', $guestEmail['htmlBody']);
 
@@ -480,7 +480,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertSame('jane.smith@example.com', $dispatchEmail['to']);
         $this->assertStringContainsString('Access Credentials & Arrival Guide', $dispatchEmail['subject']);
         $this->assertStringContainsString('0345678#', $dispatchEmail['htmlBody']);
-        $this->assertStringContainsString('https://oceanviewflats.com/guide/?code=ovf_dispatch_test&amp;lang=en', $dispatchEmail['htmlBody']);
+        $this->assertStringContainsString('https://oceanviewflats.com/guide/index.html?code=ovf_dispatch_test', $dispatchEmail['htmlBody']);
         $this->assertStringContainsString('Jane Smith', $dispatchEmail['htmlBody']);
     }
 

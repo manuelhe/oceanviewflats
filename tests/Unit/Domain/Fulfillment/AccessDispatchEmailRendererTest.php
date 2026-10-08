@@ -53,7 +53,7 @@ final class AccessDispatchEmailRendererTest extends TestCase
 
         // 2. Guide URL
         $guideUrl = $this->renderer->buildGuideUrl($reservation, 'en');
-        $this->assertSame('https://www.oceanviewflats.com/guide/?code=ovf_dispatch_131&lang=en', $guideUrl);
+        $this->assertSame('https://www.oceanviewflats.com/guide/index.html?code=ovf_dispatch_131', $guideUrl);
 
         // 3. Plain Text Rendering
         $plain = $this->renderer->renderPlainText(
@@ -164,7 +164,9 @@ final class AccessDispatchEmailRendererTest extends TestCase
             $this->assertStringContainsString($expected['parking_label'], $html, "Parking label mismatch for {$lang}");
             $this->assertStringContainsString('#87', $html, "Parking spot missing for {$lang}");
             $this->assertStringContainsString($doorCode, $html, "Door code missing for {$lang}");
-            $this->assertStringContainsString("lang={$lang}", $html, "Guide URL lang mismatch for {$lang}");
+            $expectedGuidePath = $lang === 'en' ? '/guide/index.html?code=ovf_dispatch_131' : "/guide/{$lang}.html?code=ovf_dispatch_131";
+            $this->assertStringContainsString($expectedGuidePath, $html, "Guide URL mismatch for {$lang}");
+            $this->assertStringNotContainsString("lang=", $html, "Guide URL should not contain lang query param for {$lang}");
 
             $plain = $this->renderer->renderPlainText(
                 reservation: $reservation,
