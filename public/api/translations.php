@@ -39,6 +39,8 @@ return [
             'err_rate_limit' => 'Too many registry submissions. Please wait a few minutes and try again.',
             'msg_success' => 'Guest registration completed successfully.',
             'msg_success_backed_up' => 'Guest registration completed successfully (backed up).',
+            'msg_concluded' => 'This reservation has concluded and registration is closed.',
+            'err_reservation_concluded' => 'Cannot submit guest registry for a concluded reservation.',
             'email_subject' => 'New Guest Registry - Property %s',
         ],
         // Booking Inquiry Processor (book-request.php)
@@ -98,6 +100,8 @@ return [
             'err_payment_pending' => 'Reservation payment is pending verification. Access credentials unlock upon confirmed payment and registry completion.',
             'err_registry_required' => 'Guest registry must be submitted before access credentials are released (ADR 0001).',
             'msg_verified' => 'Access credentials verified successfully.',
+            'msg_concluded' => 'This reservation has concluded and registration is closed.',
+            'err_reservation_concluded' => 'Cannot submit guest registry for a concluded reservation.',
         ],
         // Cancellation Notice (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -188,6 +192,8 @@ return [
             'err_rate_limit' => 'Demasiados registros enviados. Por favor, espere unos minutos e intente de nuevo.',
             'msg_success' => 'Registro de huéspedes completado con éxito.',
             'msg_success_backed_up' => 'Registro de huéspedes completado con éxito (respaldado).',
+            'msg_concluded' => 'Esta reserva ha concluido y el registro se encuentra cerrado.',
+            'err_reservation_concluded' => 'No es posible enviar el registro de huéspedes para una reserva concluida.',
             'email_subject' => 'Nuevo Registro de Huéspedes - Propiedad %s',
         ],
         // Booking Inquiry Processor
@@ -247,6 +253,8 @@ return [
             'err_payment_pending' => 'El pago de la reserva está pendiente de verificación. Las credenciales se liberan tras confirmar el pago y el registro.',
             'err_registry_required' => 'El registro de huéspedes debe completarse antes de liberar las credenciales de acceso (ADR 0001).',
             'msg_verified' => 'Credenciales de acceso verificadas exitosamente.',
+            'msg_concluded' => 'Esta reserva ha concluido y el registro se encuentra cerrado.',
+            'err_reservation_concluded' => 'No es posible enviar el registro de huéspedes para una reserva concluida.',
         ],
         // Notificación de Cancelación (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -337,6 +345,8 @@ return [
             'err_rate_limit' => 'Trop d\'enregistrements envoyés. Veuillez patienter quelques minutes et réessayer.',
             'msg_success' => 'Enregistrement des clients réussi.',
             'msg_success_backed_up' => 'Enregistrement des clients réussi (sauvegardé).',
+            'msg_concluded' => 'Ce séjour est terminé et l\'enregistrement est fermé.',
+            'err_reservation_concluded' => 'Impossible de soumettre le registre des voyageurs pour une réservation terminée.',
             'email_subject' => 'Nouvel enregistrement de client - Propriété %s',
         ],
         // Booking Inquiry Processor
@@ -396,6 +406,8 @@ return [
             'err_payment_pending' => 'Le paiement est en attente de vérification. Les identifiants sont délivrés après paiement et enregistrement.',
             'err_registry_required' => 'Le registre des voyageurs doit être rempli avant la délivrance des identifiants d\'accès (ADR 0001).',
             'msg_verified' => 'Identifiants d\'accès vérifiés avec succès.',
+            'msg_concluded' => 'Ce séjour est terminé et l\'enregistrement est fermé.',
+            'err_reservation_concluded' => 'Impossible de soumettre le registre des voyageurs pour une réservation terminée.',
         ],
         // Notification d'Annulation (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -486,6 +498,8 @@ return [
             'err_rate_limit' => 'Troppi registri inviati. Si prega di attendere qualche minuto e riprovare.',
             'msg_success' => 'Registrazione degli ospiti completata con successo.',
             'msg_success_backed_up' => 'Registrazione degli ospiti completata con successo (salvata).',
+            'msg_concluded' => 'Questa prenotazione si è conclusa e la registrazione è chiusa.',
+            'err_reservation_concluded' => 'Impossibile inviare la registrazione degli ospiti per una prenotazione conclusa.',
             'email_subject' => 'Nuovo Registro Ospiti - Proprietà %s',
         ],
         // Booking Inquiry Processor
@@ -545,6 +559,8 @@ return [
             'err_payment_pending' => 'Il pagamento è in attesa di verifica. Le credenziali vengono sbloccate dopo il pagamento e la registrazione.',
             'err_registry_required' => 'Il registro degli ospiti deve essere completato prima di rilasciare le credenziali di accesso (ADR 0001).',
             'msg_verified' => 'Credenziali di accesso verificate con successo.',
+            'msg_concluded' => 'Questa prenotazione si è conclusa e la registrazione è chiusa.',
+            'err_reservation_concluded' => 'Impossibile inviare la registrazione degli ospiti per una prenotazione conclusa.',
         ],
         // Notifica di Cancellazione (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -635,6 +651,8 @@ return [
             'err_rate_limit' => 'Zu viele Registrierungen gesendet. Bitte warten Sie einige Minuten und versuchen Sie es erneut.',
             'msg_success' => 'Gästeregistrierung erfolgreich abgeschlossen.',
             'msg_success_backed_up' => 'Gästeregistrierung erfolgreich abgeschlossen (lokal gesichert).',
+            'msg_concluded' => 'Diese Reservierung ist abgeschlossen und die Registrierung ist geschlossen.',
+            'err_reservation_concluded' => 'Gästeregistrierung für eine abgeschlossene Reservierung kann nicht übermittelt werden.',
             'email_subject' => 'Neue Gästeregistrierung - Unterkunft %s',
         ],
         // Booking Inquiry Processor
@@ -694,6 +712,8 @@ return [
             'err_payment_pending' => 'Zahlungsüberprüfung ausstehend. Zugangsdaten werden nach Zahlung und Registrierung freigeschaltet.',
             'err_registry_required' => 'Das Gästeregister muss vor Freigabe der Zugangsdaten übermittelt werden (ADR 0001).',
             'msg_verified' => 'Zugangsdaten erfolgreich bestätigt.',
+            'msg_concluded' => 'Diese Reservierung ist abgeschlossen und die Registrierung ist geschlossen.',
+            'err_reservation_concluded' => 'Gästeregistrierung für eine abgeschlossene Reservierung kann nicht übermittelt werden.',
         ],
         // Stornierungsbenachrichtigung (CancellationEmailRenderer.php)
         'cancellation' => [
@@ -784,6 +804,8 @@ return [
             'err_rate_limit' => 'ゲスト登録の送信回数が多すぎます。数分待ってからもう一度お試しください。',
             'msg_success' => 'ゲスト登録が正常に完了しました。',
             'msg_success_backed_up' => 'ゲスト登録が正常に完了しました（バックアップ保存済み）。',
+            'msg_concluded' => 'この宿泊予約は終了しており、宿泊者登録は締め切られました。',
+            'err_reservation_concluded' => '終了した宿泊予約に対して宿泊者登録を送信することはできません。',
             'email_subject' => '新しいゲスト登録通知 - お部屋 %s',
         ],
         // Booking Inquiry Processor
@@ -843,6 +865,8 @@ return [
             'err_payment_pending' => 'お支払いの確認中です。確認および宿泊者登録完了後にアクセス情報が開示されます。',
             'err_registry_required' => 'アクセス情報を確認する前に宿泊者名簿登録が必要です (ADR 0001)。',
             'msg_verified' => 'アクセス情報が正常に確認されました。',
+            'msg_concluded' => 'この宿泊予約は終了しており、宿泊者登録は締め切られました。',
+            'err_reservation_concluded' => '終了した宿泊予約に対して宿泊者登録を送信することはできません。',
         ],
         // キャンセル通知 (CancellationEmailRenderer.php)
         'cancellation' => [

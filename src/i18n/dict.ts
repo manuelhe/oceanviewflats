@@ -373,6 +373,8 @@ export const dict = {
 			"No reservation found matching this code. Please verify your reservation code or enter your stay details.",
 		registryAlreadyCompleted:
 			"A Guest Registry has already been completed for this reservation. You can proceed directly to your Guest Guide.",
+		registryConcluded:
+			"This reservation has concluded. Access to guest registration is no longer active.",
 		dbTitle: "Direct Booking",
 		dbSubtitle:
 			"Rent directly from the owner and save up to 20% on booking fees",
@@ -804,6 +806,8 @@ export const dict = {
 			"No se encontró ninguna reserva con este código. Verifique su código o ingrese los detalles de su estadía.",
 		registryAlreadyCompleted:
 			"Ya se completó el registro de huéspedes para esta reserva. Puede ingresar directamente a su Guía del Huésped.",
+		registryConcluded:
+			"Esta reserva ha concluido. El acceso al registro de huéspedes ya no está disponible.",
 		dbTitle: "Reserva Directa",
 		dbSubtitle:
 			"Alquila directamente con el propietario y ahorra hasta un 20% en comisiones de plataformas",
@@ -1241,6 +1245,8 @@ export const dict = {
 			"Aucune réservation trouvée correspondant à ce code. Veuillez vérifier votre code ou saisir les détails de votre séjour.",
 		registryAlreadyCompleted:
 			"Le formulaire d'enregistrement a déjà été rempli pour cette réservation. Vous pouvez accéder directement à votre guide.",
+		registryConcluded:
+			"Ce séjour est terminé. L'accès au formulaire d'enregistrement n'est plus actif.",
 		dbTitle: "Réservation Directe",
 		dbSubtitle:
 			"Louez directement auprès du propriétaire et économisez jusqu'à 20% sur les frais de plateforme",
@@ -1671,6 +1677,8 @@ export const dict = {
 			"Nessuna prenotazione trovata per questo codice. Verifica il tuo codice o inserisci i dettagli del soggiorno.",
 		registryAlreadyCompleted:
 			"La registrazione degli ospiti è già stata completata per questa prenotazione. Puoi accedere direttamente alla tua Guida per gli Ospiti.",
+		registryConcluded:
+			"Questa prenotazione si è conclusa. L'accesso alla registrazione degli ospiti non è più attivo.",
 		dbTitle: "Prenotazione Diretta",
 		dbSubtitle:
 			"Affitta direttamente dal proprietario e risparmia fino al 20% sulle commissioni delle piattaforme",
@@ -2103,6 +2111,8 @@ export const dict = {
 			"Keine Reservierung für diesen Code gefunden. Bitte überprüfen Sie Ihren Code oder geben Sie Ihre Aufenthaltsdaten ein.",
 		registryAlreadyCompleted:
 			"Die Gästeregistrierung für diese Reservierung wurde bereits abgeschlossen. Sie können direkt zum Gästehandbuch wechseln.",
+		registryConcluded:
+			"Diese Reservierung ist abgeschlossen. Der Zugang zur Gästeregistrierung ist nicht mehr aktiv.",
 		dbTitle: "Direktbuchung",
 		dbSubtitle:
 			"Buchen Sie direkt beim Eigentümer und sparen Sie bis zu 20 % an Plattformgebühren",
@@ -2534,6 +2544,8 @@ export const dict = {
 			"このコードに一致する予約が見つかりませんでした。予約コードを確認するか、滞在詳細を入力してください。",
 		registryAlreadyCompleted:
 			"この予約の宿泊者名簿登録は既に完了しています。ゲストガイドへ直接お進みいただけます。",
+		registryConcluded:
+			"この宿泊予約は終了しました。宿泊者登録はご利用いただけません。",
 		dbTitle: "直接予約",
 		dbSubtitle:
 			"ホストから直接予約することで、プラットフォーム手数料を最大20%節約できます",

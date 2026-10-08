@@ -138,6 +138,14 @@ final class GuestRegistryEndpointTest extends TestCase
                 'ovf_canc_200', '1606', 'Cancelled Guest', 'canc@example.com', '+573009998877',
                 '2026-12-01', '2026-12-05', 1200000.0, 'cancelled', 'refunded', 0
             );
+
+            INSERT INTO reservations (
+                reservation_uid, property_id, guest_name, guest_email, guest_phone,
+                check_in, check_out, total_price, status, payment_status, registry_completed
+            ) VALUES (
+                'ovf_concluded_300', '1606', 'Concluded Guest', 'concluded@example.com', '+573009998877',
+                '2020-01-01', '2020-01-05', 1200000.0, 'confirmed', 'approved', 0
+            );
         ");
     }
 
@@ -539,6 +547,23 @@ final class GuestRegistryEndpointTest extends TestCase
         $this->assertIsArray($res['json']);
         $this->assertFalse($res['json']['success']);
         $this->assertStringContainsString('cancelled', strtolower((string) $res['json']['error']));
+    }
+
+    public function testConcludedReservationRejectionReturns400(): void
+    {
+        $payload = $this->createValidRegistryData([
+            'reservation_code' => 'ovf_concluded_300',
+            'check_in' => '2020-01-01',
+            'check_out' => '2020-01-05',
+        ]);
+
+        $res = $this->callRegistryEndpoint($payload);
+
+        $this->assertSame(0, $res['exitCode'], $res['stderr']);
+        $this->assertSame(400, $res['statusCode']);
+        $this->assertIsArray($res['json']);
+        $this->assertFalse($res['json']['success']);
+        $this->assertStringContainsString('concluded', strtolower((string) $res['json']['error']));
     }
 
     public function testRegistryEndpointRejectsMissingPrimaryGuestEmailWith400(): void

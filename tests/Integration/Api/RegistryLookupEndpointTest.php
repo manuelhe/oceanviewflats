@@ -47,6 +47,8 @@ $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, 
     VALUES ('res-man-123456789abc', '1707', 'Manual Guest', 'manual@example.com', '+573009998877', '2026-11-24', '2026-11-28', 1800000, 'confirmed', 0, '998877#', datetime('now'))");
 $pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, registry_completed, registry_completed_at, door_code, created_at)
     VALUES ('res-man-completed1', '1606', 'Registered Guest', 'completed@example.com', '+573004445566', '2026-12-01', '2026-12-05', 2200000, 'confirmed', 1, datetime('now'), '0160600#', datetime('now'))");
+$pdo->exec("INSERT INTO reservations (reservation_uid, property_id, guest_name, guest_email, guest_phone, check_in, check_out, total_price, status, registry_completed, door_code, created_at)
+    VALUES ('res-man-concluded1', '1606', 'Concluded Guest', 'concluded@example.com', '+573005556677', '2020-01-01', '2020-01-05', 1000000, 'confirmed', 0, '112233#', datetime('now'))");
 $GLOBALS['TEST_PDO'] = $pdo;
 PHP;
     }
@@ -141,6 +143,31 @@ PHP;
 
         $this->assertSame(0, $res['exitCode'], $res['stderr']);
         $this->assertSame('', trim($res['stdout']));
+    }
+
+    public function testRegistryLookupReturns403AndConcludedStatusForConcludedReservation(): void
+    {
+        // Test in English
+        $resEn = $this->callEndpoint(['code' => 'res-man-concluded1', 'lang' => 'en'], $this->getSqliteSetupCode());
+
+        $this->assertSame(0, $resEn['exitCode'], $resEn['stderr']);
+        $this->assertIsArray($resEn['json']);
+        $this->assertFalse($resEn['json']['success']);
+        $this->assertSame('concluded', $resEn['json']['status']);
+        $this->assertSame('This reservation has concluded and registration is closed.', $resEn['json']['message']);
+        $this->assertArrayNotHasKey('reservation', $resEn['json']);
+        $this->assertArrayNotHasKey('credentials', $resEn['json']);
+
+        // Test in Spanish
+        $resEs = $this->callEndpoint(['code' => 'res-man-concluded1', 'lang' => 'es'], $this->getSqliteSetupCode());
+
+        $this->assertSame(0, $resEs['exitCode'], $resEs['stderr']);
+        $this->assertIsArray($resEs['json']);
+        $this->assertFalse($resEs['json']['success']);
+        $this->assertSame('concluded', $resEs['json']['status']);
+        $this->assertSame('Esta reserva ha concluido y el registro se encuentra cerrado.', $resEs['json']['message']);
+        $this->assertArrayNotHasKey('reservation', $resEs['json']);
+        $this->assertArrayNotHasKey('credentials', $resEs['json']);
     }
 
     private function callEndpoint(array $params = [], string $prependCode = '', string $method = 'GET'): array

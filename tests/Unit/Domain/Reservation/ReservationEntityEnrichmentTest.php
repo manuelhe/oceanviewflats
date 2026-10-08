@@ -418,4 +418,111 @@ final class ReservationEntityEnrichmentTest extends TestCase
         );
         $this->assertFalse($rDirectNormal->hasExternalOrPlaceholderEmail());
     }
+
+    public function testIsConcludedReturnsTrueForPastCheckout(): void
+    {
+        $reservation = new Reservation(
+            reservationUid: 'ovf_past_checkout',
+            propertyId: '1606',
+            guestName: 'Past Guest',
+            guestEmail: 'past@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2026-05-01',
+            checkOut: '2026-05-05',
+            totalPrice: 1000000.0
+        );
+
+        $nowAfterCheckout = new DateTimeImmutable('2026-05-06 00:00:00', new \DateTimeZone('America/Bogota'));
+        $this->assertTrue($reservation->isConcluded($nowAfterCheckout));
+    }
+
+    public function testIsConcludedReturnsFalseForFutureCheckout(): void
+    {
+        $reservation = new Reservation(
+            reservationUid: 'ovf_future_checkout',
+            propertyId: '1606',
+            guestName: 'Future Guest',
+            guestEmail: 'future@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2026-12-01',
+            checkOut: '2026-12-05',
+            totalPrice: 1000000.0
+        );
+
+        $nowBeforeCheckout = new DateTimeImmutable('2026-12-03 14:00:00', new \DateTimeZone('America/Bogota'));
+        $this->assertFalse($reservation->isConcluded($nowBeforeCheckout));
+    }
+
+    public function testIsConcludedBoundaryConditionOnCheckoutDate(): void
+    {
+        $reservation = new Reservation(
+            reservationUid: 'ovf_boundary_checkout',
+            propertyId: '1606',
+            guestName: 'Boundary Guest',
+            guestEmail: 'boundary@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2026-10-01',
+            checkOut: '2026-10-05',
+            totalPrice: 1000000.0
+        );
+
+        $timezone = new \DateTimeZone('America/Bogota');
+
+        // Exactly at 23:59:59 COT on checkout day -> still active (not concluded)
+        $atThreshold = new DateTimeImmutable('2026-10-05 23:59:59', $timezone);
+        $this->assertFalse($reservation->isConcluded($atThreshold));
+
+        // 1 second after 23:59:59 COT (00:00:00 next day) -> concluded
+        $afterThreshold = new DateTimeImmutable('2026-10-06 00:00:00', $timezone);
+        $this->assertTrue($reservation->isConcluded($afterThreshold));
+    }
+
+    public function testIsConcludedWithDifferentTimezones(): void
+    {
+        $reservation = new Reservation(
+            reservationUid: 'ovf_tz_checkout',
+            propertyId: '1606',
+            guestName: 'TZ Guest',
+            guestEmail: 'tz@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2026-10-01',
+            checkOut: '2026-10-05',
+            totalPrice: 1000000.0
+        );
+
+        // 2026-10-05 23:59:59 COT is 2026-10-06 04:59:59 UTC
+        $utcBefore = new DateTimeImmutable('2026-10-06 04:59:59', new \DateTimeZone('UTC'));
+        $this->assertFalse($reservation->isConcluded($utcBefore));
+
+        // 2026-10-06 05:00:00 UTC is 2026-10-06 00:00:00 COT
+        $utcAfter = new DateTimeImmutable('2026-10-06 05:00:01', new \DateTimeZone('UTC'));
+        $this->assertTrue($reservation->isConcluded($utcAfter));
+    }
+
+    public function testIsConcludedDefaultReferenceTime(): void
+    {
+        $pastReservation = new Reservation(
+            reservationUid: 'ovf_past_default',
+            propertyId: '1606',
+            guestName: 'Past Default Guest',
+            guestEmail: 'pastdefault@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2020-01-01',
+            checkOut: '2020-01-05',
+            totalPrice: 1000000.0
+        );
+        $this->assertTrue($pastReservation->isConcluded());
+
+        $futureReservation = new Reservation(
+            reservationUid: 'ovf_future_default',
+            propertyId: '1606',
+            guestName: 'Future Default Guest',
+            guestEmail: 'futuredefault@example.com',
+            guestPhone: '+57 300 111 2233',
+            checkIn: '2030-01-01',
+            checkOut: '2030-01-05',
+            totalPrice: 1000000.0
+        );
+        $this->assertFalse($futureReservation->isConcluded());
+    }
 }

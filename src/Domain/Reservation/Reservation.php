@@ -7,6 +7,7 @@ namespace OceanViewFlats\Domain\Reservation;
 use DateInterval;
 use DatePeriod;
 use DateTimeImmutable;
+use DateTimeZone;
 use InvalidArgumentException;
 
 /**
@@ -251,6 +252,20 @@ final class Reservation
     public function isVoucherHold(): bool
     {
         return $this->paymentMethodId !== null && strtolower($this->paymentMethodId) === 'efecty';
+    }
+
+    /**
+     * Identifies if this reservation has concluded past 23:59:59 COT on its check-out date (ADR 0009).
+     *
+     * @param DateTimeImmutable|null $now Optional reference time for testing or deterministic evaluation.
+     */
+    public function isConcluded(?DateTimeImmutable $now = null): bool
+    {
+        $timezone = new DateTimeZone('America/Bogota');
+        $referenceTime = $now ?? new DateTimeImmutable('now', $timezone);
+        $concludedThreshold = new DateTimeImmutable($this->checkOut . ' 23:59:59', $timezone);
+
+        return $referenceTime > $concludedThreshold;
     }
 
     /**

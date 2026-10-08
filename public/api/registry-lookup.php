@@ -87,6 +87,15 @@ if ($reservation->status !== ReservationStatus::CONFIRMED) {
     ]);
 }
 
+if ($reservation->isConcluded()) {
+    http_response_code(403);
+    $concludedMessage = $regTrans['msg_concluded'] ?? $guideTrans['msg_concluded'] ?? 'This reservation has concluded and registration is closed.';
+    send_json_response(false, $concludedMessage, [
+        'status' => 'concluded',
+        'message' => $concludedMessage,
+    ]);
+}
+
 // Build sanitized public stay payload (Principle of Least Privilege: NO credentials, NO pricing, NO notes, NO phone/email)
 $guideUrl = ($lang === 'en' ? 'guide/' : "guide/{$lang}.html") . '?code=' . rawurlencode($reservation->reservationUid);
 
