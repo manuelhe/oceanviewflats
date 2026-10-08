@@ -240,8 +240,12 @@ An authorized internal operator possessing authenticated credentials to manage R
 _Avoid_: Staff, Employee, Operator, Superuser
 
 **Audit Log**:
-An immutable administrative record capturing operational actions (such as door PIN overrides, cancellations, refunds, or rate updates), attributing the change to a specific Admin User with timestamps and payload diffs.
+An immutable administrative record capturing operational actions (such as door PIN overrides, cancellations, refunds, rate updates, or webhook settlements), attributing the change to an Admin User or System actor with timestamps and before/after payload diffs. Access to the Audit Log interface is restricted strictly to Admin Users with admin or superadmin roles.
 _Avoid_: History, Activity Feed, Event Log, Change Trail
+
+**Audit Log Inspector**:
+The slide-over administrative inspection drawer that displays before-and-after state transitions, actor attribution, client IP and user agent metadata, and deep links to audited domain entities.
+_Avoid_: Detail Modal, Log Popup, Change Viewer
 
 **Property Filter**:
 The administrative UI selector used across operational interfaces (rates, calendar holds, reservations) to scope records by Property. Always labeled "Property" in administrative views in strict adherence to canonical entity language.

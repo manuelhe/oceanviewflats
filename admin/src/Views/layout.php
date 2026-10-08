@@ -78,6 +78,11 @@
                     <a href="/calendar-blocks" class="px-3 py-2 rounded-md text-sm font-medium <?= ($currentRoute ?? '') === '/calendar-blocks' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' ?>">
                         Calendar Blocks
                     </a>
+                    <?php if (in_array($currentUser['role'] ?? '', ['admin', 'superadmin'], true)): ?>
+                    <a href="/audit-logs" class="px-3 py-2 rounded-md text-sm font-medium <?= ($currentRoute ?? '') === '/audit-logs' ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100' ?>">
+                        Audit Logs
+                    </a>
+                    <?php endif; ?>
                 </nav>
             </div>
             <div class="flex items-center space-x-4">

@@ -425,8 +425,14 @@ The automated reception clearance synchronization engine communicates with the e
        ├─► Reservations Ledger (View, Filter, Edit, Cancel, Override Door Codes)
        ├─► Calendar Sync & Property Blocks (Airbnb iCal import/export)
        ├─► Rate Engine & Seasonal Overrides
-       └─► Audit Trail Viewer (admin_audit_logs)
+       └─► Audit Log Viewer (/audit-logs - Filter, Inspect Diff, RBAC)
 ```
+
+### 8.1 Audit Log Viewer (`/audit-logs`)
+The Audit Log interface provides an immutable operational record of all administrative actions, payment webhook settlements, and guest lifecycle events.
+- **Access Control (RBAC)**: Restricted strictly to `admin` and `superadmin` roles. The navigation link is hidden for `manager` and `viewer` roles, and direct access returns HTTP 403 Forbidden.
+- **Search & Filtering**: Real-time filtering by action category (Reservations, Rates, Calendar Holds, Authentication), entity type, actor (Admin User vs. System), date range, and free-text UID/IP search.
+- **Audit Log Inspector**: A slide-over drawer displaying metadata, deep links to entities (e.g. `/reservations?search={uid}`), and structured before/after state diffs with collapsible raw JSON.
 
 ---
 
