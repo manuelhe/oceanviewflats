@@ -301,6 +301,10 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Available (3 Nights)', $body);
         $this->assertStringContainsString('$1,750,000 COP', $body);
         $this->assertStringContainsString('$1,500,000', $body);
+        $this->assertStringContainsString('data-available="true"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":true', $body);
+        $this->assertStringContainsString('"defaultPrice":1750000', $body);
     }
 
     public function testQuotePreviewForOwnerStayZeroesTotal(): void
@@ -333,6 +337,10 @@ final class ReservationControllerTest extends TestCase
         $body = $response->getBody();
         $this->assertStringContainsString('$0 COP', $body);
         $this->assertStringContainsString('Owner Stay automatically zeroes total pricing', $body);
+        $this->assertStringContainsString('data-available="true"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":true', $body);
+        $this->assertStringContainsString('"defaultPrice":0', $body);
     }
 
     public function testQuotePreviewReturnsConflictWarningWhenUnavailable(): void
@@ -352,6 +360,63 @@ final class ReservationControllerTest extends TestCase
         $body = $response->getBody();
         $this->assertStringContainsString('Selected Dates Are Unavailable', $body);
         $this->assertStringContainsString('href="/reservations/res-1"', $body);
+        $this->assertStringContainsString('data-available="false"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":false', $body);
+        $this->assertStringContainsString('Direct reservation conflict: res-1', $body);
+    }
+
+    public function testQuotePreviewReturnsDataAvailableFalseWhenDatesInvalid(): void
+    {
+        $request = new Request('POST', '/reservations/quote-preview', post: [
+            'property_id' => '1606',
+            'check_in' => '2026-11-05',
+            'check_out' => '2026-11-01',
+        ]);
+        $response = $this->controller->quotePreview($request);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+        $this->assertStringContainsString('data-available="false"', $body);
+        $this->assertStringContainsString('availabilityChecked', $body);
+        $this->assertStringContainsString('"available":false', $body);
+        $this->assertStringContainsString('check-out must be after check-in', $body);
+    }
+
+    public function testCreateModalRendersDateSynchronizationAndHtmxLifecycleScript(): void
+    {
+        $request = new Request('GET', '/reservations/new', server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        // Date inputs and submit button presence
+        $this->assertStringContainsString('id="create-check-in"', $body);
+        $this->assertStringContainsString('id="create-check-out"', $body);
+        $this->assertStringContainsString('id="create-submit-btn"', $body);
+        $this->assertStringContainsString('data-default-text="Create Reservation"', $body);
+
+        // Date synchronization logic
+        $this->assertStringContainsString('syncMinEndDate', $body);
+        $this->assertStringContainsString('checkOutInput.min = minEndStr', $body);
+
+        // HTMX lifecycle listeners for quote preview
+        $this->assertStringContainsString('htmx:beforeRequest', $body);
+        $this->assertStringContainsString('htmx:afterRequest', $body);
+        $this->assertStringContainsString('Checking availability...', $body);
+    }
+
+    public function testCreateModalWithPrefilledCheckInSetsMinCheckOut(): void
+    {
+        $request = new Request('GET', '/reservations/new', query: ['check_in' => '2026-11-10'], server: ['HTTP_HX_REQUEST' => 'true']);
+        $response = $this->controller->newReservation($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $body = $response->getBody();
+
+        $this->assertStringContainsString('value="2026-11-10"', $body);
+        $this->assertStringContainsString('min="2026-11-11"', $body);
     }
 
     public function testCreateManualReservationValidatesInputAndReturns422(): void

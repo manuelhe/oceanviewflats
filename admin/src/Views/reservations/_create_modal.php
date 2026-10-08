@@ -19,6 +19,15 @@ $propIdVal = $propertyId ?? '1606';
 $sourceVal = $source ?? 'manual_override';
 $isAirbnb = (strtolower($sourceVal) === 'airbnb');
 $sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
+$minCheckOut = '';
+if (!empty($checkIn)) {
+    try {
+        $minCheckOut = (new \DateTimeImmutable((string) $checkIn))->modify('+1 day')->format('Y-m-d');
+    } catch (\Throwable) {
+        $minCheckOut = '';
+    }
+}
+$submitLabel = $isAirbnb ? 'Onboard & Generate Dispatch' : 'Create Reservation';
 ?>
 
 <div class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -186,6 +195,7 @@ $sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
                                name="check_out"
                                id="create-check-out"
                                required
+                               <?= $minCheckOut !== '' ? 'min="' . htmlspecialchars($minCheckOut, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
                                value="<?= htmlspecialchars((string) ($checkOut ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                hx-post="/reservations/quote-preview"
                                hx-trigger="change"
@@ -313,6 +323,8 @@ $sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
                         Cancel
                     </button>
                     <button type="submit"
+                            id="create-submit-btn"
+                            data-default-text="<?= htmlspecialchars($submitLabel, ENT_QUOTES, 'UTF-8') ?>"
                             class="px-5 py-2 border border-transparent rounded-lg shadow-2xs text-xs font-semibold text-white <?= $isAirbnb ? 'bg-[#FF385C] hover:bg-[#E00B41]' : 'bg-indigo-600 hover:bg-indigo-700' ?> transition cursor-pointer flex items-center">
                         <span class="htmx-indicator mr-2 hidden">
                             <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
@@ -320,11 +332,145 @@ $sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                         </span>
-                        <?= $isAirbnb ? 'Onboard & Generate Dispatch' : 'Create Reservation' ?>
+                        <span id="create-submit-text"><?= $submitLabel ?></span>
                     </button>
                 </div>
 
             </form>
+
+            <script>
+            (function() {
+                var form = document.getElementById('create-reservation-form');
+                var checkInInput = document.getElementById('create-check-in');
+                var checkOutInput = document.getElementById('create-check-out');
+                var sourceSelect = document.getElementById('create-source');
+
+                // 1. Date Range Auto-Synchronization
+                function syncMinEndDate() {
+                    if (!checkInInput || !checkOutInput) return;
+                    if (!checkInInput.value) {
+                        checkOutInput.removeAttribute('min');
+                        return;
+                    }
+                    var parts = checkInInput.value.split('-');
+                    if (parts.length !== 3) return;
+                    var start = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                    if (isNaN(start.getTime())) return;
+
+                    var minEnd = new Date(start);
+                    minEnd.setDate(minEnd.getDate() + 1);
+                    var y = minEnd.getFullYear();
+                    var m = String(minEnd.getMonth() + 1).padStart(2, '0');
+                    var d = String(minEnd.getDate()).padStart(2, '0');
+                    var minEndStr = y + '-' + m + '-' + d;
+                    checkOutInput.min = minEndStr;
+
+                    if (checkOutInput.value && checkOutInput.value <= checkInInput.value) {
+                        checkOutInput.value = minEndStr;
+                    }
+                }
+
+                if (checkInInput && checkOutInput) {
+                    checkInInput.addEventListener('change', syncMinEndDate);
+                    checkInInput.addEventListener('input', syncMinEndDate);
+                    if (checkInInput.value) {
+                        syncMinEndDate();
+                    }
+                }
+
+                // 2. Submit button default text management for booking source
+                function getSubmitDefaultText() {
+                    if (sourceSelect && sourceSelect.value === 'airbnb') {
+                        return 'Onboard & Generate Dispatch';
+                    }
+                    return 'Create Reservation';
+                }
+
+                if (sourceSelect) {
+                    sourceSelect.addEventListener('change', function() {
+                        var submitBtn = document.getElementById('create-submit-btn');
+                        var submitBtnText = document.getElementById('create-submit-text');
+                        var text = getSubmitDefaultText();
+                        if (submitBtn) {
+                            submitBtn.dataset.defaultText = text;
+                        }
+                        if (submitBtnText && submitBtnText.textContent !== 'Checking availability...') {
+                            submitBtnText.textContent = text;
+                        }
+                    });
+                }
+
+                // 3. HTMX Lifecycle Listener for in-flight quote requests
+                function isQuotePreviewRequest(evt) {
+                    var target = evt.detail && evt.detail.target;
+                    var quoteContainer = document.getElementById('quote-preview-container');
+                    if (target && (target.id === 'quote-preview-container' || target === quoteContainer)) {
+                        return true;
+                    }
+                    var path = evt.detail && (
+                        (evt.detail.requestConfig && evt.detail.requestConfig.path) ||
+                        (evt.detail.pathInfo && evt.detail.pathInfo.requestPath) ||
+                        evt.detail.url
+                    );
+                    return typeof path === 'string' && path.indexOf('/reservations/quote-preview') !== -1;
+                }
+
+                function setCheckingState() {
+                    var submitBtn = document.getElementById('create-submit-btn');
+                    var submitBtnText = document.getElementById('create-submit-text');
+                    if (!submitBtn) return;
+
+                    submitBtn.disabled = true;
+                    submitBtn.setAttribute('aria-disabled', 'true');
+                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    submitBtn.classList.remove('cursor-pointer');
+                    if (submitBtnText) {
+                        submitBtnText.textContent = 'Checking availability...';
+                    }
+                }
+
+                function removeCheckingState() {
+                    var submitBtn = document.getElementById('create-submit-btn');
+                    var submitBtnText = document.getElementById('create-submit-text');
+                    if (!submitBtn) return;
+
+                    submitBtn.disabled = false;
+                    submitBtn.removeAttribute('aria-disabled');
+                    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    submitBtn.classList.add('cursor-pointer');
+                    if (submitBtnText) {
+                        var defaultText = submitBtn.dataset.defaultText || getSubmitDefaultText();
+                        submitBtnText.textContent = defaultText;
+                    }
+                }
+
+                if (form) {
+                    form.addEventListener('htmx:beforeRequest', function(evt) {
+                        if (isQuotePreviewRequest(evt)) {
+                            setCheckingState();
+                        }
+                    });
+
+                    form.addEventListener('htmx:afterRequest', function(evt) {
+                        if (isQuotePreviewRequest(evt)) {
+                            removeCheckingState();
+                        }
+                    });
+
+                    form.addEventListener('htmx:sendError', function(evt) {
+                        if (isQuotePreviewRequest(evt)) {
+                            removeCheckingState();
+                        }
+                    });
+
+                    form.addEventListener('htmx:responseError', function(evt) {
+                        if (isQuotePreviewRequest(evt)) {
+                            removeCheckingState();
+                        }
+                    });
+                }
+            })();
+            </script>
 
         </div>
     </div>
