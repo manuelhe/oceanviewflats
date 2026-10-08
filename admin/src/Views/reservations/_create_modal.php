@@ -15,8 +15,8 @@
  * @var bool|null $preMarkRegistry
  * @var bool|null $sendConfirmationEmail
  */
-$propIdVal = $propertyId ?? '1606';
-$sourceVal = $source ?? 'manual_override';
+$propIdVal = (!empty($propertyId) && in_array($propertyId, ['1606', '1707'], true)) ? $propertyId : '1606';
+$sourceVal = (!empty($source)) ? $source : 'manual_override';
 $isAirbnb = (strtolower($sourceVal) === 'airbnb');
 $sendEmailVal = $sendConfirmationEmail ?? (!$isAirbnb);
 ?>
