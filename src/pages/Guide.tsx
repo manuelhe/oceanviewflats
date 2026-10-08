@@ -184,6 +184,7 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 									data-msg-verifying={t.guideCredentialsVerifying}
 									data-msg-not-found={t.guideNoReservationFound}
 									data-msg-copied={t.guideCopySuccess}
+									data-msg-concluded={t.guideConcluded}
 								>
 									<div className="space-y-3">
 										<div className="flex justify-between items-center">

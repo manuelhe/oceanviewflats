@@ -80,6 +80,19 @@ final class AccessVerificationResult
         );
     }
 
+    public static function concluded(string $message = 'This reservation has concluded and registration is closed.'): self
+    {
+        return new self(
+            verified: false,
+            status: 'concluded',
+            message: $message,
+            reason: 'concluded',
+            reservation: null,
+            credentials: null,
+            registryUrl: null
+        );
+    }
+
     /**
      * Converts to an associative array for API responses.
      * Note: Access credentials are NEVER included if verified is false.
