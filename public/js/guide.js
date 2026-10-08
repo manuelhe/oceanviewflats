@@ -306,19 +306,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="p-1.5 bg-amber-500/15 text-amber-700 rounded-lg shrink-0">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
                         </span>
-                        <span>${concludedBadge || concludedText}</span>
+                        <span id="concluded-badge-text"></span>
                     </div>
                     <div class="p-4 bg-slate-900 text-slate-100 rounded-2xl border border-slate-800">
-                        <p class="text-xs leading-relaxed text-slate-300 font-medium">
-                            ${concludedText}
-                        </p>
+                        <p id="concluded-body-text" class="text-xs leading-relaxed text-slate-300 font-medium"></p>
                     </div>
                 </div>
                 <div class="mt-4 pt-3 border-t border-amber-500/15 text-[11px] text-slate-500 font-semibold flex items-center justify-between">
                     <span>OceanViewFlats</span>
-                    <span class="text-amber-700/80">${concludedBadge ? `&bull; ${concludedBadge}` : ''}</span>
+                    <span id="concluded-footer-badge" class="text-amber-700/80"></span>
                 </div>
             `;
+            const badgeEl = doorCodeCard.querySelector('#concluded-badge-text');
+            const bodyEl = doorCodeCard.querySelector('#concluded-body-text');
+            const footerBadgeEl = doorCodeCard.querySelector('#concluded-footer-badge');
+
+            if (badgeEl) badgeEl.textContent = concludedBadge || concludedText;
+            if (bodyEl) bodyEl.textContent = concludedText;
+            if (footerBadgeEl && concludedBadge) footerBadgeEl.textContent = `• ${concludedBadge}`;
         }
     }
 
