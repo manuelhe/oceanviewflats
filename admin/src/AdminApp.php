@@ -57,12 +57,22 @@ use OceanViewFlats\Domain\Reservation\InboundChannelSyncServiceInterface;
 use OceanViewFlats\Domain\Reservation\MaintenanceBlockRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\PdoMaintenanceBlockRepository;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\Port\AuditPort;
+use OceanViewFlats\Domain\Reservation\Port\LifecycleEventPublisherPort;
+use OceanViewFlats\Domain\Reservation\Port\PaymentRefundPort;
+use OceanViewFlats\Domain\Reservation\Port\ReservationPersistencePort;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use OceanViewFlats\Domain\Support\PathResolver;
+use OceanViewFlats\Infrastructure\Reservation\MercadoPagoPaymentRefundAdapter;
+use OceanViewFlats\Infrastructure\Reservation\PdoAuditAdapter;
+use OceanViewFlats\Infrastructure\Reservation\PdoReservationPersistenceAdapter;
+use OceanViewFlats\Infrastructure\Reservation\TransactionalLifecycleEventPublisherAdapter;
 use PDO;
 
 /**
@@ -187,6 +197,30 @@ final class AdminApp
             'clearance_sync' => $clearanceSync,
         ]);
 
+        /** @var ReservationPersistencePort $persistencePort */
+        $persistencePort = $options['reservation_persistence_port'] ?? new PdoReservationPersistenceAdapter($pdo, $reservationRepository);
+        /** @var PaymentRefundPort $paymentRefundPort */
+        $paymentRefundPort = $options['payment_refund_port'] ?? new MercadoPagoPaymentRefundAdapter($refundClient);
+        /** @var AuditPort $auditPort */
+        $auditPort = $options['audit_port'] ?? new PdoAuditAdapter($pdo);
+        /** @var LifecycleEventPublisherPort $eventPublisherPort */
+        $eventPublisherPort = $options['lifecycle_event_publisher_port'] ?? new TransactionalLifecycleEventPublisherAdapter(
+            fulfillmentService: $lifecycleService,
+            cancellationRenderer: $cancellationEmailRenderer,
+            emailSender: $emailSender,
+            auditPort: $auditPort
+        );
+
+        /** @var ReservationLifecycleEngineInterface $lifecycleEngine */
+        $lifecycleEngine = $options['lifecycle_engine'] ?? new ReservationLifecycleEngine(
+            persistencePort: $persistencePort,
+            paymentRefundPort: $paymentRefundPort,
+            eventPublisherPort: $eventPublisherPort,
+            auditPort: $auditPort,
+            ledger: $ledger,
+            quoteEngine: $quoteEngine
+        );
+
         $reservationController = new ReservationController(
             repository: $reservationRepository,
             search: $reservationSearch,
@@ -202,7 +236,8 @@ final class AdminApp
             pdo: $pdo,
             urlBuilder: $urlBuilder,
             clearanceRepo: $clearanceRepo,
-            clearanceSync: $clearanceSync
+            clearanceSync: $clearanceSync,
+            lifecycleEngine: $lifecycleEngine
         );
 
         // 6. Rates Repository & Controller

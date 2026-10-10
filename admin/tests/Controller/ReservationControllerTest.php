@@ -1987,7 +1987,7 @@ final class ReservationControllerTest extends TestCase
                 check_in, check_out, total_price, status, source, registry_completed,
                 door_code, mercadopago_payment_id, payment_status, created_at
             ) VALUES 
-            ('res-1', '1606', 'Alice Smith', 'alice@example.com', '+573001112233', '2026-10-01', '2026-10-05', 1200000.00, 'confirmed', 'web', 1, '1234#', 'pay-mp-123456', 'approved', '2026-09-01 12:00:00'),
+            ('res-1', '1606', 'Alice Smith', 'alice@example.com', '+573001112233', '2026-11-01', '2026-11-05', 1200000.00, 'confirmed', 'web', 1, '1234#', 'pay-mp-123456', 'approved', '2026-09-01 12:00:00'),
             ('res-2', '1606', 'Bob Jones', 'bob@example.com', '+573004445566', '2026-10-10', '2026-10-15', 1500000.00, 'pending_payment', 'cash', 0, NULL, NULL, 'pending', '2026-09-02 12:00:00'),
             ('res-3', '1707', 'Carlos Gomez', 'carlos@example.com', '+573007778899', '2026-10-20', '2026-10-25', 1800000.00, 'confirmed', 'manual_override', 0, '5678#', NULL, 'offline', '2026-09-03 12:00:00');
 
@@ -1995,7 +1995,7 @@ final class ReservationControllerTest extends TestCase
             VALUES (1, 'pin_override', 'reservation', 'res-1', '{\"door_code\": \"1111#\"}', '{\"door_code\": \"1234#\"}', '127.0.0.1', '2026-09-29 10:00:00');
 
             INSERT INTO guest_registries (reservation_uid, property_id, check_in, check_out, guest_count, guests_payload, car_plates, car_model, ip_address)
-            VALUES ('res-1', '1606', '2026-10-01', '2026-10-05', 1, '[{\"full_name\":\"Bob Smith\",\"doc_type\":\"CC\",\"doc_number\":\"12345678\",\"is_primary\":true}]', 'ABC-123', 'Toyota Corolla', '192.168.1.1');
+            VALUES ('res-1', '1606', '2026-11-01', '2026-11-05', 1, '[{\"full_name\":\"Bob Smith\",\"doc_type\":\"CC\",\"doc_number\":\"12345678\",\"is_primary\":true}]', 'ABC-123', 'Toyota Corolla', '192.168.1.1');
         ");
     }
 }

@@ -187,42 +187,62 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
         $absorbingSource = $draft->isAirbnb() ? 'airbnb' : null;
 
         if ($draft->isAirbnb()) {
-            $channelConflict = $this->ledger->findChannelConflict(
-                $draft->propertyId,
-                $draft->checkIn,
-                $draft->checkOut,
-                absorbingSource: null
-            );
-            if ($channelConflict !== null && strtolower($channelConflict->source) === 'airbnb') {
+            if ($draft->channelBlockUid !== null) {
                 $wasChannelBlockAbsorbed = true;
-                $absorbedChannelBlockUid = $draft->channelBlockUid ?? $channelConflict->summary;
+                $absorbedChannelBlockUid = $draft->channelBlockUid;
+            } else {
+                $channelConflict = $this->ledger->findChannelConflict(
+                    $draft->propertyId,
+                    $draft->checkIn,
+                    $draft->checkOut,
+                    absorbingSource: null
+                );
+                if ($channelConflict !== null && strtolower($channelConflict->source) === 'airbnb') {
+                    $wasChannelBlockAbsorbed = true;
+                    $absorbedChannelBlockUid = $channelConflict->summary;
+                }
             }
         }
 
-        $conflicts = $this->ledger->getConflictReasons(
-            propertyId: $draft->propertyId,
-            checkIn: $draft->checkIn,
-            checkOut: $draft->checkOut,
-            absorbingSource: $absorbingSource
-        );
+        if ($draft->reservationUid === null) {
+            if (!$this->ledger->isAvailable($draft->propertyId, $draft->checkIn, $draft->checkOut, null, $absorbingSource)) {
+                $conflicts = $this->ledger->getConflictReasons(
+                    propertyId: $draft->propertyId,
+                    checkIn: $draft->checkIn,
+                    checkOut: $draft->checkOut,
+                    absorbingSource: $absorbingSource
+                );
+                throw ReservationConflictException::forDates(
+                    $draft->propertyId,
+                    $draft->checkIn,
+                    $draft->checkOut,
+                    !empty($conflicts) ? implode('; ', $conflicts) : 'with an existing reservation or channel block.'
+                );
+            }
+        } else {
+            $conflicts = $this->ledger->getConflictReasons(
+                propertyId: $draft->propertyId,
+                checkIn: $draft->checkIn,
+                checkOut: $draft->checkOut,
+                absorbingSource: $absorbingSource
+            );
 
-        // Disregard self-conflict when transitioning an existing reservation
-        if ($draft->reservationUid !== null) {
+            // Disregard self-conflict when transitioning an existing reservation
             $conflicts = array_values(
                 array_filter(
                     $conflicts,
                     fn(string $reason) => !str_contains($reason, $draft->reservationUid)
                 )
             );
-        }
 
-        if (count($conflicts) > 0) {
-            throw ReservationConflictException::forDates(
-                $draft->propertyId,
-                $draft->checkIn,
-                $draft->checkOut,
-                implode('; ', $conflicts)
-            );
+            if (count($conflicts) > 0) {
+                throw ReservationConflictException::forDates(
+                    $draft->propertyId,
+                    $draft->checkIn,
+                    $draft->checkOut,
+                    implode('; ', $conflicts)
+                );
+            }
         }
 
         // 4. UID and Smart Lock Access PIN Generation (ADR 0001)

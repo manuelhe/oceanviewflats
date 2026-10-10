@@ -24,15 +24,34 @@ use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestRegistryRequiredException;
 use OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync;
 use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
+use InvalidArgumentException;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
+use OceanViewFlats\Domain\Reservation\ActorContext;
+use OceanViewFlats\Domain\Reservation\CancellationPreview;
+use OceanViewFlats\Domain\Reservation\CancellationRequest;
+use OceanViewFlats\Domain\Reservation\ExcessiveRefundException;
+use OceanViewFlats\Domain\Reservation\GatewayRefundException;
+use OceanViewFlats\Domain\Reservation\InvalidReservationStateException;
+use OceanViewFlats\Domain\Reservation\Port\AuditPort;
+use OceanViewFlats\Domain\Reservation\Port\ReservationPersistencePort;
+use OceanViewFlats\Domain\Reservation\PrimaryGuest;
+use OceanViewFlats\Domain\Reservation\RefundInstruction;
 use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationConflictException;
+use OceanViewFlats\Domain\Reservation\ReservationDraft;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
 use OceanViewFlats\Domain\Reservation\ReservationNotFoundException;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
+use OceanViewFlats\Domain\Reservation\ReservationValidationException;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchCriteria;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchResult;
+use OceanViewFlats\Infrastructure\Reservation\MercadoPagoPaymentRefundAdapter;
+use OceanViewFlats\Infrastructure\Reservation\PdoReservationPersistenceAdapter;
+use OceanViewFlats\Infrastructure\Reservation\TransactionalLifecycleEventPublisherAdapter;
 use PDO;
 use Throwable;
 
@@ -47,6 +66,7 @@ final class ReservationController
     private readonly PublicUrlBuilder $urlBuilder;
     private readonly ?CondominiumClearanceRepositoryInterface $clearanceRepo;
     private readonly ?CondominiumClearanceSyncInterface $clearanceSync;
+    private readonly ReservationLifecycleEngineInterface $lifecycleEngine;
 
     public function __construct(
         private readonly ReservationRepositoryInterface $repository,
@@ -63,7 +83,8 @@ final class ReservationController
         private readonly ?PDO $pdo = null,
         ?PublicUrlBuilder $urlBuilder = null,
         ?CondominiumClearanceRepositoryInterface $clearanceRepo = null,
-        ?CondominiumClearanceSyncInterface $clearanceSync = null
+        ?CondominiumClearanceSyncInterface $clearanceSync = null,
+        ?ReservationLifecycleEngineInterface $lifecycleEngine = null
     ) {
         $this->cancellationEmailRenderer = $cancellationEmailRenderer ?? new CancellationEmailRenderer($this->publicSiteUrl);
         $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->publicSiteUrl);
@@ -74,6 +95,7 @@ final class ReservationController
             searchAdapter: $this->search,
             auditLogger: $this->auditLogger
         ) : null);
+        $this->lifecycleEngine = $lifecycleEngine ?? $this->buildFallbackLifecycleEngine();
     }
 
     /**
@@ -349,65 +371,62 @@ final class ReservationController
             return $this->renderCreateError($request, 'Total price cannot be negative.');
         }
 
-        // Ledger conflict check (absorbs matching external channel block if source is airbnb per ADR 0007)
-        $absorbingSource = $isAirbnb ? 'airbnb' : null;
-        if (!$this->ledger->isAvailable($propertyId, $checkIn, $checkOut, null, $absorbingSource)) {
-            $conflictReasons = $this->ledger->getConflictReasons($propertyId, $checkIn, $checkOut, null, $absorbingSource);
-            $errorMessage = !empty($conflictReasons)
-                ? 'Selected dates conflict: ' . implode('; ', $conflictReasons)
+        $currentUser = $this->buildCurrentUser($session);
+        $primaryGuest = new PrimaryGuest(
+            name: $guestName,
+            email: $guestEmail,
+            phone: $guestPhone
+        );
+        $adminUserId = $currentUser['id'];
+        $actor = $adminUserId !== null
+            ? ActorContext::admin($adminUserId, $request->getClientIp(), (string) $request->getHeader('User-Agent', ''))
+            : new ActorContext(adminUserId: null, ipAddress: $request->getClientIp(), userAgent: (string) $request->getHeader('User-Agent', ''), source: 'admin');
+
+        if ($isAirbnb) {
+            $draft = ReservationDraft::external(
+                propertyId: $propertyId,
+                checkIn: $checkIn,
+                checkOut: $checkOut,
+                primaryGuest: $primaryGuest,
+                externalConfirmationCode: $externalConfirmationCode,
+                channelBlockUid: $channelBlockUid,
+                hostPayoutCop: $totalPrice,
+                notes: $notes !== '' ? $notes : null,
+                preMarkRegistry: $preMarkRegistry,
+                source: 'airbnb',
+                actor: $actor,
+                sendConfirmationEmail: $sendConfirmationEmail
+            );
+        } else {
+            $draft = ReservationDraft::manual(
+                propertyId: $propertyId,
+                checkIn: $checkIn,
+                checkOut: $checkOut,
+                primaryGuest: $primaryGuest,
+                totalPrice: $totalPrice,
+                notes: $notes !== '' ? $notes : null,
+                preMarkRegistry: $preMarkRegistry,
+                source: $source,
+                actor: $actor,
+                sendConfirmationEmail: $sendConfirmationEmail
+            );
+        }
+
+        try {
+            $result = $this->lifecycleEngine->confirmOrRecord($draft);
+        } catch (ReservationConflictException $e) {
+            $errorMessage = $e->conflictReasons !== ''
+                ? (str_starts_with($e->conflictReasons, 'with ')
+                    ? 'Selected dates conflict ' . $e->conflictReasons
+                    : 'Selected dates conflict: ' . $e->conflictReasons)
                 : 'Selected dates conflict with an existing reservation or channel block.';
             return $this->renderCreateError($request, $errorMessage);
+        } catch (ReservationValidationException $e) {
+            return $this->renderCreateError($request, $e->getMessage());
         }
 
-        // Generate UID and random Door Code
-        $uid = $isAirbnb ? ('res-abnb-' . bin2hex(random_bytes(4))) : ('res-man-' . bin2hex(random_bytes(6)));
-        $doorCode = DoorCodeGenerator::generateRandom();
-
-        $currentUser = $this->buildCurrentUser($session);
-        $registryCompletedAt = $preMarkRegistry ? new DateTimeImmutable() : null;
-
-        $reservationEntity = new Reservation(
-            reservationUid: $uid,
-            propertyId: $propertyId,
-            guestName: $guestName,
-            guestEmail: $guestEmail,
-            guestPhone: $guestPhone,
-            checkIn: $checkIn,
-            checkOut: $checkOut,
-            totalPrice: $totalPrice,
-            status: ReservationStatus::CONFIRMED,
-            paymentMethodId: $isAirbnb ? 'external_ota' : 'manual',
-            paymentStatus: 'approved',
-            lang: 'es',
-            createdAt: new DateTimeImmutable(),
-            updatedAt: new DateTimeImmutable(),
-            registryCompleted: $preMarkRegistry,
-            registryCompletedAt: $registryCompletedAt,
-            doorCode: $doorCode,
-            source: $source,
-            externalConfirmationCode: $isAirbnb ? $externalConfirmationCode : null,
-            channelBlockUid: $isAirbnb ? $channelBlockUid : null,
-            notes: $notes !== '' ? $notes : null
-        );
-
-        $savedReservation = $this->repository->save($reservationEntity);
-
-        // Record audit trail
-        $this->auditLogger->record(
-            action: $isAirbnb ? 'airbnb_reservation_created' : 'manual_reservation_created',
-            entityType: 'reservation',
-            entityId: $uid,
-            before: null,
-            after: $savedReservation->toArray(),
-            adminUserId: $currentUser['id'],
-            ipAddress: $request->getClientIp(),
-            userAgent: (string) $request->getHeader('User-Agent', '')
-        );
-
-        // Best-effort post-commit confirmation email delivery
-        if ($sendConfirmationEmail) {
-            $this->lifecycleService->fulfillBookingConfirmation($savedReservation);
-        }
+        $savedReservation = $result->reservation;
+        $uid = $savedReservation->reservationUid;
 
         $dossier = $this->search->findWithAuditTrail($uid);
         $clearance = $this->clearanceRepo?->findByReservationUid($uid);
@@ -633,64 +652,6 @@ final class ReservationController
         );
     }
 
-    /**
-     * @param array<string, mixed> $currentUser
-     */
-    private function sendCancellationEmailSafely(
-        Reservation $reservation,
-        float $refundAmount,
-        float $policyRetention,
-        array $currentUser,
-        Request $request
-    ): void {
-        try {
-            $subject = $this->cancellationEmailRenderer->renderGuestSubject($reservation);
-            $htmlBody = $this->cancellationEmailRenderer->renderGuestCancellationHtml(
-                reservation: $reservation,
-                refundAmount: $refundAmount,
-                policyRetention: $policyRetention
-            );
-            $sent = $this->emailSender->send($reservation->guestEmail, $subject, $htmlBody);
-
-            if ($sent) {
-                $this->auditLogger->record(
-                    action: 'cancellation_email_sent',
-                    entityType: 'reservation',
-                    entityId: $reservation->reservationUid,
-                    before: null,
-                    after: [
-                        'recipient' => $reservation->guestEmail,
-                        'refund_amount' => $refundAmount,
-                        'policy_retention' => $policyRetention,
-                    ],
-                    adminUserId: $currentUser['id'],
-                    ipAddress: $request->getClientIp(),
-                    userAgent: (string) $request->getHeader('User-Agent', '')
-                );
-            } else {
-                $this->logEmailFailure($reservation->reservationUid, 'Email sender returned false', $currentUser, $request);
-            }
-        } catch (Throwable $e) {
-            $this->logEmailFailure($reservation->reservationUid, $e->getMessage(), $currentUser, $request);
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $currentUser
-     */
-    private function logEmailFailure(string $uid, string $error, array $currentUser, Request $request): void
-    {
-        $this->auditLogger->record(
-            action: 'email_delivery_failed',
-            entityType: 'reservation',
-            entityId: $uid,
-            before: null,
-            after: ['error' => $error],
-            adminUserId: $currentUser['id'],
-            ipAddress: $request->getClientIp(),
-            userAgent: (string) $request->getHeader('User-Agent', '')
-        );
-    }
 
     /**
      * @param array<string, mixed> $session
@@ -743,19 +704,19 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
         }
 
-        if ($reservation->status === ReservationStatus::CANCELLED) {
-            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
+        try {
+            $preview = $this->lifecycleEngine->previewCancellation($uid);
+        } catch (InvalidReservationStateException $e) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 422);
+        } catch (InvalidArgumentException) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
         }
-
-        $totalPrice = $reservation->totalPrice;
-        $refundedAmount = $reservation->refundedAmount;
-        $refundableBalance = max(0.0, round($totalPrice - $refundedAmount, 2));
-        $isOnlinePayment = !empty($reservation->mercadopagoPaymentId);
 
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_cancel_modal.php', [
             'reservation' => $reservation->toArray(),
-            'refundableBalance' => $refundableBalance,
-            'isOnlinePayment' => $isOnlinePayment,
+            'preview' => $preview,
+            'refundableBalance' => $preview->refundableBalanceCop,
+            'isOnlinePayment' => $preview->isOnlinePayment,
             'errorMessage' => null,
             'oldInput' => [],
             'csrfToken' => (string) ($session['csrf_token'] ?? ''),
@@ -779,31 +740,30 @@ final class ReservationController
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Invalid or expired CSRF token. Please refresh.</div>', 403);
         }
 
-        // 2. Acquire reservation
+        // 2. Acquire reservation & preview
         $reservation = $this->repository->findByUid($uid);
         if ($reservation === null) {
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
         }
 
-        if ($reservation->status === ReservationStatus::CANCELLED) {
-            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation is already cancelled.</div>', 422);
+        try {
+            $preview = $this->lifecycleEngine->previewCancellation($uid);
+        } catch (InvalidReservationStateException $e) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 422);
+        } catch (InvalidArgumentException) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found</div>', 404);
         }
-
-        $totalPrice = $reservation->totalPrice;
-        $currentRefunded = $reservation->refundedAmount;
-        $refundableBalance = max(0.0, round($totalPrice - $currentRefunded, 2));
-        $isOnlinePayment = !empty($reservation->mercadopagoPaymentId);
 
         $reason = trim((string) $request->getPost('reason', ''));
         $refundType = trim((string) $request->getPost('refund_type', 'none'));
         $refundAmountInput = (float) $request->getPost('refund_amount', 0.0);
         $sendCancellationEmailRaw = $request->getPost('send_cancellation_email');
+        $sendCancellationEmail = !empty($sendCancellationEmailRaw);
 
-        // Helper for consistent validation/gateway error rendering
         $failWithCancelError = fn(string $errorMessage): Response => $this->renderCancelError(
             reservation: $reservation->toArray(),
-            refundableBalance: $refundableBalance,
-            isOnlinePayment: $isOnlinePayment,
+            refundableBalance: $preview->refundableBalanceCop,
+            isOnlinePayment: $preview->isOnlinePayment,
             errorMessage: $errorMessage,
             oldInput: [
                 'reason' => $reason,
@@ -811,165 +771,52 @@ final class ReservationController
                 'refund_amount' => $refundAmountInput,
                 'send_cancellation_email' => $sendCancellationEmailRaw,
             ],
-            csrfToken: (string) ($session['csrf_token'] ?? '')
+            csrfToken: (string) ($session['csrf_token'] ?? ''),
+            preview: $preview
         );
 
-        // 3. Validate Reason
         if ($reason === '') {
             return $failWithCancelError('Cancellation reason is required.');
         }
 
-        // 4. Determine and validate Refund Amount
         if ($refundType === 'full') {
-            $refundAmount = $refundableBalance;
+            $refundInstruction = RefundInstruction::full();
         } elseif ($refundType === 'partial') {
-            if ($refundAmountInput <= 0 || $refundAmountInput > $refundableBalance) {
-                return $failWithCancelError('Partial refund amount must be greater than 0 and cannot exceed the refundable balance ($' . number_format($refundableBalance, 0, '.', ',') . ' COP).');
+            if ($refundAmountInput <= 0 || $refundAmountInput > $preview->refundableBalanceCop) {
+                return $failWithCancelError('Partial refund amount must be greater than 0 and cannot exceed the refundable balance ($' . number_format($preview->refundableBalanceCop, 0, '.', ',') . ' COP).');
             }
-            $refundAmount = round($refundAmountInput, 2);
+            $refundInstruction = RefundInstruction::partial($refundAmountInput);
         } else {
             $refundType = 'none';
-            $refundAmount = 0.0;
+            $refundInstruction = RefundInstruction::none();
         }
 
-        // 5. External Gateway Refund Dispatch (if online payment & refund requested)
-        // Must execute BEFORE opening the database transaction so network latency does not hold locks.
-        $mpPaymentId = $isOnlinePayment ? $reservation->mercadopagoPaymentId : null;
-        $mpRefundId = null;
-        $source = $isOnlinePayment ? 'admin_pms' : 'admin_manual';
+        $currentUser = $this->buildCurrentUser($session);
+        $adminUserId = $currentUser['id'];
+        $actor = $adminUserId !== null
+            ? ActorContext::admin($adminUserId, $request->getClientIp(), (string) $request->getHeader('User-Agent', ''))
+            : new ActorContext(adminUserId: null, ipAddress: $request->getClientIp(), userAgent: (string) $request->getHeader('User-Agent', ''), source: 'admin');
 
-        if ($isOnlinePayment && $refundAmount > 0) {
-            if ($this->refundClient === null) {
-                return $failWithCancelError('Refund client service is unavailable. Please contact technical support.');
-            }
-
-            $idempotencyKey = 'ref_' . $uid . '_' . (int) $refundAmount . '_' . time();
-
-            try {
-                $refundResult = $this->refundClient->refundPayment((string) $mpPaymentId, $refundAmount, $idempotencyKey);
-                $mpRefundId = (string) $refundResult['id'];
-            } catch (MercadoPagoRefundException $e) {
-                return $failWithCancelError($e->getUserFriendlyMessage());
-            } catch (Throwable $e) {
-                return $failWithCancelError('Gateway connection failed: ' . $e->getMessage());
-            }
-        }
-
-        // 6. Begin database transaction for local mutations
-        $pdo = $this->pdo;
-        $inTransaction = false;
-        if ($pdo !== null && !$pdo->inTransaction()) {
-            $pdo->beginTransaction();
-            $inTransaction = true;
-        }
+        $cancellationRequest = new CancellationRequest(
+            reason: $reason,
+            refundInstruction: $refundInstruction,
+            actor: $actor,
+            sendCancellationEmail: $sendCancellationEmail
+        );
 
         try {
-            $currentUser = $this->buildCurrentUser($session);
-            $adminUserId = $currentUser['id'];
-
-            $cancelNote = '[Cancelled ' . date('Y-m-d H:i') . '] ' . $reason;
-            if ($refundAmount > 0) {
-                $cancelNote .= ' (Refund: COP ' . number_format($refundAmount, 2) . ', type: ' . $refundType . ')';
-            } else {
-                $cancelNote .= ' (Policy retention: No refund)';
-            }
-            $existingNotes = $reservation->notes !== null ? trim($reservation->notes) : '';
-            $updatedNotes = $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote;
-
-            $newRefundedAmount = round($currentRefunded + $refundAmount, 2);
-            $newPaymentStatus = $reservation->paymentStatus ?? 'pending_payment';
-            if ($newRefundedAmount >= $totalPrice && $totalPrice > 0) {
-                $newPaymentStatus = 'refunded';
-            } elseif ($newRefundedAmount > 0) {
-                $newPaymentStatus = 'partially_refunded';
-            }
-
-            $cancelledReservation = $reservation->withRefund(
-                additionalRefundAmount: $refundAmount,
-                notes: $updatedNotes,
-                status: ReservationStatus::CANCELLED,
-                paymentStatus: $newPaymentStatus
-            );
-
-            $savedReservation = $this->repository->save($cancelledReservation);
-
-            // Record refund in repository ledger
-            if ($refundAmount > 0) {
-                $this->repository->recordRefund([
-                    'reservation_uid' => $uid,
-                    'mercadopago_refund_id' => $mpRefundId,
-                    'mercadopago_payment_id' => $mpPaymentId ?? 'offline',
-                    'amount' => $refundAmount,
-                    'status' => 'approved',
-                    'reason' => $reason,
-                    'source' => $source,
-                    'admin_user_id' => $adminUserId,
-                ]);
-            }
-
-            // Record audit logs
-            $this->auditLogger->record(
-                action: 'reservation_cancelled',
-                entityType: 'reservation',
-                entityId: $uid,
-                before: [
-                    'status' => $reservation->status->value,
-                    'payment_status' => $reservation->paymentStatus,
-                ],
-                after: [
-                    'status' => 'cancelled',
-                    'reason' => $reason,
-                    'refund_type' => $refundType,
-                    'refund_amount' => $refundAmount,
-                ],
-                adminUserId: $adminUserId,
-                ipAddress: $request->getClientIp(),
-                userAgent: (string) $request->getHeader('User-Agent', '')
-            );
-
-            if ($refundAmount > 0) {
-                $this->auditLogger->record(
-                    action: 'refund_issued',
-                    entityType: 'reservation',
-                    entityId: $uid,
-                    before: ['refunded_amount' => $currentRefunded],
-                    after: [
-                        'refunded_amount' => round($currentRefunded + $refundAmount, 2),
-                        'refund_amount' => $refundAmount,
-                        'mercadopago_refund_id' => $mpRefundId,
-                        'refund_type' => $refundType,
-                        'source' => $source,
-                    ],
-                    adminUserId: $adminUserId,
-                    ipAddress: $request->getClientIp(),
-                    userAgent: (string) $request->getHeader('User-Agent', '')
-                );
-            }
-
-            // Commit transaction
-            if ($inTransaction) {
-                $pdo->commit();
-            }
+            $result = $this->lifecycleEngine->cancel($uid, $cancellationRequest);
+        } catch (GatewayRefundException $e) {
+            return $failWithCancelError($e->getUserFriendlyMessage());
+        } catch (ExcessiveRefundException $e) {
+            return $failWithCancelError($e->getMessage());
+        } catch (InvalidReservationStateException $e) {
+            return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 422);
         } catch (Throwable $e) {
-            if ($inTransaction) {
-                $pdo->rollBack();
-            }
             return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Cancellation failed unexpectedly: ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</div>', 500);
         }
 
-        // 10. Resilient Post-Commit Guest Cancellation Email Dispatch
-        $sendCancellationEmail = !empty($sendCancellationEmailRaw);
-        if ($sendCancellationEmail) {
-            $this->sendCancellationEmailSafely(
-                reservation: $savedReservation,
-                refundAmount: $refundAmount,
-                policyRetention: max(0.0, round($totalPrice - ($currentRefunded + $refundAmount), 2)),
-                currentUser: $currentUser,
-                request: $request
-            );
-        }
-
-        // 11. Render response
+        $savedReservation = $result->reservation;
         $updatedDossier = $this->search->findWithAuditTrail($uid);
         $clearance = $this->clearanceRepo?->findByReservationUid($uid);
         $drawerHtml = $this->viewRenderer->renderPartial('reservations/_detail_drawer.php', [
@@ -1009,7 +856,8 @@ final class ReservationController
         bool $isOnlinePayment,
         string $errorMessage,
         array $oldInput,
-        string $csrfToken
+        string $csrfToken,
+        ?CancellationPreview $preview = null
     ): Response {
         $modalHtml = $this->viewRenderer->renderPartial('reservations/_cancel_modal.php', [
             'reservation' => $reservation,
@@ -1018,6 +866,7 @@ final class ReservationController
             'errorMessage' => $errorMessage,
             'oldInput' => $oldInput,
             'csrfToken' => $csrfToken,
+            'preview' => $preview,
         ]);
 
         return Response::html($modalHtml, 422);
@@ -1095,5 +944,58 @@ final class ReservationController
             'email' => (string) ($session['admin_user_email'] ?? ''),
             'role' => (string) ($session['admin_user_role'] ?? 'admin'),
         ];
+    }
+
+    private function buildFallbackLifecycleEngine(): ReservationLifecycleEngineInterface
+    {
+        $persistencePort = $this->pdo !== null
+            ? new PdoReservationPersistenceAdapter($this->pdo, $this->repository)
+            : new class($this->repository) implements ReservationPersistencePort {
+                public function __construct(private readonly ReservationRepositoryInterface $repo) {}
+                public function getReservation(string $reservationUid): ?Reservation { return $this->repo->findByUid($reservationUid); }
+                public function save(Reservation $reservation): Reservation { return $this->repo->save($reservation); }
+                public function holdAtomic(Reservation $reservation, ?DateTimeImmutable $now = null): Reservation { return $this->repo->save($reservation); }
+                /** @param array<string, mixed> $data */
+                public function recordRefund(array $data): void { $this->repo->recordRefund($data); }
+                public function executeInTransaction(callable $operation): mixed { return $operation(); }
+            };
+
+        $refundPort = new MercadoPagoPaymentRefundAdapter($this->refundClient);
+
+        $auditPort = new class($this->auditLogger) implements AuditPort {
+            public function __construct(private readonly AuditLogger $logger) {}
+            /**
+             * @param array<string, mixed>|null $payloadBefore
+             * @param array<string, mixed>|null $payloadAfter
+             */
+            public function record(string $action, string $entityType, string $entityId, ?array $payloadBefore = null, ?array $payloadAfter = null, ?ActorContext $actor = null): int {
+                return $this->logger->record(
+                    action: $action,
+                    entityType: $entityId !== '' ? $entityType : 'reservation',
+                    entityId: $entityId,
+                    before: $payloadBefore,
+                    after: $payloadAfter,
+                    adminUserId: $actor?->adminUserId,
+                    ipAddress: $actor !== null ? $actor->ipAddress : '',
+                    userAgent: $actor?->userAgent
+                );
+            }
+        };
+
+        $eventPublisherPort = new TransactionalLifecycleEventPublisherAdapter(
+            fulfillmentService: $this->lifecycleService,
+            cancellationRenderer: $this->cancellationEmailRenderer,
+            emailSender: $this->emailSender,
+            auditPort: $auditPort
+        );
+
+        return new ReservationLifecycleEngine(
+            persistencePort: $persistencePort,
+            paymentRefundPort: $refundPort,
+            eventPublisherPort: $eventPublisherPort,
+            auditPort: $auditPort,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine
+        );
     }
 }
