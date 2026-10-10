@@ -6,8 +6,10 @@
  * @var string|null $errorMessage
  * @var array<string, mixed> $oldInput
  * @var string $csrfToken
+ * @var \OceanViewFlats\Domain\Reservation\CancellationPreview|null $preview
  */
 
+$preview = $preview ?? null;
 $uid = (string) ($reservation['reservation_uid'] ?? '');
 $propertyId = (string) ($reservation['property_id'] ?? '');
 $guestName = (string) ($reservation['guest_name'] ?? '');
@@ -96,6 +98,27 @@ $sendCancellationEmail = !empty($oldInput)
                         <span>Refundable Balance: <strong class="text-emerald-700 font-mono text-sm">$<?= number_format($refundableBalance, 0, '.', ',') ?> COP</strong></span>
                     </div>
                 </div>
+
+                <?php if ($preview !== null): ?>
+                    <!-- Cancellation Policy Evaluation (Lifecycle Engine) -->
+                    <div class="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl text-xs space-y-1.5">
+                        <div class="flex items-center justify-between text-blue-900 font-semibold">
+                            <span class="flex items-center space-x-1.5">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Policy Evaluation (<?= $preview->daysUntilCheckIn ?> days until check-in)</span>
+                            </span>
+                            <span class="font-mono text-[11px] text-blue-700">
+                                Suggested Max Refund: $<?= number_format($preview->suggestedMaxRefundCop, 0, '.', ',') ?> COP
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center text-[11px] text-blue-800 pt-1 border-t border-blue-100">
+                            <span>Policy Retention: <strong>$<?= number_format($preview->suggestedPolicyRetentionCop, 0, '.', ',') ?> COP</strong></span>
+                            <span>Remaining Refundable: <strong>$<?= number_format($preview->refundableBalanceCop, 0, '.', ',') ?> COP</strong></span>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Payment Channel Context -->
                 <?php if (!$isOnlinePayment): ?>

@@ -30,6 +30,11 @@ class AdminAuditLogRepository
             'condominium_clearance_retry',
             'reservation_created_confirmed',
             'reservation_created_pending',
+            'reservation_confirmed',
+            'direct_hold_created',
+            'payment_approved_webhook',
+            'airbnb_reservation_created',
+            'manual_reservation_created',
         ],
         'cat:rates' => [
             'rate_tier_create',

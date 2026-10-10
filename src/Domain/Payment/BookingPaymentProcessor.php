@@ -13,10 +13,17 @@ use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Quote\Quote;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
+use OceanViewFlats\Domain\Reservation\ActorContext;
+use OceanViewFlats\Domain\Reservation\DirectHoldRequest;
+use OceanViewFlats\Domain\Reservation\DraftPaymentDetails;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\PrimaryGuest;
 use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationDraft;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
+use OceanViewFlats\Infrastructure\Reservation\ReservationLifecycleEngineFactory;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
 use OceanViewFlats\Domain\Support\PathResolver;
@@ -43,6 +50,8 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
 
     private readonly PendingPaymentEmailRendererInterface $pendingEmailRenderer;
 
+    private readonly ReservationLifecycleEngineInterface $lifecycleEngine;
+
     /**
      * @param PaymentGatewayInterface $gateway
      * @param PDO $pdo
@@ -55,6 +64,7 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
      * @param string $hostNotificationEmail
      * @param array<string, array<string, mixed>>|null $translations
      * @param PendingPaymentEmailRendererInterface|null $pendingEmailRenderer
+     * @param ReservationLifecycleEngineInterface|null $lifecycleEngine
      */
     public function __construct(
         private readonly PaymentGatewayInterface $gateway,
@@ -67,10 +77,18 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         private readonly string $hostNotificationEmail = 'reservas@oceanviewflats.com',
         ?array $translations = null,
-        ?PendingPaymentEmailRendererInterface $pendingEmailRenderer = null
+        ?PendingPaymentEmailRendererInterface $pendingEmailRenderer = null,
+        ?ReservationLifecycleEngineInterface $lifecycleEngine = null
     ) {
         $this->translations = $translations ?? PathResolver::loadTranslations();
         $this->pendingEmailRenderer = $pendingEmailRenderer ?? new PendingPaymentEmailRenderer($this->translations);
+        $this->lifecycleEngine = $lifecycleEngine ?? ReservationLifecycleEngineFactory::create($this->pdo, [
+            'ledger' => $this->ledger,
+            'quoteEngine' => $this->quoteEngine,
+            'repository' => $this->repository,
+            'bookingFulfillment' => $this->fulfillment,
+            'emailSender' => $this->emailSender,
+        ]);
     }
 
     /**
@@ -96,6 +114,9 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
         $fulfillment = $options['fulfillment'] ?? BookingFulfillment::createDefault($hostNotificationEmail, $emailSender);
         $translations = $options['translations'] ?? null;
         $pendingEmailRenderer = $options['pendingEmailRenderer'] ?? null;
+        $lifecycleEngine = isset($options['lifecycleEngine']) && $options['lifecycleEngine'] instanceof ReservationLifecycleEngineInterface
+            ? $options['lifecycleEngine']
+            : null;
 
         return new self(
             gateway: $gateway,
@@ -108,7 +129,8 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
             publicSiteUrl: $publicSiteUrl,
             hostNotificationEmail: $hostNotificationEmail,
             translations: $translations,
-            pendingEmailRenderer: $pendingEmailRenderer
+            pendingEmailRenderer: $pendingEmailRenderer,
+            lifecycleEngine: $lifecycleEngine
         );
     }
 
@@ -327,53 +349,33 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
 
         // 8. Gateway approval handling
         if ($gatewayResult->isApproved()) {
-            $reservation = new Reservation(
-                reservationUid: $uid,
+            $draft = ReservationDraft::direct(
                 propertyId: $propertyId,
-                guestName: $guestName,
-                guestEmail: $guestEmail,
-                guestPhone: $guestPhone,
                 checkIn: $request->checkIn,
                 checkOut: $request->checkOut,
+                primaryGuest: PrimaryGuest::create(
+                    name: $guestName,
+                    email: $guestEmail,
+                    phone: $guestPhone,
+                    lang: $lang
+                ),
                 totalPrice: $quote->totalCop(),
-                status: ReservationStatus::CONFIRMED,
-                paymentMethodId: $gatewayResult->paymentMethodId ?? $paymentMethodId,
-                mercadopagoPaymentId: $gatewayResult->paymentId,
-                paymentStatus: 'approved',
-                paymentDetail: $gatewayResult->statusDetail,
-                lang: $lang,
-                createdAt: new DateTimeImmutable()
+                payment: DraftPaymentDetails::direct(
+                    paymentMethodId: $gatewayResult->paymentMethodId ?? $paymentMethodId,
+                    mercadopagoPaymentId: (string) $gatewayResult->paymentId,
+                    paymentStatus: 'approved',
+                    paymentDetail: $gatewayResult->statusDetail
+                ),
+                reservationUid: $uid,
+                actor: ActorContext::guest(ipAddress: $request->clientIp)
             );
 
-            $this->repository->save($reservation);
-
-            $this->recordAuditLog(
-                action: 'reservation_created_confirmed',
-                uid: $uid,
-                payloadBefore: null,
-                payloadAfter: [
-                    'reservation_uid' => $uid,
-                    'property_id' => $propertyId,
-                    'check_in' => $request->checkIn,
-                    'check_out' => $request->checkOut,
-                    'total_price' => $quote->totalCop(),
-                    'status' => 'confirmed',
-                    'payment_id' => $gatewayResult->paymentId,
-                    'payment_status' => 'approved',
-                ],
-                clientIp: $request->clientIp
-            );
+            $this->lifecycleEngine->confirmOrRecord($draft);
 
             $this->recordIdempotency($effectiveIdempotencyKey, (string) ($gatewayResult->paymentId ?? $uid));
             if ($effectiveIdempotencyKey !== $uid) {
                 $this->recordIdempotency($uid, (string) ($gatewayResult->paymentId ?? $uid));
             }
-
-            // Post-settlement fulfillment (spreadsheet sync & confirmation emails withholding credentials per ADR 0001)
-            $this->fulfillment->fulfillConfirmation($reservation, [
-                'payment_id' => $gatewayResult->paymentId,
-                'payment_status' => 'approved',
-            ]);
 
             $extra = [
                 'payment_id' => $gatewayResult->paymentId,
@@ -389,42 +391,29 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
 
         // 9. Gateway pending handling (cash vouchers, PSE asynchronous clearing)
         if ($gatewayResult->isPending()) {
-            $reservation = new Reservation(
-                reservationUid: $uid,
+            $holdRequest = DirectHoldRequest::create(
                 propertyId: $propertyId,
-                guestName: $guestName,
-                guestEmail: $guestEmail,
-                guestPhone: $guestPhone,
                 checkIn: $request->checkIn,
                 checkOut: $request->checkOut,
-                totalPrice: $quote->totalCop(),
-                status: ReservationStatus::PENDING_PAYMENT,
+                primaryGuest: PrimaryGuest::create(
+                    name: $guestName,
+                    email: $guestEmail,
+                    phone: $guestPhone,
+                    lang: $lang
+                ),
                 paymentMethodId: $gatewayResult->paymentMethodId ?? $paymentMethodId,
-                mercadopagoPaymentId: $gatewayResult->paymentId,
-                paymentStatus: $gatewayResult->status,
-                paymentDetail: $gatewayResult->statusDetail,
-                lang: $lang,
-                createdAt: new DateTimeImmutable()
+                actor: ActorContext::guest(ipAddress: $request->clientIp),
+                reservationUid: $uid,
+                payment: DraftPaymentDetails::direct(
+                    paymentMethodId: $gatewayResult->paymentMethodId ?? $paymentMethodId,
+                    mercadopagoPaymentId: (string) $gatewayResult->paymentId,
+                    paymentStatus: $gatewayResult->status,
+                    paymentDetail: $gatewayResult->statusDetail
+                )
             );
 
-            $this->repository->save($reservation);
-
-            $this->recordAuditLog(
-                action: 'reservation_created_pending',
-                uid: $uid,
-                payloadBefore: null,
-                payloadAfter: [
-                    'reservation_uid' => $uid,
-                    'property_id' => $propertyId,
-                    'check_in' => $request->checkIn,
-                    'check_out' => $request->checkOut,
-                    'total_price' => $quote->totalCop(),
-                    'status' => 'pending_payment',
-                    'payment_id' => $gatewayResult->paymentId,
-                    'payment_status' => $gatewayResult->status,
-                ],
-                clientIp: $request->clientIp
-            );
+            $holdResult = $this->lifecycleEngine->holdDirect($holdRequest);
+            $reservation = $holdResult->reservation;
 
             $this->recordIdempotency($effectiveIdempotencyKey, (string) ($gatewayResult->paymentId ?? $uid));
             if ($effectiveIdempotencyKey !== $uid) {
@@ -509,41 +498,7 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
         }
     }
 
-    /**
-     * Records administrative audit log if table is available.
-     *
-     * @param string $action
-     * @param string $uid
-     * @param array<string, mixed>|null $payloadBefore
-     * @param array<string, mixed>|null $payloadAfter
-     * @param string|null $clientIp
-     */
-    private function recordAuditLog(
-        string $action,
-        string $uid,
-        ?array $payloadBefore,
-        ?array $payloadAfter,
-        ?string $clientIp
-    ): void {
-        try {
-            $stmt = $this->pdo->prepare('
-                INSERT INTO admin_audit_logs (
-                    admin_user_id, action, entity_type, entity_id, payload_before, payload_after, ip_address, created_at
-                ) VALUES (
-                    NULL, :action, "reservation", :entity_id, :payload_before, :payload_after, :ip_address, CURRENT_TIMESTAMP
-                )
-            ');
-            $stmt->execute([
-                'action' => $action,
-                'entity_id' => $uid,
-                'payload_before' => $payloadBefore !== null ? json_encode($payloadBefore, JSON_UNESCAPED_SLASHES) : null,
-                'payload_after' => $payloadAfter !== null ? json_encode($payloadAfter, JSON_UNESCAPED_SLASHES) : null,
-                'ip_address' => $clientIp ?? '127.0.0.1',
-            ]);
-        } catch (Throwable) {
-            // Silently tolerate environments without admin_audit_logs
-        }
-    }
+
 
     /**
      * Dispatches localized pending payment instructions to guest and host.

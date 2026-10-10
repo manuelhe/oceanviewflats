@@ -318,6 +318,9 @@ final class ReservationLedger implements ReservationLedgerInterface
         return $updated;
     }
 
+    /**
+     * @deprecated Use ReservationLifecycleEngineInterface::cancel() for complete lifecycle transitions, including refund processing, audit logging, and post-commit events (ADR 0011).
+     */
     public function cancel(
         string $reservationUid,
         string $reason = ''

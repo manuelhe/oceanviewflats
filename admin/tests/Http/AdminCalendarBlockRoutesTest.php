@@ -207,7 +207,7 @@ final class AdminCalendarBlockRoutesTest extends TestCase
     public function testPostCalendarBlockCollidingWithReservationReturns422(): void
     {
         $now = new DateTimeImmutable('2026-10-01 10:00:00');
-        $this->reservationRepo->save(new Reservation(
+        $this->reservationRepo->save(Reservation::create(
             reservationUid: 'ovf_route_collision',
             propertyId: '1606',
             guestName: 'Route Test Guest',

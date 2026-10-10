@@ -14,11 +14,12 @@ require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 
 use OceanViewFlats\Domain\Fulfillment\GoogleSheetWebhookSync;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
-use OceanViewFlats\Domain\Quote\QuoteEngine;
-use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
-use OceanViewFlats\Domain\Reservation\Reservation;
-use OceanViewFlats\Domain\Reservation\ReservationLedger;
-use OceanViewFlats\Domain\Reservation\ReservationStatus;
+use OceanViewFlats\Domain\Reservation\ActorContext;
+use OceanViewFlats\Domain\Reservation\DirectHoldRequest;
+use OceanViewFlats\Domain\Reservation\PrimaryGuest;
+use OceanViewFlats\Domain\Reservation\ReservationConflictException;
+use OceanViewFlats\Domain\Reservation\ReservationValidationException;
+use OceanViewFlats\Infrastructure\Reservation\ReservationLifecycleEngineFactory;
 
 // Load central utilities & configuration
 require_once __DIR__ . '/utils.php';
@@ -118,7 +119,7 @@ if ($checkIn < strtotime(date('Y-m-d'))) {
     send_json_response(false, $t['err_dates_past']);
 }
 
-// 6. Overlap Booking Check Against Cache and Database via ReservationLedger
+// 6. Overlap Booking Check, Quote Computation, and Atomic Hold via ReservationLifecycleEngine (ADR 0011)
 $pdo = null;
 if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
     try {
@@ -129,31 +130,41 @@ if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
 }
 
 $cacheDir = __DIR__ . '/../cache';
-$ledger = ReservationLedger::createDefault($pdo, $cacheDir);
+$lifecycleEngine = ReservationLifecycleEngineFactory::create($pdo, [
+    'cacheDir' => $cacheDir,
+]);
 
-// A: Ephemeral channel blocks check (ADR 0002)
-$channelConflict = $ledger->findChannelConflict($propertyId, $checkInStr, $checkOutStr);
-if ($channelConflict !== null) {
-    send_json_response(false, sprintf($t['err_overlap_airbnb'], $channelConflict->startDate));
-}
+$holdRequest = DirectHoldRequest::create(
+    propertyId: $propertyId,
+    checkIn: $checkInStr,
+    checkOut: $checkOutStr,
+    primaryGuest: PrimaryGuest::create(
+        name: $guestName,
+        email: $guestEmail,
+        phone: $guestPhone,
+        lang: $lang
+    ),
+    actor: ActorContext::guest()
+);
 
-// B: Active direct reservations check with dynamic hold windows (ADR 0003)
-$resConflict = $ledger->findReservationConflict($propertyId, $checkInStr, $checkOutStr);
-if ($resConflict !== null) {
+try {
+    $holdResult = $lifecycleEngine->holdDirect($holdRequest);
+} catch (ReservationValidationException $e) {
+    if ($e->getErrorCode() === 'MINIMUM_STAY_VIOLATED') {
+        send_json_response(false, sprintf($t['err_min_stay'], $e->getExpected() ?? 1, $e->getActual() ?? 1));
+    }
+    send_json_response(false, $t['err_dates_invalid']);
+} catch (ReservationConflictException $e) {
+    if ($e->isChannelBlock()) {
+        $conflictDate = $e->getConflictDate() ?? $checkInStr;
+        send_json_response(false, sprintf($t['err_overlap_airbnb'], $conflictDate));
+    }
     send_json_response(false, $t['err_overlap_db']);
 }
 
-// 7. Authoritative Quote Computation via QuoteEngine (ADR 0004)
-try {
-    $quoteEngine = QuoteEngine::createDefault();
-    $quote = $quoteEngine->quote($propertyId, $checkInStr, $checkOutStr);
-} catch (InvalidArgumentException $e) {
-    send_json_response(false, $t['err_dates_invalid']);
-}
-
-if (!$quote->isValid()) {
-    send_json_response(false, sprintf($t['err_min_stay'], $quote->minimumStayRequired(), $quote->nightsCount()));
-}
+$reservation = $holdResult->reservation;
+$quote = $holdResult->quote;
+$uid = $reservation->reservationUid;
 
 $datesCount = $quote->nightsCount();
 $accommodationTotal = $quote->accommodationTotalCop();
@@ -167,35 +178,9 @@ if (abs($serverTotalCop - $clientPriceCop) > 1.0) {
     error_log("Direct booking pricing audit mismatch: Client: $clientPriceCop, Server: $serverTotalCop.");
 }
 
-// 8. Log Booking Request to MySQL
-$uid = 'ovf_' . bin2hex(random_bytes(4)); // Safe unique reservation code
-$dbLogged = false;
+$dbLogged = $pdo !== null;
 
-$reservation = new Reservation(
-    reservationUid: $uid,
-    propertyId: $propertyId,
-    guestName: $guestName,
-    guestEmail: $guestEmail,
-    guestPhone: $guestPhone,
-    checkIn: $checkInStr,
-    checkOut: $checkOutStr,
-    totalPrice: (float)$serverTotalCop,
-    status: ReservationStatus::PENDING_PAYMENT,
-    lang: $lang,
-    createdAt: new DateTimeImmutable()
-);
-
-if ($pdo !== null) {
-    try {
-        $repository = new PdoReservationRepository($pdo);
-        $repository->save($reservation);
-        $dbLogged = true;
-    } catch (Exception $e) {
-        error_log("Database insertion failed: " . $e->getMessage());
-    }
-}
-
-// 9. Forward Details to Google Sheet webhook
+// 7. Forward Details to Google Sheet webhook
 $sheetSync = GoogleSheetWebhookSync::createFromEnv();
 $sheetSuccess = $sheetSync->sync($reservation);
 

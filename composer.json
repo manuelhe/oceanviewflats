@@ -15,7 +15,8 @@
     "psr-4": {
       "OceanViewFlats\\Api\\": "public/api/",
       "OceanViewFlats\\Domain\\": "src/Domain/",
-      "OceanViewFlats\\Admin\\": "admin/src/"
+      "OceanViewFlats\\Admin\\": "admin/src/",
+      "OceanViewFlats\\Infrastructure\\": "src/Infrastructure/"
     }
   },
   "autoload-dev": {
