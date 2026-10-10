@@ -193,3 +193,38 @@ test("registry.js has excised duplicate dictionaries and uses window.t and apiBa
 		"registry.js must use pageConfig.apiBase",
 	);
 });
+
+test("guide.js has excised introTemplates and uses canonical greeting separation and pageConfig", () => {
+	const guideJsPath = path.join(process.cwd(), "public", "js", "guide.js");
+	const content = fs.readFileSync(guideJsPath, "utf-8");
+
+	// Ensure duplicate template dictionary and regex logic are excised
+	assert.ok(
+		!content.includes("const introTemplates ="),
+		"guide.js must not contain duplicate introTemplates dictionary",
+	);
+	assert.ok(
+		!content.includes("function getGenericGreeting"),
+		"guide.js must not contain procedural getGenericGreeting function",
+	);
+
+	// Ensure canonical keys are referenced
+	assert.ok(
+		content.includes("guideWelcomeWithGuest"),
+		"guide.js must reference guideWelcomeWithGuest translation key",
+	);
+	assert.ok(
+		content.includes("guideWelcomeGeneric"),
+		"guide.js must reference guideWelcomeGeneric translation key",
+	);
+
+	// Ensure pageConfig assetPrefix and apiBase are used
+	assert.ok(
+		content.includes("pageConfig.assetPrefix"),
+		"guide.js must use pageConfig.assetPrefix",
+	);
+	assert.ok(
+		content.includes("pageConfig.apiBase"),
+		"guide.js must use pageConfig.apiBase",
+	);
+});
