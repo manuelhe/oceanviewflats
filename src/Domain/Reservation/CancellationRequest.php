@@ -9,14 +9,26 @@ namespace OceanViewFlats\Domain\Reservation;
  */
 final class CancellationRequest
 {
+    public readonly RefundInstruction $refundInstruction;
+    public readonly ?float $refundAmountCop;
+
     public function __construct(
         public readonly string $reason,
-        public readonly RefundInstruction $refundInstruction,
+        ?RefundInstruction $refundInstruction = null,
         public readonly bool $sendCancellationEmail = true,
         public readonly ?ActorContext $actor = null,
         public readonly bool $dispatchGatewayRefund = true,
-        public readonly ?string $externalRefundId = null
+        public readonly ?string $externalRefundId = null,
+        ?float $refundAmountCop = null
     ) {
+        $this->refundAmountCop = $refundAmountCop ?? $refundInstruction?->amountCop;
+        if ($refundInstruction !== null) {
+            $this->refundInstruction = $refundInstruction;
+        } elseif ($refundAmountCop !== null && $refundAmountCop > 0.0) {
+            $this->refundInstruction = RefundInstruction::partial($refundAmountCop);
+        } else {
+            $this->refundInstruction = RefundInstruction::full();
+        }
     }
 
     public static function withoutRefund(

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Domain\Payment;
 
-use DateTimeImmutable;
 use OceanViewFlats\Domain\Fulfillment\BookingFulfillment;
 use OceanViewFlats\Domain\Fulfillment\BookingFulfillmentInterface;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
@@ -12,14 +11,13 @@ use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
 use OceanViewFlats\Domain\Reservation\ActorContext;
+use OceanViewFlats\Domain\Reservation\CancellationRequest;
 use OceanViewFlats\Domain\Reservation\DraftPaymentDetails;
 use OceanViewFlats\Domain\Reservation\InvalidReservationStateException;
 use OceanViewFlats\Domain\Reservation\PrimaryGuest;
-use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationDraft;
 use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
 use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
-use OceanViewFlats\Domain\Reservation\ReservationStatus;
 use PDO;
 use Throwable;
 
@@ -212,68 +210,20 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
 
             if ($resStatus !== 'cancelled') {
                 try {
-                    $this->pdo->beginTransaction();
+                    $refunds = $details->refunds;
+                    $lastRefundId = !empty($refunds) ? end($refunds)->refundId : null;
 
-                    $existingNotes = isset($reservation['notes']) && is_string($reservation['notes']) ? trim($reservation['notes']) : '';
-                    $cancelNote = sprintf(
-                        '[External Refund Sync %s] Full refund detected via webhook (COP %s)',
-                        date('Y-m-d H:i'),
-                        number_format($actualRefundAmount, 2)
-                    );
-                    $updatedNotes = $existingNotes !== '' ? $existingNotes . "\n" . $cancelNote : $cancelNote;
-
-                    $hasNotesCol = array_key_exists('notes', $reservation);
-                    if ($hasNotesCol) {
-                        $upStmt = $this->pdo->prepare("
-                            UPDATE reservations 
-                            SET status = 'cancelled', 
-                                payment_status = 'refunded', 
-                                refunded_amount = :refunded_amount, 
-                                notes = :notes,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE reservation_uid = :uid
-                        ");
-                        $upStmt->execute([
-                            ':uid' => $externalRef,
-                            ':refunded_amount' => $actualRefundAmount,
-                            ':notes' => $updatedNotes,
-                        ]);
-                    } else {
-                        $upStmt = $this->pdo->prepare("
-                            UPDATE reservations 
-                            SET status = 'cancelled', 
-                                payment_status = 'refunded', 
-                                refunded_amount = :refunded_amount, 
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE reservation_uid = :uid
-                        ");
-                        $upStmt->execute([
-                            ':uid' => $externalRef,
-                            ':refunded_amount' => $actualRefundAmount,
-                        ]);
-                    }
-
-                    $this->syncRefundItems($externalRef, $cleanPaymentId, $details->refunds, $actualRefundAmount);
-
-                    $this->recordAuditLog(
-                        action: 'refund_cancellation',
-                        reservationUid: $externalRef,
-                        payloadBefore: [
-                            'status' => $resStatus,
-                            'payment_status' => $reservation['payment_status'] ?? null,
-                        ],
-                        payloadAfter: [
-                            'status' => 'cancelled',
-                            'payment_status' => 'refunded',
-                            'refunded_amount' => $actualRefundAmount,
-                        ]
+                    $cancellationRequest = new CancellationRequest(
+                        reason: 'External Refund Sync: Mercado Pago full refund webhook',
+                        refundAmountCop: $actualRefundAmount,
+                        dispatchGatewayRefund: false,
+                        externalRefundId: $lastRefundId,
+                        actor: ActorContext::webhook(),
+                        sendCancellationEmail: true,
                     );
 
-                    $this->pdo->commit();
+                    $this->lifecycleEngine->cancel($externalRef, $cancellationRequest);
                 } catch (Throwable $e) {
-                    if ($this->pdo->inTransaction()) {
-                        $this->pdo->rollBack();
-                    }
                     return WebhookSettlementResult::databaseError(
                         message: 'Failed to process full refund cancellation: ' . $e->getMessage(),
                         httpStatusCode: 500,
@@ -281,9 +231,6 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
                         reservationUid: $externalRef
                     );
                 }
-
-                // Resilient post-commit cancellation email dispatch
-                $this->dispatchCancellationEmail($reservation, $cleanPaymentId, $actualRefundAmount);
 
                 return WebhookSettlementResult::refundCancelled(
                     reservationUid: $externalRef,
@@ -576,70 +523,6 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
             ]);
         } catch (Throwable) {
             // Tolerant of missing audit logs table or non-fatal logging failure
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $reservation
-     */
-    private function dispatchCancellationEmail(array $reservation, string $paymentId, float $actualRefundAmount): void
-    {
-        $totPrice = (float) ($reservation['total_price'] ?? 0.0);
-        $policyRetention = max(0.0, round($totPrice - $actualRefundAmount, 2));
-
-        $cancelledReservation = new Reservation(
-            reservationUid: (string) $reservation['reservation_uid'],
-            propertyId: (string) $reservation['property_id'],
-            guestName: (string) $reservation['guest_name'],
-            guestEmail: (string) $reservation['guest_email'],
-            guestPhone: (string) $reservation['guest_phone'],
-            checkIn: (string) $reservation['check_in'],
-            checkOut: (string) $reservation['check_out'],
-            totalPrice: $totPrice,
-            status: ReservationStatus::CANCELLED,
-            paymentMethodId: isset($reservation['payment_method_id']) ? (string) $reservation['payment_method_id'] : null,
-            mercadopagoPaymentId: $paymentId !== '' ? $paymentId : null,
-            paymentStatus: 'refunded',
-            lang: isset($reservation['lang']) ? (string) $reservation['lang'] : 'en',
-            createdAt: isset($reservation['created_at']) ? new DateTimeImmutable((string) $reservation['created_at']) : null
-        );
-
-        try {
-            $guestSubject = $this->cancellationRenderer->renderGuestSubject($cancelledReservation);
-            $guestHtml = $this->cancellationRenderer->renderGuestCancellationHtml($cancelledReservation, $actualRefundAmount, $policyRetention);
-            $mailSent = $this->emailSender->send($cancelledReservation->guestEmail, $guestSubject, $guestHtml);
-
-            if ($mailSent) {
-                $this->recordAuditLog(
-                    action: 'cancellation_email_sent',
-                    reservationUid: $cancelledReservation->reservationUid,
-                    payloadAfter: [
-                        'recipient' => $cancelledReservation->guestEmail,
-                        'refund_amount' => $actualRefundAmount,
-                        'policy_retention' => $policyRetention,
-                        'trigger' => 'mercadopago_webhook',
-                    ]
-                );
-            } else {
-                $this->recordAuditLog(
-                    action: 'email_delivery_failed',
-                    reservationUid: $cancelledReservation->reservationUid,
-                    payloadAfter: [
-                        'recipient' => $cancelledReservation->guestEmail,
-                        'error' => 'Email sender returned false',
-                        'trigger' => 'mercadopago_webhook',
-                    ]
-                );
-            }
-        } catch (Throwable $e) {
-            $this->recordAuditLog(
-                action: 'email_delivery_failed',
-                reservationUid: $cancelledReservation->reservationUid,
-                payloadAfter: [
-                    'error' => $e->getMessage(),
-                    'trigger' => 'mercadopago_webhook',
-                ]
-            );
         }
     }
 }

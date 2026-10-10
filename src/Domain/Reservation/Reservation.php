@@ -19,6 +19,9 @@ final class Reservation
     public const DEFAULT_STANDARD_HOLD_MINUTES = 30;
     public const DEFAULT_VOUCHER_HOLD_HOURS = 72;
 
+    /**
+     * @internal Hydrated exclusively by ReservationPersistencePort and repositories. For new reservation creation, use ReservationDraft and ReservationLifecycleEngineInterface.
+     */
     public function __construct(
         public readonly string $reservationUid,
         public readonly string $propertyId,

@@ -83,6 +83,12 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
                     : null
             );
 
+        $audit = isset($options['auditPort']) && $options['auditPort'] instanceof AuditPort
+            ? $options['auditPort']
+            : ($pdo !== null
+                ? new PdoAuditAdapter($pdo)
+                : new InMemoryAuditAdapter());
+
         $eventPublisher = isset($options['eventPublisherPort']) && $options['eventPublisherPort'] instanceof LifecycleEventPublisherPort
             ? $options['eventPublisherPort']
             : new TransactionalLifecycleEventPublisherAdapter(
@@ -97,14 +103,9 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
                     : null,
                 bookingFulfillment: isset($options['bookingFulfillment']) && $options['bookingFulfillment'] instanceof BookingFulfillmentInterface
                     ? $options['bookingFulfillment']
-                    : null
+                    : null,
+                auditPort: $audit
             );
-
-        $audit = isset($options['auditPort']) && $options['auditPort'] instanceof AuditPort
-            ? $options['auditPort']
-            : ($pdo !== null
-                ? new PdoAuditAdapter($pdo)
-                : new InMemoryAuditAdapter());
 
         $cacheDir = isset($options['cacheDir']) && is_string($options['cacheDir']) ? $options['cacheDir'] : null;
         $maintenanceSource = isset($options['maintenanceBlockSource']) && $options['maintenanceBlockSource'] instanceof MaintenanceBlockSourceInterface

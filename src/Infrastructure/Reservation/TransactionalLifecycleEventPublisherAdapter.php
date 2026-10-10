@@ -85,6 +85,12 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
                 $refundAmount = $event->cancellationResult->refundAmountCop;
                 $policyRetention = $event->cancellationResult->policyRetentionCop;
 
+                $trigger = match ($event->actorContext->source) {
+                    'webhook' => 'mercadopago_webhook',
+                    'admin' => 'admin_cancellation',
+                    default => $event->actorContext->source,
+                };
+
                 try {
                     $subject = $this->cancellationRenderer->renderGuestSubject($reservation);
                     $htmlBody = $this->cancellationRenderer->renderGuestCancellationHtml(
@@ -104,6 +110,7 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
                                 'recipient' => $reservation->guestEmail,
                                 'refund_amount' => $refundAmount,
                                 'policy_retention' => $policyRetention,
+                                'trigger' => $trigger,
                             ],
                             actor: $event->actorContext
                         );
@@ -113,7 +120,11 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
                             entityType: 'reservation',
                             entityId: $reservation->reservationUid,
                             payloadBefore: null,
-                            payloadAfter: ['error' => 'Email sender returned false'],
+                            payloadAfter: [
+                                'recipient' => $reservation->guestEmail,
+                                'error' => 'Email sender returned false',
+                                'trigger' => $trigger,
+                            ],
                             actor: $event->actorContext
                         );
                     }
@@ -123,7 +134,11 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
                         entityType: 'reservation',
                         entityId: $reservation->reservationUid,
                         payloadBefore: null,
-                        payloadAfter: ['error' => $e->getMessage()],
+                        payloadAfter: [
+                            'recipient' => $reservation->guestEmail,
+                            'error' => $e->getMessage(),
+                            'trigger' => $trigger,
+                        ],
                         actor: $event->actorContext
                     );
                 }

@@ -267,7 +267,7 @@ final class CalendarBlockControllerTest extends TestCase
         $now = new DateTimeImmutable('2026-10-01 10:00:00');
 
         // Existing direct reservation in ledger: Nov 10 to Nov 15
-        $this->reservationRepo->save(new Reservation(
+        $this->reservationRepo->save(Reservation::create(
             reservationUid: 'ovf_active_direct',
             propertyId: '1606',
             guestName: 'Direct Guest',
