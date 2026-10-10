@@ -21,11 +21,13 @@ use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceRepositoryInterface;
 use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestRegistryRequiredException;
 use OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync;
 use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
+use OceanViewFlats\Domain\Reservation\ReservationNotFoundException;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchCriteria;
@@ -66,7 +68,12 @@ final class ReservationController
         $this->cancellationEmailRenderer = $cancellationEmailRenderer ?? new CancellationEmailRenderer($this->publicSiteUrl);
         $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->publicSiteUrl);
         $this->clearanceRepo = $clearanceRepo ?? ($this->pdo !== null ? new PdoCondominiumClearanceRepository($this->pdo) : null);
-        $this->clearanceSync = $clearanceSync ?? ($this->clearanceRepo !== null ? new HuespedManagerClearanceSync($this->clearanceRepo) : null);
+        $this->clearanceSync = $clearanceSync ?? ($this->clearanceRepo !== null ? new HuespedManagerClearanceSync(
+            repository: $this->clearanceRepo,
+            reservationRepository: $this->repository,
+            searchAdapter: $this->search,
+            auditLogger: $this->auditLogger
+        ) : null);
     }
 
     /**
@@ -495,24 +502,6 @@ final class ReservationController
             }
         }
 
-        $uid = (string) ($request->getAttribute('uid') ?? '');
-        $reservation = $this->repository->findByUid($uid);
-
-        if ($reservation === null) {
-            if ($request->isHtmx()) {
-                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found.</div>', 404);
-            }
-            return Response::json(['success' => false, 'error' => 'Reservation not found.'], 404);
-        }
-
-        $registry = $this->search->findGuestRegistry($uid);
-        if ($registry === null) {
-            if ($request->isHtmx()) {
-                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Guest registry must be submitted before condominium clearance can be synced.</div>', 400);
-            }
-            return Response::json(['success' => false, 'error' => 'Guest registry must be submitted before condominium clearance can be synced.'], 400);
-        }
-
         if ($this->clearanceSync === null) {
             if ($request->isHtmx()) {
                 return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Condominium clearance synchronization service is unavailable.</div>', 500);
@@ -520,41 +509,30 @@ final class ReservationController
             return Response::json(['success' => false, 'error' => 'Condominium clearance synchronization service is unavailable.'], 500);
         }
 
-        $guests = $registry['guests_payload'] ?? [];
-        if (is_string($guests)) {
-            $decoded = json_decode($guests, true);
-            $guests = is_array($decoded) ? $decoded : [];
-        }
-
-        $notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $registry['car_model'] ?? null);
-        $carPlates = $registry['car_plates'] ?? null;
-
-        $existingClearance = $this->clearanceRepo?->findByReservationUid($uid);
-        $payloadBefore = $existingClearance?->toArray();
-
-        $clearance = $this->clearanceSync->sync(
-            reservationUid: $reservation->reservationUid,
-            propertyId: $reservation->propertyId,
-            checkIn: $reservation->checkIn,
-            checkOut: $reservation->checkOut,
-            guests: $guests,
-            carPlates: $carPlates,
-            notes: $notes
-        );
-
-        $this->auditLogger->record(
-            action: 'condominium_clearance_retry',
-            entityType: 'reservation',
-            entityId: $uid,
-            before: $payloadBefore,
-            after: $clearance->toArray(),
+        $uid = (string) ($request->getAttribute('uid') ?? '');
+        $adminContext = new AdminContext(
             adminUserId: $currentUser['id'],
             ipAddress: $request->getClientIp(),
             userAgent: (string) $request->getHeader('User-Agent', '')
         );
 
+        try {
+            $clearance = $this->clearanceSync->syncForReservation($uid, $adminContext);
+        } catch (ReservationNotFoundException) {
+            if ($request->isHtmx()) {
+                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Reservation not found.</div>', 404);
+            }
+            return Response::json(['success' => false, 'error' => 'Reservation not found.'], 404);
+        } catch (GuestRegistryRequiredException) {
+            if ($request->isHtmx()) {
+                return Response::html('<div class="p-4 text-xs text-rose-600 font-semibold">Guest registry must be submitted before condominium clearance can be synced.</div>', 400);
+            }
+            return Response::json(['success' => false, 'error' => 'Guest registry must be submitted before condominium clearance can be synced.'], 400);
+        }
+
         if ($request->isHtmx()) {
-            return $this->renderDetailDrawerResponse($uid, $session, $reservation->toArray(), $clearance);
+            $reservation = $this->repository->findByUid($uid);
+            return $this->renderDetailDrawerResponse($uid, $session, $reservation?->toArray() ?? [], $clearance);
         }
 
         return Response::json([

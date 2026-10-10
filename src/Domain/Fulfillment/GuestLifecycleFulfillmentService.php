@@ -25,6 +25,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
     private readonly AccessDispatchEmailRendererInterface $accessDispatchRenderer;
     private readonly PropertyCredentialsProviderInterface $credentialsProvider;
     private readonly PublicUrlBuilder $urlBuilder;
+    private readonly ?CondominiumClearanceSyncInterface $clearanceSync;
 
     public function __construct(
         private readonly PDO $pdo,
@@ -36,13 +37,14 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         private readonly string $hostNotificationEmail = 'rentals@oceanviewflats.com',
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
         ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null,
-        private readonly ?CondominiumClearanceSyncInterface $condominiumClearanceSync = null,
+        ?CondominiumClearanceSyncInterface $clearanceSync = null,
         ?PropertyCredentialsProviderInterface $credentialsProvider = null,
         ?PublicUrlBuilder $urlBuilder = null
     ) {
         $this->accessDispatchRenderer = $accessDispatchRenderer ?? new AccessDispatchEmailRenderer($this->publicSiteUrl);
         $this->credentialsProvider = $credentialsProvider ?? new ConfigPropertyCredentialsProvider();
         $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->publicSiteUrl);
+        $this->clearanceSync = $clearanceSync;
     }
 
     /**
@@ -80,10 +82,12 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         $confirmationEmailRenderer = $options['confirmation_email_renderer'] ?? new ConfirmationEmailRenderer($resolvedPublicSiteUrl);
         /** @var AccessDispatchEmailRendererInterface $accessDispatchRenderer */
         $accessDispatchRenderer = $options['access_dispatch_renderer'] ?? new AccessDispatchEmailRenderer($resolvedPublicSiteUrl);
-        /** @var ?CondominiumClearanceSyncInterface $condominiumClearanceSync */
-        $condominiumClearanceSync = array_key_exists('condominium_clearance_sync', $options)
-            ? $options['condominium_clearance_sync']
-            : HuespedManagerClearanceSync::createDefault($pdo);
+        /** @var ?CondominiumClearanceSyncInterface $clearanceSync */
+        $clearanceSync = array_key_exists('clearance_sync', $options)
+            ? $options['clearance_sync']
+            : (array_key_exists('condominium_clearance_sync', $options)
+                ? $options['condominium_clearance_sync']
+                : HuespedManagerClearanceSync::createDefault($pdo));
         /** @var PropertyCredentialsProviderInterface $credentialsProvider */
         $credentialsProvider = $options['credentials_provider'] ?? new ConfigPropertyCredentialsProvider();
         /** @var PublicUrlBuilder $urlBuilder */
@@ -99,7 +103,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
             hostNotificationEmail: $resolvedHost,
             publicSiteUrl: $resolvedPublicSiteUrl,
             accessDispatchRenderer: $accessDispatchRenderer,
-            condominiumClearanceSync: $condominiumClearanceSync,
+            clearanceSync: $clearanceSync,
             credentialsProvider: $credentialsProvider,
             urlBuilder: $urlBuilder
         );
@@ -275,19 +279,9 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         }
 
         // Condominium clearance synchronization (out-of-band side effect, ADR 0008)
-        if ($this->condominiumClearanceSync !== null) {
+        if ($this->clearanceSync !== null) {
             try {
-                $notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $submission->carModel);
-
-                $this->condominiumClearanceSync->sync(
-                    reservationUid: $reservation->reservationUid,
-                    propertyId: $reservation->propertyId,
-                    checkIn: $reservation->checkIn,
-                    checkOut: $reservation->checkOut,
-                    guests: $submission->occupants,
-                    carPlates: $submission->carPlates,
-                    notes: $notes
-                );
+                $clearance = $this->clearanceSync->syncSubmission($reservation, $submission);
             } catch (Throwable $e) {
                 error_log('Condominium clearance synchronization failed for reservation ' . $reservation->reservationUid . ': ' . $e->getMessage());
             }
@@ -414,6 +408,15 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
                 $this->pdo->rollBack();
             }
             return RegistryFulfillmentResult::systemError('Database transaction failed: ' . $e->getMessage());
+        }
+
+        // Condominium clearance synchronization (out-of-band side effect, ADR 0008, Ticket #156)
+        if ($this->clearanceSync !== null) {
+            try {
+                $this->clearanceSync->syncForReservation($reservationUid, $admin);
+            } catch (\Throwable $e) {
+                error_log("Failed to sync condominium clearance during manual registry completion for {$reservationUid}: " . $e->getMessage());
+            }
         }
 
         $lang = $submission !== null ? $submission->lang : $reservation->lang;

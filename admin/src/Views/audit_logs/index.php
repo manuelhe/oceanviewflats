@@ -85,6 +85,7 @@ $dateTo = (string) ($filters['date_to'] ?? '');
                             <option value="guest_registry_submitted" <?= $selectedAction === 'guest_registry_submitted' ? 'selected' : '' ?>>Guest Registry Submitted</option>
                             <option value="door_code_override" <?= $selectedAction === 'door_code_override' ? 'selected' : '' ?>>Door Code Overridden</option>
                             <option value="door_code_regenerate" <?= $selectedAction === 'door_code_regenerate' ? 'selected' : '' ?>>Door Code Regenerated</option>
+                            <option value="condominium_clearance_sync" <?= $selectedAction === 'condominium_clearance_sync' ? 'selected' : '' ?>>Condominium Clearance Sync</option>
                             <option value="condominium_clearance_retry" <?= $selectedAction === 'condominium_clearance_retry' ? 'selected' : '' ?>>Condominium Clearance Retry</option>
                         </optgroup>
 

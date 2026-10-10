@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Domain\Fulfillment;
 
+use InvalidArgumentException;
+use LogicException;
+use OceanViewFlats\Admin\Audit\AuditLogger;
+use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationNotFoundException;
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
+use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use PDO;
 use Throwable;
 
@@ -26,7 +35,10 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
 
     public function __construct(
         private readonly CondominiumClearanceRepositoryInterface $repository,
+        private readonly ?ReservationRepositoryInterface $reservationRepository = null,
+        private readonly ?ReservationSearchInterface $searchAdapter = null,
         private readonly HttpTransportInterface $transport = new CurlHttpTransport(),
+        private readonly ?AuditLogger $auditLogger = null,
         ?string $baseUrl = null,
         ?string $token1707 = null,
         ?string $token1606 = null,
@@ -54,7 +66,10 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
     {
         return new self(
             repository: new PdoCondominiumClearanceRepository($pdo),
-            transport: $transport ?? new CurlHttpTransport()
+            reservationRepository: new PdoReservationRepository($pdo),
+            searchAdapter: new PdoReservationSearchAdapter($pdo),
+            transport: $transport ?? new CurlHttpTransport(),
+            auditLogger: new AuditLogger($pdo)
         );
     }
 
@@ -75,18 +90,105 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
     }
 
     /**
+     * Deep synchronization entry point loading reservation and guest registry from persistence.
+     *
+     * @throws LogicException If repository or search adapter dependencies are not configured
+     * @throws ReservationNotFoundException If reservation does not exist
+     * @throws GuestRegistryRequiredException If guest registry has not been submitted
+     */
+    public function syncForReservation(string $reservationUid, ?AdminContext $admin = null): CondominiumClearance
+    {
+        if ($this->reservationRepository === null) {
+            throw new LogicException('Reservation repository is not configured on HuespedManagerClearanceSync.');
+        }
+
+        $reservation = $this->reservationRepository->findByUid($reservationUid);
+        if ($reservation === null) {
+            throw new ReservationNotFoundException("Reservation not found: {$reservationUid}");
+        }
+
+        if ($this->searchAdapter === null) {
+            throw new LogicException('Reservation search adapter is not configured on HuespedManagerClearanceSync.');
+        }
+
+        $registry = $this->searchAdapter->findGuestRegistry($reservationUid);
+        if ($registry === null) {
+            throw new GuestRegistryRequiredException("Guest registry must be submitted before condominium clearance can be synced for reservation: {$reservationUid}");
+        }
+
+        $guests = $registry['guests_payload'] ?? [];
+        if (is_string($guests)) {
+            $decoded = json_decode($guests, true);
+            $guests = is_array($decoded) ? $decoded : [];
+        }
+
+        $carPlates = isset($registry['car_plates']) && trim((string) $registry['car_plates']) !== ''
+            ? trim((string) $registry['car_plates'])
+            : null;
+        $carModel = isset($registry['car_model']) && trim((string) $registry['car_model']) !== ''
+            ? trim((string) $registry['car_model'])
+            : null;
+
+        $notes = self::formatClearanceNotes($reservation->notes, $carModel);
+
+        return $this->performSync(
+            reservationUid: $reservation->reservationUid,
+            propertyId: $reservation->propertyId,
+            checkIn: $reservation->checkIn,
+            checkOut: $reservation->checkOut,
+            guests: $guests,
+            carPlates: $carPlates,
+            notes: $notes,
+            admin: $admin
+        );
+    }
+
+    /**
+     * Deep synchronization entry point utilizing in-memory reservation and guest registry submission models.
+     *
+     * @throws InvalidArgumentException If guest registry submission does not contain any occupants
+     */
+    public function syncSubmission(
+        Reservation $reservation,
+        GuestRegistrySubmission $submission,
+        ?AdminContext $admin = null
+    ): CondominiumClearance {
+        if (empty($submission->occupants)) {
+            throw new InvalidArgumentException('Guest registry submission must contain at least one occupant for condominium clearance sync.');
+        }
+
+        $notes = self::formatClearanceNotes($reservation->notes, $submission->carModel);
+
+        return $this->performSync(
+            reservationUid: $reservation->reservationUid,
+            propertyId: $reservation->propertyId,
+            checkIn: $reservation->checkIn,
+            checkOut: $reservation->checkOut,
+            guests: $submission->occupants,
+            carPlates: $submission->carPlates,
+            notes: $notes,
+            admin: $admin
+        );
+    }
+
+    /**
+     * Encapsulates reception portal synchronization handshake, persistence, and audit logging.
+     *
      * @param array<int, OccupantDetails|array<string, mixed>> $guests
      */
-    public function sync(
+    private function performSync(
         string $reservationUid,
         string $propertyId,
         string $checkIn,
         string $checkOut,
         array $guests,
         ?string $carPlates = null,
-        ?string $notes = null
+        ?string $notes = null,
+        ?AdminContext $admin = null
     ): CondominiumClearance {
         $existing = $this->repository->findByReservationUid($reservationUid);
+        $payloadBefore = $existing?->toArray();
+
         $clearance = $existing !== null
             ? $existing->recordAttempt()
             : CondominiumClearance::createPending($reservationUid, $propertyId);
@@ -95,16 +197,14 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
         $checkToken = $this->getCheckTokenForProperty($propertyId);
         if ($checkToken === null || trim($checkToken) === '') {
             $clearance = $clearance->markFailed(sprintf('No check token configured for property ID: %s', $propertyId));
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         // 2. Parse and normalize occupants
         $occupants = $this->normalizeOccupants($guests);
         if ($occupants === []) {
             $clearance = $clearance->markFailed('Occupant list is empty; at least 1 guest required for condominium clearance.');
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         $primaryPhone = trim((string) ($occupants[0]->phone ?? ''));
@@ -132,15 +232,13 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
         } catch (Throwable $e) {
             $clearance = $clearance->withPayload(['step1' => $step1Payload])
                 ->markFailed('Step 1 transport exception: ' . $e->getMessage());
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         if ($response1['error'] !== null) {
             $clearance = $clearance->withPayload(['step1' => $step1Payload])
                 ->markFailed('Step 1 HTTP transport error: ' . $response1['error']);
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         if ($response1['statusCode'] < 200 || $response1['statusCode'] >= 300) {
@@ -150,16 +248,14 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
                     $response1['statusCode'],
                     substr($response1['body'], 0, 250)
                 ));
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         $json1 = json_decode($response1['body'], true);
         if (!is_array($json1) || empty($json1['last_id']) || !is_numeric($json1['last_id']) || (int) $json1['last_id'] <= 0) {
             $clearance = $clearance->withPayload(['step1' => $step1Payload])
                 ->markFailed("Step 1 response missing valid 'last_id': " . substr($response1['body'], 0, 250));
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         $lastId = (int) $json1['last_id'];
@@ -235,8 +331,7 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
         } catch (Throwable $e) {
             $clearance = $clearance->withPayload($fullPayload)
                 ->markFailed('Step 2 transport exception: ' . $e->getMessage());
-            $this->repository->save($clearance);
-            return $clearance;
+            return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
         }
 
         // 5. Verify Step 2 outcome
@@ -283,7 +378,34 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
                 ->markFailed($failureReason ?? 'Step 2 failed during occupant submission.');
         }
 
+        return $this->finalizeClearance($clearance, $reservationUid, $payloadBefore, $admin);
+    }
+
+    /**
+     * @param array<string, mixed>|null $payloadBefore
+     */
+    private function finalizeClearance(
+        CondominiumClearance $clearance,
+        string $reservationUid,
+        ?array $payloadBefore,
+        ?AdminContext $admin
+    ): CondominiumClearance {
         $this->repository->save($clearance);
+
+        if ($admin !== null && $this->auditLogger !== null) {
+            $action = $payloadBefore !== null ? 'condominium_clearance_retry' : 'condominium_clearance_sync';
+            $this->auditLogger->record(
+                action: $action,
+                entityType: 'reservation',
+                entityId: $reservationUid,
+                before: $payloadBefore,
+                after: $clearance->toArray(),
+                adminUserId: $admin->adminUserId,
+                ipAddress: (string) ($admin->ipAddress ?? ''),
+                userAgent: $admin->userAgent
+            );
+        }
+
         return $clearance;
     }
 

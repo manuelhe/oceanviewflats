@@ -226,7 +226,7 @@ The external property management and building reception system (Huésped Manager
 _Avoid_: External Tool, Third-party Form, Salguero App, Huesped Manager
 
 **Condominium Clearance Sync**:
-The automated or administratively retried integration process that transmits verified Guest Registry stay parameters, vehicle plates, and registered occupant identities to the Condominium Administration Portal upon Guest Registry submission under ADR 0001.
+The automated or administratively retried integration process that transmits verified Guest Registry stay parameters, vehicle plates, and registered occupant identities to the Condominium Administration Portal upon Guest Registry submission or manual administrative verification under ADR 0001 and ADR 0008.
 _Avoid_: Reception Push, Front Desk Export, Building Registration
 
 **Condominium Clearance Number**:

@@ -257,6 +257,7 @@ final class OccupantDetails
         $idx = (int)($data['index'] ?? $index);
         $name = trim((string)(
             $data['name']
+            ?? $data['full_name']
             ?? $data["guest_name_{$idx}"]
             ?? $data['guest_name']
             ?? ''
@@ -283,7 +284,7 @@ final class OccupantDetails
 
         $age = (int)($data['age'] ?? $data["guest_age_{$idx}"] ?? 0);
         $docType = trim((string)($data['doc_type'] ?? $data['docType'] ?? $data["guest_doc_type_{$idx}"] ?? ''));
-        $docNum = trim((string)($data['doc_num'] ?? $data['docNum'] ?? $data["guest_doc_num_{$idx}"] ?? ''));
+        $docNum = trim((string)($data['doc_num'] ?? $data['docNum'] ?? $data['doc_number'] ?? $data["guest_doc_num_{$idx}"] ?? ''));
 
         $rawEmail = $data['email'] ?? $data["guest_email_{$idx}"] ?? null;
         $email = $rawEmail !== null && trim((string)$rawEmail) !== '' ? (string)$rawEmail : null;
