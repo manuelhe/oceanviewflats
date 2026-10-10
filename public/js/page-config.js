@@ -37,7 +37,4 @@
 
 	window.getPageConfig = getPageConfig;
 	window.t = t;
-	window.OVF = window.OVF || {};
-	window.OVF.getPageConfig = getPageConfig;
-	window.OVF.t = t;
 })();

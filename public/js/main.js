@@ -831,11 +831,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let captchaSignature = '';
     async function loadCaptcha() {
         try {
-            const actionPath = form.getAttribute('action') || 'api/contact-processor.php';
-            const processorBase = actionPath.replace('contact-processor.php', '');
+            const apiBase = pageConfig.apiBase || `${pageConfig.assetPrefix || ''}api/`;
+            const processorBase = apiBase.endsWith('/') ? apiBase : `${apiBase}/`;
             
-            const currentLang = document.documentElement.lang || 'en';
-            const response = await fetch(processorBase + 'contact-processor.php?action=captcha&lang=' + currentLang);
+            const currentLang = pageConfig.lang || document.documentElement.lang || 'en';
+            const response = await fetch(`${processorBase}contact-processor.php?action=captcha&lang=${encodeURIComponent(currentLang)}`);
             if (response.ok) {
                 const data = await response.json();
                 const originalText = captchaLabel.getAttribute('data-original') || captchaLabel.textContent;
@@ -897,7 +897,8 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSubmit.classList.add('opacity-75', 'cursor-not-allowed');
 
         try {
-            const actionUrl = form.getAttribute('action') || 'api/contact-processor.php';
+            const apiBase = pageConfig.apiBase || `${pageConfig.assetPrefix || ''}api/`;
+            const actionUrl = apiBase.endsWith('/') ? `${apiBase}contact-processor.php` : `${apiBase}/contact-processor.php`;
             const response = await fetch(actionUrl, {
                 method: 'POST',
                 body: formData,
