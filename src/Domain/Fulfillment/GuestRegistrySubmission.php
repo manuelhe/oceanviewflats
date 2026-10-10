@@ -17,6 +17,13 @@ final class GuestRegistrySubmission
     public readonly array $occupants;
 
     /**
+     * Alias for occupants providing collection access parity.
+     *
+     * @var array<int, OccupantDetails>
+     */
+    public readonly array $guests;
+
+    /**
      * @param array<int, mixed> $occupants
      */
     public function __construct(
@@ -92,6 +99,7 @@ final class GuestRegistrySubmission
             $validated[] = $occupant;
         }
         $this->occupants = $validated;
+        $this->guests = $validated;
     }
 
     public function getPrimaryOccupant(): ?OccupantDetails
