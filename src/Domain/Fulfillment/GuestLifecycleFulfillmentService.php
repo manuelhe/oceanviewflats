@@ -39,13 +39,12 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         ?AccessDispatchEmailRendererInterface $accessDispatchRenderer = null,
         ?CondominiumClearanceSyncInterface $clearanceSync = null,
         ?PropertyCredentialsProviderInterface $credentialsProvider = null,
-        ?PublicUrlBuilder $urlBuilder = null,
-        ?CondominiumClearanceSyncInterface $condominiumClearanceSync = null
+        ?PublicUrlBuilder $urlBuilder = null
     ) {
         $this->accessDispatchRenderer = $accessDispatchRenderer ?? new AccessDispatchEmailRenderer($this->publicSiteUrl);
         $this->credentialsProvider = $credentialsProvider ?? new ConfigPropertyCredentialsProvider();
         $this->urlBuilder = $urlBuilder ?? new PublicUrlBuilder($this->publicSiteUrl);
-        $this->clearanceSync = $clearanceSync ?? $condominiumClearanceSync;
+        $this->clearanceSync = $clearanceSync;
     }
 
     /**

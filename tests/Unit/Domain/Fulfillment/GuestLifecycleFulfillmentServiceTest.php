@@ -1059,7 +1059,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             emailSender: $this->emailSender,
             spreadsheetSync: $this->spreadsheetSync,
             confirmationEmailRenderer: $this->confirmationEmailRenderer,
-            condominiumClearanceSync: $mockSync
+            clearanceSync: $mockSync
         );
 
         $stmt = $this->pdo->prepare("
@@ -1097,7 +1097,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             emailSender: $this->emailSender,
             spreadsheetSync: $this->spreadsheetSync,
             confirmationEmailRenderer: $this->confirmationEmailRenderer,
-            condominiumClearanceSync: $mockSync
+            clearanceSync: $mockSync
         );
 
         $stmt = $this->pdo->prepare("
@@ -1139,7 +1139,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
             emailSender: $this->emailSender,
             spreadsheetSync: $this->spreadsheetSync,
             confirmationEmailRenderer: $this->confirmationEmailRenderer,
-            condominiumClearanceSync: $mockSync
+            clearanceSync: $mockSync
         );
 
         $stmt = $this->pdo->prepare("

@@ -1680,6 +1680,10 @@ final class ReservationControllerTest extends TestCase
             );
 
         $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+        $clearanceRepo->save(
+            \OceanViewFlats\Domain\Fulfillment\CondominiumClearance::createPending('res-1', '1606')
+                ->markFailed('Prior connection failure')
+        );
         $clearanceSync = new \OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync(
             repository: $clearanceRepo,
             reservationRepository: $this->repository,
@@ -1727,6 +1731,76 @@ final class ReservationControllerTest extends TestCase
         $this->assertSame(1, (int) $log['admin_user_id']);
     }
 
+    public function testInitialClearanceSyncRecordsSyncAuditLog(): void
+    {
+        $mockTransport = $this->createMock(\OceanViewFlats\Domain\Fulfillment\HttpTransportInterface::class);
+        $mockTransport->expects($this->exactly(2))
+            ->method('post')
+            ->willReturnOnConsecutiveCalls(
+                [
+                    'statusCode' => 200,
+                    'body' => json_encode(['last_id' => '778']),
+                    'headers' => [],
+                    'cookies' => ['PHPSESSID' => 'test-session-123'],
+                    'error' => null,
+                ],
+                [
+                    'statusCode' => 302,
+                    'body' => '',
+                    'headers' => ['location' => 'https://example.com/ok.php'],
+                    'cookies' => [],
+                    'error' => null,
+                ]
+            );
+
+        $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+        $clearanceSync = new \OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync(
+            repository: $clearanceRepo,
+            reservationRepository: $this->repository,
+            searchAdapter: $this->search,
+            transport: $mockTransport,
+            auditLogger: $this->auditLogger
+        );
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            search: $this->search,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailSender: $this->emailSender,
+            lifecycleService: $this->lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient,
+            pdo: $this->pdo,
+            clearanceRepo: $clearanceRepo,
+            clearanceSync: $clearanceSync
+        );
+
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-1/clearance-retry',
+            server: ['HTTP_X_CSRF_TOKEN' => 'test-csrf-token-xyz']
+        ))->withAttribute('uid', 'res-1');
+
+        $response = $controller->retryClearance($request, $this->session);
+        $this->assertSame(200, $response->getStatusCode());
+        $data = json_decode($response->getBody(), true);
+        $this->assertTrue($data['success']);
+        $this->assertSame('synced', $data['status']);
+        $this->assertSame('778', $data['clearance_number']);
+
+        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_sync" AND entity_id = "res-1"');
+        $stmt->execute();
+        $log = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertNotFalse($log);
+        $after = json_decode((string) $log['payload_after'], true);
+        $this->assertSame('synced', $after['status']);
+        $this->assertSame('778', $after['clearance_number']);
+        $this->assertSame(1, (int) $log['admin_user_id']);
+    }
+
     public function testRetryClearanceFailureCapturesErrorAndRecordsAuditLog(): void
     {
         $mockTransport = $this->createMock(\OceanViewFlats\Domain\Fulfillment\HttpTransportInterface::class);
@@ -1741,6 +1815,10 @@ final class ReservationControllerTest extends TestCase
             ]);
 
         $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+        $clearanceRepo->save(
+            \OceanViewFlats\Domain\Fulfillment\CondominiumClearance::createPending('res-1', '1606')
+                ->markFailed('Prior connection failure')
+        );
         $clearanceSync = new \OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync(
             repository: $clearanceRepo,
             reservationRepository: $this->repository,

@@ -507,7 +507,7 @@ final class HuespedManagerClearanceSyncTest extends TestCase
         $this->assertSame(0, $mockTransport->called);
     }
 
-    public function testEmptyOccupantsFailsGracefully(): void
+    public function testSyncSubmissionThrowsInvalidArgumentExceptionWhenOccupantsEmpty(): void
     {
         $mockTransport = new class implements HttpTransportInterface {
             public int $called = 0;
@@ -526,7 +526,37 @@ final class HuespedManagerClearanceSyncTest extends TestCase
         $res = $this->createSampleReservation('ovf_res_empty', '1707', '2026-11-01', '2026-11-05');
         $sub = $this->createSampleSubmission('ovf_res_empty', '1707', '2026-11-01', '2026-11-05', []);
 
-        $clearance = $adapter->syncSubmission($res, $sub);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Guest registry submission must contain at least one occupant for condominium clearance sync.');
+
+        $adapter->syncSubmission($res, $sub);
+    }
+
+    public function testSyncForReservationWithEmptyOccupantsRecordsFailure(): void
+    {
+        $resRepo = new PdoReservationRepository($this->pdo);
+        $resRepo->save($this->createSampleReservation('ovf_res_empty_db_occ'));
+
+        $stmt = $this->pdo->prepare('
+            INSERT INTO guest_registries (reservation_uid, property_id, check_in, check_out, guest_count, guests_payload)
+            VALUES (:uid, "1707", "2026-11-01", "2026-11-05", 0, :payload)
+        ');
+        $stmt->execute([
+            ':uid' => 'ovf_res_empty_db_occ',
+            ':payload' => json_encode([]),
+        ]);
+
+        $mockTransport = new class implements HttpTransportInterface {
+            public int $called = 0;
+            public function post(string $url, array|string $data = [], array $headers = [], array $options = []): array
+            {
+                $this->called++;
+                return ['statusCode' => 200, 'body' => '', 'headers' => [], 'cookies' => [], 'error' => null];
+            }
+        };
+
+        $adapter = HuespedManagerClearanceSync::createDefault($this->pdo, $mockTransport);
+        $clearance = $adapter->syncForReservation('ovf_res_empty_db_occ');
 
         $this->assertTrue($clearance->isFailed());
         $this->assertStringContainsString('Occupant list is empty', $clearance->errorMessage ?? '');
@@ -737,7 +767,7 @@ final class HuespedManagerClearanceSyncTest extends TestCase
         $logs = AuditLogger::getLogsForEntity($this->pdo, 'reservation', 'ovf_res_deep_test');
         $this->assertCount(1, $logs);
         $log1 = $logs[0];
-        $this->assertSame('condominium_clearance_retry', $log1['action']);
+        $this->assertSame('condominium_clearance_sync', $log1['action']);
         $this->assertSame(42, (int) $log1['admin_user_id']);
         $this->assertSame('192.168.1.50', $log1['ip_address']);
         $this->assertSame('Mozilla/5.0 AdminPanel/1.0', $log1['user_agent']);
@@ -802,9 +832,39 @@ final class HuespedManagerClearanceSyncTest extends TestCase
 
         $logs = AuditLogger::getLogsForEntity($this->pdo, 'reservation', 'ovf_res_fail_audit');
         $this->assertCount(1, $logs);
-        $this->assertSame('condominium_clearance_retry', $logs[0]['action']);
+        $this->assertSame('condominium_clearance_sync', $logs[0]['action']);
         $after = json_decode((string) $logs[0]['payload_after'], true);
         $this->assertSame('failed', $after['status']);
+    }
+
+    public function testSyncForReservationThrowsLogicExceptionWhenReservationRepositoryNotConfigured(): void
+    {
+        $adapter = new HuespedManagerClearanceSync(
+            repository: $this->repository,
+            reservationRepository: null
+        );
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Reservation repository is not configured on HuespedManagerClearanceSync.');
+
+        $adapter->syncForReservation('ovf_res_test');
+    }
+
+    public function testSyncForReservationThrowsLogicExceptionWhenSearchAdapterNotConfigured(): void
+    {
+        $resRepo = new PdoReservationRepository($this->pdo);
+        $resRepo->save($this->createSampleReservation('ovf_res_no_adapter'));
+
+        $adapter = new HuespedManagerClearanceSync(
+            repository: $this->repository,
+            reservationRepository: $resRepo,
+            searchAdapter: null
+        );
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Reservation search adapter is not configured on HuespedManagerClearanceSync.');
+
+        $adapter->syncForReservation('ovf_res_no_adapter');
     }
 
     public function testSyncForReservationThrowsReservationNotFoundExceptionWhenReservationMissing(): void

@@ -289,11 +289,69 @@ final class AdminCondominiumClearanceRetryTest extends TestCase
         $this->assertSame('78910', $clearance['clearance_number']);
 
         // Check audit log
-        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_retry" AND entity_id = :uid');
+        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_sync" AND entity_id = :uid');
         $stmt->execute([':uid' => 'res-ready-1']);
         $auditLog = $stmt->fetch(PDO::FETCH_ASSOC);
         $this->assertNotEmpty($auditLog);
         $this->assertSame(1, (int) $auditLog['admin_user_id']);
+    }
+
+    public function testEndpointExecutesClearanceRetryWhenPriorClearanceExistedAndRecordsRetryAuditLog(): void
+    {
+        $this->pdo->prepare("
+            INSERT INTO condominium_clearances (reservation_uid, property_id, status, error_message, attempts)
+            VALUES ('res-ready-1', '1606', 'failed', 'Previous timeout', 1)
+        ")->execute();
+
+        $prependCode = "
+            class TestClearanceTransport implements \OceanViewFlats\Domain\Fulfillment\HttpTransportInterface {
+                private int \$step = 1;
+                public function post(string \$url, array|string \$data = [], array \$headers = [], array \$options = []): array {
+                    if (str_contains(\$url, 'reg_guest_owner_pre.php')) {
+                        return [
+                            'statusCode' => 200,
+                            'body' => json_encode(['last_id' => '99999']),
+                            'headers' => [],
+                            'cookies' => ['PHPSESSID' => 'test-session-123'],
+                            'error' => null,
+                        ];
+                    }
+                    return [
+                        'statusCode' => 302,
+                        'body' => '',
+                        'headers' => ['location' => 'https://salguerosunset.huespedmanager.com.co/propietarios/production/control_hpds.php'],
+                        'cookies' => [],
+                        'error' => null,
+                    ];
+                }
+            }
+            \$GLOBALS['TEST_CLEARANCE_TRANSPORT'] = new TestClearanceTransport();
+        ";
+
+        $res = $this->callEndpoint(
+            ['reservation_uid' => 'res-ready-1'],
+            'POST',
+            ['HTTP_X_CSRF_TOKEN' => 'valid-csrf-token'],
+            $prependCode,
+            true,
+            'valid-csrf-token'
+        );
+
+        $this->assertSame(200, $res['statusCode']);
+        $this->assertTrue($res['json']['success']);
+        $this->assertSame('synced', $res['json']['status']);
+        $this->assertSame('99999', $res['json']['clearance_number']);
+
+        // Check audit log for retry action
+        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_retry" AND entity_id = :uid');
+        $stmt->execute([':uid' => 'res-ready-1']);
+        $auditLog = $stmt->fetch(PDO::FETCH_ASSOC);
+        $this->assertNotEmpty($auditLog);
+        $before = json_decode((string) $auditLog['payload_before'], true);
+        $after = json_decode((string) $auditLog['payload_after'], true);
+        $this->assertSame('failed', $before['status']);
+        $this->assertSame('synced', $after['status']);
+        $this->assertSame('99999', $after['clearance_number']);
     }
 
     public function testEndpointExecutesClearanceSyncAndReturns200OnSyncFailure(): void
@@ -336,7 +394,7 @@ final class AdminCondominiumClearanceRetryTest extends TestCase
         $this->assertSame('failed', $clearance['status']);
 
         // Check audit log
-        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_retry" AND entity_id = :uid');
+        $stmt = $this->pdo->prepare('SELECT * FROM admin_audit_logs WHERE action = "condominium_clearance_sync" AND entity_id = :uid');
         $stmt->execute([':uid' => 'res-ready-1']);
         $auditLog = $stmt->fetch(PDO::FETCH_ASSOC);
         $this->assertNotEmpty($auditLog);

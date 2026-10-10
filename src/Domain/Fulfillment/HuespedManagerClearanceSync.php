@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OceanViewFlats\Domain\Fulfillment;
 
+use InvalidArgumentException;
+use LogicException;
 use OceanViewFlats\Admin\Audit\AuditLogger;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
 use OceanViewFlats\Domain\Reservation\Reservation;
@@ -90,13 +92,14 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
     /**
      * Deep synchronization entry point loading reservation and guest registry from persistence.
      *
+     * @throws LogicException If repository or search adapter dependencies are not configured
      * @throws ReservationNotFoundException If reservation does not exist
      * @throws GuestRegistryRequiredException If guest registry has not been submitted
      */
     public function syncForReservation(string $reservationUid, ?AdminContext $admin = null): CondominiumClearance
     {
         if ($this->reservationRepository === null) {
-            throw new ReservationNotFoundException("Reservation not found: {$reservationUid}");
+            throw new LogicException('Reservation repository is not configured on HuespedManagerClearanceSync.');
         }
 
         $reservation = $this->reservationRepository->findByUid($reservationUid);
@@ -105,7 +108,7 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
         }
 
         if ($this->searchAdapter === null) {
-            throw new GuestRegistryRequiredException("Guest registry must be submitted before condominium clearance can be synced for reservation: {$reservationUid}");
+            throw new LogicException('Reservation search adapter is not configured on HuespedManagerClearanceSync.');
         }
 
         $registry = $this->searchAdapter->findGuestRegistry($reservationUid);
@@ -142,12 +145,18 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
 
     /**
      * Deep synchronization entry point utilizing in-memory reservation and guest registry submission models.
+     *
+     * @throws InvalidArgumentException If guest registry submission does not contain any occupants
      */
     public function syncSubmission(
         Reservation $reservation,
         GuestRegistrySubmission $submission,
         ?AdminContext $admin = null
     ): CondominiumClearance {
+        if (empty($submission->occupants)) {
+            throw new InvalidArgumentException('Guest registry submission must contain at least one occupant for condominium clearance sync.');
+        }
+
         $notes = self::formatClearanceNotes($reservation->notes, $submission->carModel);
 
         return $this->performSync(
@@ -384,8 +393,9 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
         $this->repository->save($clearance);
 
         if ($admin !== null && $this->auditLogger !== null) {
+            $action = $payloadBefore !== null ? 'condominium_clearance_retry' : 'condominium_clearance_sync';
             $this->auditLogger->record(
-                action: 'condominium_clearance_retry',
+                action: $action,
                 entityType: 'reservation',
                 entityId: $reservationUid,
                 before: $payloadBefore,

@@ -26,6 +26,7 @@ class AdminAuditLogRepository
             'door_code_regenerate',
             'pin_override',
             'pin_regenerate',
+            'condominium_clearance_sync',
             'condominium_clearance_retry',
             'reservation_created_confirmed',
             'reservation_created_pending',
