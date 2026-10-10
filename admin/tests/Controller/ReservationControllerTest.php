@@ -961,6 +961,125 @@ final class ReservationControllerTest extends TestCase
         $this->assertStringContainsString('Custom registry error', $response->getBody());
     }
 
+    public function testCompleteRegistryTriggersCondominiumClearanceSyncAndReflectsInDrawer(): void
+    {
+        $clearanceRepo = new \OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository($this->pdo);
+
+        $mockSync = $this->createMock(\OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('syncForReservation')
+            ->with(
+                'res-3',
+                $this->callback(function ($admin) {
+                    return $admin instanceof \OceanViewFlats\Domain\Fulfillment\AdminContext
+                        && $admin->adminUserId === 1;
+                })
+            )
+            ->willReturnCallback(function (string $uid, ?\OceanViewFlats\Domain\Fulfillment\AdminContext $admin) use ($clearanceRepo) {
+                $clearance = new \OceanViewFlats\Domain\Fulfillment\CondominiumClearance(
+                    reservationUid: $uid,
+                    propertyId: '1707',
+                    status: \OceanViewFlats\Domain\Fulfillment\CondominiumClearance::STATUS_SYNCED,
+                    clearanceNumber: 'CLR-MANUAL-888',
+                    syncedAt: '2026-10-09 18:00:00'
+                );
+                $clearanceRepo->save($clearance);
+                return $clearance;
+            });
+
+        $lifecycleService = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'email_sender' => $this->emailSender,
+            'public_site_url' => 'https://oceanviewflats.com',
+            'confirmation_email_renderer' => $this->emailRenderer,
+            'reservation_repository' => $this->repository,
+            'clearance_sync' => $mockSync,
+        ]);
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            search: $this->search,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailSender: $this->emailSender,
+            lifecycleService: $lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient,
+            pdo: $this->pdo,
+            clearanceRepo: $clearanceRepo,
+            clearanceSync: $mockSync
+        );
+
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-3/registry/complete',
+            server: ['HTTP_HX_REQUEST' => 'true']
+        ))->withAttribute('uid', 'res-3');
+
+        $response = $controller->completeRegistry($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('reservationUpdated', $response->getHeader('HX-Trigger'));
+
+        // Verify DB update
+        $res = $this->repository->findByUid('res-3');
+        $this->assertNotNull($res);
+        $this->assertTrue($res->registryCompleted);
+
+        // Verify clearance reflected in drawer HTML
+        $body = $response->getBody();
+        $this->assertStringContainsString('Condominium Clearance', $body);
+        $this->assertStringContainsString('Synced', $body);
+        $this->assertStringContainsString('#CLR-MANUAL-888', $body);
+    }
+
+    public function testCompleteRegistryNonBlockingWhenClearanceSyncFails(): void
+    {
+        $mockSync = $this->createMock(\OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('syncForReservation')
+            ->willThrowException(new \RuntimeException('Huesped Manager portal timeout'));
+
+        $lifecycleService = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'email_sender' => $this->emailSender,
+            'public_site_url' => 'https://oceanviewflats.com',
+            'confirmation_email_renderer' => $this->emailRenderer,
+            'reservation_repository' => $this->repository,
+            'clearance_sync' => $mockSync,
+        ]);
+
+        $controller = new ReservationController(
+            repository: $this->repository,
+            search: $this->search,
+            viewRenderer: $this->viewRenderer,
+            auditLogger: $this->auditLogger,
+            ledger: $this->ledger,
+            quoteEngine: $this->quoteEngine,
+            emailSender: $this->emailSender,
+            lifecycleService: $lifecycleService,
+            publicSiteUrl: 'https://oceanviewflats.com',
+            refundClient: $this->refundClient,
+            pdo: $this->pdo
+        );
+
+        $request = (new Request(
+            method: 'POST',
+            uri: '/reservations/res-3/registry/complete',
+            server: ['HTTP_HX_REQUEST' => 'true']
+        ))->withAttribute('uid', 'res-3');
+
+        $response = $controller->completeRegistry($request, $this->session);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame('reservationUpdated', $response->getHeader('HX-Trigger'));
+
+        // Verify reservation completed successfully despite sync failure
+        $res = $this->repository->findByUid('res-3');
+        $this->assertNotNull($res);
+        $this->assertTrue($res->registryCompleted);
+    }
+
     public function testOverrideDoorCodeNotFoundReturns404(): void
     {
         $request = (new Request('POST', '/reservations/res-nonexistent/door-code/override', post: ['door_code' => '123456#']))

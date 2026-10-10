@@ -163,14 +163,6 @@ final class AdminApp
             repository: $reservationRepository
         );
 
-        /** @var GuestLifecycleFulfillmentServiceInterface $lifecycleService */
-        $lifecycleService = $options['lifecycle_service'] ?? GuestLifecycleFulfillmentService::createDefault($pdo, [
-            'email_sender' => $emailSender,
-            'confirmation_email_renderer' => $emailRenderer,
-            'public_site_url' => $publicSiteUrl,
-            'reservation_repository' => $reservationRepository,
-        ]);
-
         /** @var PublicUrlBuilder $urlBuilder */
         $urlBuilder = $options['public_url_builder'] ?? new PublicUrlBuilder($publicSiteUrl);
 
@@ -180,10 +172,20 @@ final class AdminApp
 
         /** @var CondominiumClearanceSyncInterface $clearanceSync */
         $clearanceSync = $options['condominium_clearance_sync']
-            ?? new HuespedManagerClearanceSync(
-                repository: $clearanceRepo,
-                transport: $options['condominium_clearance_transport'] ?? new CurlHttpTransport()
+            ?? $options['clearance_sync']
+            ?? HuespedManagerClearanceSync::createDefault(
+                $pdo,
+                $options['condominium_clearance_transport'] ?? null
             );
+
+        /** @var GuestLifecycleFulfillmentServiceInterface $lifecycleService */
+        $lifecycleService = $options['lifecycle_service'] ?? GuestLifecycleFulfillmentService::createDefault($pdo, [
+            'email_sender' => $emailSender,
+            'confirmation_email_renderer' => $emailRenderer,
+            'public_site_url' => $publicSiteUrl,
+            'reservation_repository' => $reservationRepository,
+            'clearance_sync' => $clearanceSync,
+        ]);
 
         $reservationController = new ReservationController(
             repository: $reservationRepository,
