@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
 	BASE_URL,
+	getClientDictionaryForPage,
 	getHrefLangTags,
 	LANGUAGES,
 	type PageConfig,
@@ -129,6 +130,19 @@ pages.forEach((page) => {
 		const url = lang === "en" ? basePath : `${basePath}/${lang}.html`;
 		const structuredData = page.getStructuredData(t, lang, BASE_URL);
 
+		const apiBase = page.id === "404" ? "/api/" : `${assetPrefix}api/`;
+		const i18nSlice = page.clientI18n
+			? page.clientI18n(t)
+			: getClientDictionaryForPage(page.id, t);
+
+		const pageConfig = {
+			pageId: page.id,
+			lang,
+			assetPrefix,
+			apiBase,
+			i18n: i18nSlice,
+		};
+
 		const html = baseTemplate({
 			markup,
 			lang,
@@ -143,6 +157,7 @@ pages.forEach((page) => {
 			structuredData,
 			assetPrefix,
 			customScripts: page.scripts,
+			pageConfig,
 		});
 
 		const outputPath = path.join(distDir, filename);
