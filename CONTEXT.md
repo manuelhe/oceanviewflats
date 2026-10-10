@@ -109,6 +109,14 @@ _Avoid_: Void Booking, Expired Hold
 A Confirmed Reservation whose stay duration has completed past 23:59:59 COT on the Check-out Date. Concluded Reservations permanently invalidate and suppress public Guest Guide credentials and Guest Registry access, redacting all personal guest identity and stay details to prevent data information leaks.
 _Avoid_: Ended Reservation, Expired Reservation, Finished Booking, Past Booking
 
+**Resurrection Defense**:
+The architectural invariant preventing delayed asynchronous payment webhooks, out-of-order gateway notifications, or duplicate submissions from reactivating, confirming, or altering a Cancelled Reservation or Concluded Reservation.
+_Avoid_: Zombie Prevention, Late Webhook Lock, Status Guard
+
+**Cancellation Dry-Run**:
+A side-effect-free simulation and financial calculation of a Reservation's Refundable Balance, elapsed days to Check-in Date, and applicable Policy Retention, evaluated prior to executing a cancellation.
+_Avoid_: Refund Preview, Cancellation Estimation, Refund Quote
+
 **Primary Guest**:
 The individual who initiates and pays for the Reservation, holds legal and financial responsibility for the stay, and is contractually required to be one of the staying occupants.
 _Avoid_: Booker, Lead Guest, Main Guest, Customer, Client
@@ -168,6 +176,10 @@ _Avoid_: External Reservation, Airbnb Booking, OTA Booking, Blackout Date
 **Channel Block UID**:
 The unique identifier of an iCalendar event imported from an external channel feed, recorded on an External Reservation to link the registered stay with its source Channel Block and display an onboarded status badge in administrative views.
 _Avoid_: iCal ID, Event Token, Block Hash
+
+**Channel Block Absorption**:
+The automated subsumption of an imported iCalendar Channel Block by a matching External Reservation (or Direct Reservation) covering the identical date range on the Reservation Ledger, preventing redundant calendar conflicts.
+_Avoid_: Block Merge, iCal Override, Calendar Deduplication
 
 **Maintenance Block**:
 A deliberate administrative unavailability hold applied to a Property's calendar for maintenance, repairs, or private host use. Maintenance Blocks do not create Reservation records, Guest identities, or financial transactions, but are projected onto Outbound Feeds to block external channels.

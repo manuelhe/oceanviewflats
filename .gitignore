@@ -148,3 +148,4 @@ tasks
 .scratch/
 .phpunit.result.cache
 .phpunit.cache/
+architecture-review-*.html
