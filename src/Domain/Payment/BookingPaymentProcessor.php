@@ -22,8 +22,8 @@ use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationDraft;
 use OceanViewFlats\Domain\Reservation\ReservationLedger;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
-use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
 use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
+use OceanViewFlats\Infrastructure\Reservation\ReservationLifecycleEngineFactory;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
 use OceanViewFlats\Domain\Support\PathResolver;
@@ -82,7 +82,7 @@ final class BookingPaymentProcessor implements BookingPaymentProcessorInterface
     ) {
         $this->translations = $translations ?? PathResolver::loadTranslations();
         $this->pendingEmailRenderer = $pendingEmailRenderer ?? new PendingPaymentEmailRenderer($this->translations);
-        $this->lifecycleEngine = $lifecycleEngine ?? ReservationLifecycleEngine::createDefault($this->pdo, [
+        $this->lifecycleEngine = $lifecycleEngine ?? ReservationLifecycleEngineFactory::create($this->pdo, [
             'ledger' => $this->ledger,
             'quoteEngine' => $this->quoteEngine,
             'repository' => $this->repository,

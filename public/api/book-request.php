@@ -18,8 +18,8 @@ use OceanViewFlats\Domain\Reservation\ActorContext;
 use OceanViewFlats\Domain\Reservation\DirectHoldRequest;
 use OceanViewFlats\Domain\Reservation\PrimaryGuest;
 use OceanViewFlats\Domain\Reservation\ReservationConflictException;
-use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
 use OceanViewFlats\Domain\Reservation\ReservationValidationException;
+use OceanViewFlats\Infrastructure\Reservation\ReservationLifecycleEngineFactory;
 
 // Load central utilities & configuration
 require_once __DIR__ . '/utils.php';
@@ -130,7 +130,7 @@ if (!empty($config['db']['host']) && !empty($config['db']['dbname'])) {
 }
 
 $cacheDir = __DIR__ . '/../cache';
-$lifecycleEngine = ReservationLifecycleEngine::createDefault($pdo, [
+$lifecycleEngine = ReservationLifecycleEngineFactory::create($pdo, [
     'cacheDir' => $cacheDir,
 ]);
 
@@ -155,13 +155,8 @@ try {
     }
     send_json_response(false, $t['err_dates_invalid']);
 } catch (ReservationConflictException $e) {
-    $msg = $e->getMessage();
-    if (stripos($msg, 'channel block') !== false || stripos($msg, 'airbnb') !== false) {
-        if (preg_match('/\((\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})\)/', $msg, $matches)) {
-            $conflictDate = $matches[1];
-        } else {
-            $conflictDate = $checkInStr;
-        }
+    if ($e->isChannelBlock()) {
+        $conflictDate = $e->getConflictDate() ?? $checkInStr;
         send_json_response(false, sprintf($t['err_overlap_airbnb'], $conflictDate));
     }
     send_json_response(false, $t['err_overlap_db']);

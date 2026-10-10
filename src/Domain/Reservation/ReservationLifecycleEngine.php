@@ -7,12 +7,7 @@ namespace OceanViewFlats\Domain\Reservation;
 use DateTimeImmutable;
 use DateTimeZone;
 use InvalidArgumentException;
-use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
-use OceanViewFlats\Domain\Fulfillment\BookingFulfillmentInterface;
-use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
-use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
-use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Quote\Quote;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
@@ -22,13 +17,6 @@ use OceanViewFlats\Domain\Reservation\Port\AuditPort;
 use OceanViewFlats\Domain\Reservation\Port\LifecycleEventPublisherPort;
 use OceanViewFlats\Domain\Reservation\Port\PaymentRefundPort;
 use OceanViewFlats\Domain\Reservation\Port\ReservationPersistencePort;
-use OceanViewFlats\Infrastructure\Reservation\InMemory\InMemoryAuditAdapter;
-use OceanViewFlats\Infrastructure\Reservation\InMemory\InMemoryReservationPersistenceAdapter;
-use OceanViewFlats\Infrastructure\Reservation\MercadoPagoPaymentRefundAdapter;
-use OceanViewFlats\Infrastructure\Reservation\PdoAuditAdapter;
-use OceanViewFlats\Infrastructure\Reservation\PdoReservationPersistenceAdapter;
-use OceanViewFlats\Infrastructure\Reservation\TransactionalLifecycleEventPublisherAdapter;
-use PDO;
 
 /**
  * Authoritative, deep Reservation Lifecycle Engine domain service.
@@ -52,89 +40,6 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
     ) {
         $this->ledger = $ledger ?? ReservationLedger::createDefault();
         $this->quoteEngine = $quoteEngine ?? QuoteEngine::createDefault();
-    }
-
-    /**
-     * Factory to instantiate engine with standard infrastructure adapters and PDO connection.
-     *
-     * @param ?PDO $pdo
-     * @param array<string, mixed> $options
-     */
-    public static function createDefault(?PDO $pdo = null, array $options = []): self
-    {
-        $repository = isset($options['repository']) && $options['repository'] instanceof ReservationRepositoryInterface
-            ? $options['repository']
-            : null;
-
-        $persistence = isset($options['persistencePort']) && $options['persistencePort'] instanceof ReservationPersistencePort
-            ? $options['persistencePort']
-            : ($pdo !== null
-                ? new PdoReservationPersistenceAdapter($pdo, $repository)
-                : new InMemoryReservationPersistenceAdapter([], $repository instanceof InMemoryReservationRepository ? $repository : null));
-
-        $paymentRefund = isset($options['paymentRefundPort']) && $options['paymentRefundPort'] instanceof PaymentRefundPort
-            ? $options['paymentRefundPort']
-            : new MercadoPagoPaymentRefundAdapter(
-                isset($options['mpRefundClient']) && $options['mpRefundClient'] instanceof MercadoPagoRefundClientInterface
-                    ? $options['mpRefundClient']
-                    : null,
-                isset($options['mpAccessToken']) && is_string($options['mpAccessToken'])
-                    ? $options['mpAccessToken']
-                    : null
-            );
-
-        $audit = isset($options['auditPort']) && $options['auditPort'] instanceof AuditPort
-            ? $options['auditPort']
-            : ($pdo !== null
-                ? new PdoAuditAdapter($pdo)
-                : new InMemoryAuditAdapter());
-
-        $eventPublisher = isset($options['eventPublisherPort']) && $options['eventPublisherPort'] instanceof LifecycleEventPublisherPort
-            ? $options['eventPublisherPort']
-            : new TransactionalLifecycleEventPublisherAdapter(
-                fulfillmentService: isset($options['fulfillmentService']) && $options['fulfillmentService'] instanceof GuestLifecycleFulfillmentServiceInterface
-                    ? $options['fulfillmentService']
-                    : null,
-                cancellationRenderer: isset($options['cancellationRenderer']) && $options['cancellationRenderer'] instanceof CancellationEmailRendererInterface
-                    ? $options['cancellationRenderer']
-                    : null,
-                emailSender: isset($options['emailSender']) && $options['emailSender'] instanceof EmailSenderInterface
-                    ? $options['emailSender']
-                    : null,
-                bookingFulfillment: isset($options['bookingFulfillment']) && $options['bookingFulfillment'] instanceof BookingFulfillmentInterface
-                    ? $options['bookingFulfillment']
-                    : null,
-                auditPort: $audit
-            );
-
-        $cacheDir = isset($options['cacheDir']) && is_string($options['cacheDir']) ? $options['cacheDir'] : null;
-        $maintenanceSource = isset($options['maintenanceBlockSource']) && $options['maintenanceBlockSource'] instanceof MaintenanceBlockSourceInterface
-            ? $options['maintenanceBlockSource']
-            : null;
-
-        $ledger = isset($options['ledger']) && $options['ledger'] instanceof ReservationLedgerInterface
-            ? $options['ledger']
-            : ReservationLedger::createDefault(
-                pdo: $pdo,
-                cacheDir: $cacheDir,
-                maintenanceBlockSource: $maintenanceSource,
-                repository: $repository
-            );
-
-        $quoteEngine = isset($options['quoteEngine']) && $options['quoteEngine'] instanceof QuoteEngineInterface
-            ? $options['quoteEngine']
-            : QuoteEngine::createDefault(
-                csvPath: isset($options['csvPath']) && is_string($options['csvPath']) ? $options['csvPath'] : null
-            );
-
-        return new self(
-            persistencePort: $persistence,
-            paymentRefundPort: $paymentRefund,
-            eventPublisherPort: $eventPublisher,
-            auditPort: $audit,
-            ledger: $ledger,
-            quoteEngine: $quoteEngine
-        );
     }
 
     /**
@@ -553,7 +458,7 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
 
         $dispatchGatewayRefund = $request->dispatchGatewayRefund;
         if ($isOnlinePayment && $refundAmount > 0.0 && $dispatchGatewayRefund) {
-            $idempotencyKey = sprintf('ref_%s_%d_%d', $reservationUid, (int) $refundAmount, time());
+            $idempotencyKey = $request->idempotencyKey ?? sprintf('ref_%s_%d', $reservationUid, (int) $refundAmount);
             $receipt = $this->paymentRefundPort->issueRefund((string) $mpPaymentId, $refundAmount, $idempotencyKey);
             $mpRefundId = $receipt->refundId;
         } elseif (!$dispatchGatewayRefund && $request->externalRefundId !== null) {

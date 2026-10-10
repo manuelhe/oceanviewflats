@@ -19,7 +19,8 @@ final class CancellationRequest
         public readonly ?ActorContext $actor = null,
         public readonly bool $dispatchGatewayRefund = true,
         public readonly ?string $externalRefundId = null,
-        ?float $refundAmountCop = null
+        ?float $refundAmountCop = null,
+        public readonly ?string $idempotencyKey = null
     ) {
         $this->refundAmountCop = $refundAmountCop ?? $refundInstruction?->amountCop;
         if ($refundInstruction !== null) {
@@ -47,13 +48,15 @@ final class CancellationRequest
     public static function withFullRefund(
         string $reason,
         ?ActorContext $actor = null,
-        bool $sendCancellationEmail = true
+        bool $sendCancellationEmail = true,
+        ?string $idempotencyKey = null
     ): self {
         return new self(
             reason: $reason,
             refundInstruction: RefundInstruction::full(),
             sendCancellationEmail: $sendCancellationEmail,
-            actor: $actor
+            actor: $actor,
+            idempotencyKey: $idempotencyKey
         );
     }
 
@@ -61,13 +64,15 @@ final class CancellationRequest
         string $reason,
         float $amountCop,
         ?ActorContext $actor = null,
-        bool $sendCancellationEmail = true
+        bool $sendCancellationEmail = true,
+        ?string $idempotencyKey = null
     ): self {
         return new self(
             reason: $reason,
             refundInstruction: RefundInstruction::partial($amountCop),
             sendCancellationEmail: $sendCancellationEmail,
-            actor: $actor
+            actor: $actor,
+            idempotencyKey: $idempotencyKey
         );
     }
 
@@ -94,7 +99,8 @@ final class CancellationRequest
         bool $sendCancellationEmail = true,
         ?ActorContext $actor = null,
         bool $dispatchGatewayRefund = true,
-        ?string $externalRefundId = null
+        ?string $externalRefundId = null,
+        ?string $idempotencyKey = null
     ): self {
         return new self(
             reason: $reason,
@@ -102,7 +108,8 @@ final class CancellationRequest
             sendCancellationEmail: $sendCancellationEmail,
             actor: $actor,
             dispatchGatewayRefund: $dispatchGatewayRefund,
-            externalRefundId: $externalRefundId
+            externalRefundId: $externalRefundId,
+            idempotencyKey: $idempotencyKey
         );
     }
 }

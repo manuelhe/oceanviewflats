@@ -20,11 +20,6 @@ use OceanViewFlats\Domain\Reservation\Port\LifecycleEventPublisherPort;
  */
 final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEventPublisherPort
 {
-    /**
-     * @var list<callable(object): void>
-     */
-    private array $listeners = [];
-
     public function __construct(
         private readonly ?GuestLifecycleFulfillmentServiceInterface $fulfillmentService = null,
         private readonly ?CancellationEmailRendererInterface $cancellationRenderer = null,
@@ -32,16 +27,6 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
         private readonly ?BookingFulfillmentInterface $bookingFulfillment = null,
         private readonly ?AuditPort $auditPort = null
     ) {
-    }
-
-    /**
-     * Registers a post-commit event listener callback.
-     *
-     * @param callable(object): void $listener
-     */
-    public function addListener(callable $listener): void
-    {
-        $this->listeners[] = $listener;
     }
 
     /**
@@ -70,8 +55,6 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
         } catch (Throwable) {
             // Best effort post-commit notification resilience
         }
-
-        $this->notifyListeners($event);
     }
 
     /**
@@ -145,19 +128,6 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
             }
         } catch (Throwable) {
             // Best effort post-commit notification resilience
-        }
-
-        $this->notifyListeners($event);
-    }
-
-    private function notifyListeners(object $event): void
-    {
-        foreach ($this->listeners as $listener) {
-            try {
-                $listener($event);
-            } catch (Throwable) {
-                // Prevent individual listener failures from bubbling
-            }
         }
     }
 }

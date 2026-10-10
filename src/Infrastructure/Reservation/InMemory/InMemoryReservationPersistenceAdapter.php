@@ -10,6 +10,8 @@ use OceanViewFlats\Domain\Reservation\Port\ReservationPersistencePort;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationConflictException;
 
+use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
+
 /**
  * In-memory test adapter for ReservationPersistencePort with rollback simulation.
  */
@@ -25,21 +27,21 @@ class InMemoryReservationPersistenceAdapter implements ReservationPersistencePor
      */
     private array $refunds = [];
 
-    private ?InMemoryReservationRepository $repository;
+    private ?ReservationRepositoryInterface $repository;
 
     /**
      * @param list<Reservation> $initialReservations
      */
     public function __construct(
         array $initialReservations = [],
-        ?InMemoryReservationRepository $repository = null
+        ?ReservationRepositoryInterface $repository = null
     ) {
         $this->repository = $repository;
         foreach ($initialReservations as $reservation) {
             $this->reservations[$reservation->reservationUid] = $reservation;
             $this->repository?->save($reservation);
         }
-        if ($this->repository !== null) {
+        if ($this->repository instanceof InMemoryReservationRepository) {
             foreach ($this->repository->all() as $res) {
                 $this->reservations[$res->reservationUid] = $res;
             }
@@ -51,7 +53,19 @@ class InMemoryReservationPersistenceAdapter implements ReservationPersistencePor
      */
     public function getReservation(string $reservationUid): ?Reservation
     {
-        return $this->reservations[$reservationUid] ?? null;
+        if (isset($this->reservations[$reservationUid])) {
+            return $this->reservations[$reservationUid];
+        }
+
+        if ($this->repository !== null) {
+            $reservation = $this->repository->findByUid($reservationUid);
+            if ($reservation !== null) {
+                $this->reservations[$reservationUid] = $reservation;
+                return $reservation;
+            }
+        }
+
+        return null;
     }
 
     /**

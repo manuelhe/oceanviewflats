@@ -13,7 +13,7 @@ final class PrimaryGuest
         public readonly string $name,
         public readonly string $email,
         public readonly string $phone,
-        public readonly string $lang = 'en'
+        public readonly string $lang = 'es'
     ) {
     }
 
@@ -21,7 +21,7 @@ final class PrimaryGuest
         string $name,
         string $email,
         string $phone = '',
-        string $lang = 'en'
+        string $lang = 'es'
     ): self {
         return new self($name, $email, $phone, $lang);
     }

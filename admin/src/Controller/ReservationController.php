@@ -32,15 +32,13 @@ use OceanViewFlats\Domain\Reservation\CancellationRequest;
 use OceanViewFlats\Domain\Reservation\ExcessiveRefundException;
 use OceanViewFlats\Domain\Reservation\GatewayRefundException;
 use OceanViewFlats\Domain\Reservation\InvalidReservationStateException;
-use OceanViewFlats\Domain\Reservation\Port\AuditPort;
-use OceanViewFlats\Domain\Reservation\Port\ReservationPersistencePort;
 use OceanViewFlats\Domain\Reservation\PrimaryGuest;
 use OceanViewFlats\Domain\Reservation\RefundInstruction;
 use OceanViewFlats\Domain\Reservation\Reservation;
 use OceanViewFlats\Domain\Reservation\ReservationConflictException;
 use OceanViewFlats\Domain\Reservation\ReservationDraft;
+use OceanViewFlats\Domain\Reservation\Port\AuditPort;
 use OceanViewFlats\Domain\Reservation\ReservationLedgerInterface;
-use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
 use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
 use OceanViewFlats\Domain\Reservation\ReservationNotFoundException;
 use OceanViewFlats\Domain\Reservation\ReservationRepositoryInterface;
@@ -49,9 +47,7 @@ use OceanViewFlats\Domain\Reservation\ReservationValidationException;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchCriteria;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchInterface;
 use OceanViewFlats\Domain\Reservation\Search\ReservationSearchResult;
-use OceanViewFlats\Infrastructure\Reservation\MercadoPagoPaymentRefundAdapter;
-use OceanViewFlats\Infrastructure\Reservation\PdoReservationPersistenceAdapter;
-use OceanViewFlats\Infrastructure\Reservation\TransactionalLifecycleEventPublisherAdapter;
+use OceanViewFlats\Infrastructure\Reservation\ReservationLifecycleEngineFactory;
 use PDO;
 use Throwable;
 
@@ -375,7 +371,8 @@ final class ReservationController
         $primaryGuest = new PrimaryGuest(
             name: $guestName,
             email: $guestEmail,
-            phone: $guestPhone
+            phone: $guestPhone,
+            lang: 'es'
         );
         $adminUserId = $currentUser['id'];
         $actor = $adminUserId !== null
@@ -948,20 +945,6 @@ final class ReservationController
 
     private function buildFallbackLifecycleEngine(): ReservationLifecycleEngineInterface
     {
-        $persistencePort = $this->pdo !== null
-            ? new PdoReservationPersistenceAdapter($this->pdo, $this->repository)
-            : new class($this->repository) implements ReservationPersistencePort {
-                public function __construct(private readonly ReservationRepositoryInterface $repo) {}
-                public function getReservation(string $reservationUid): ?Reservation { return $this->repo->findByUid($reservationUid); }
-                public function save(Reservation $reservation): Reservation { return $this->repo->save($reservation); }
-                public function holdAtomic(Reservation $reservation, ?DateTimeImmutable $now = null): Reservation { return $this->repo->save($reservation); }
-                /** @param array<string, mixed> $data */
-                public function recordRefund(array $data): void { $this->repo->recordRefund($data); }
-                public function executeInTransaction(callable $operation): mixed { return $operation(); }
-            };
-
-        $refundPort = new MercadoPagoPaymentRefundAdapter($this->refundClient);
-
         $auditPort = new class($this->auditLogger) implements AuditPort {
             public function __construct(private readonly AuditLogger $logger) {}
             /**
@@ -982,20 +965,15 @@ final class ReservationController
             }
         };
 
-        $eventPublisherPort = new TransactionalLifecycleEventPublisherAdapter(
-            fulfillmentService: $this->lifecycleService,
-            cancellationRenderer: $this->cancellationEmailRenderer,
-            emailSender: $this->emailSender,
-            auditPort: $auditPort
-        );
-
-        return new ReservationLifecycleEngine(
-            persistencePort: $persistencePort,
-            paymentRefundPort: $refundPort,
-            eventPublisherPort: $eventPublisherPort,
-            auditPort: $auditPort,
-            ledger: $this->ledger,
-            quoteEngine: $this->quoteEngine
-        );
+        return ReservationLifecycleEngineFactory::create($this->pdo, [
+            'repository' => $this->repository,
+            'mpRefundClient' => $this->refundClient,
+            'auditPort' => $auditPort,
+            'fulfillmentService' => $this->lifecycleService,
+            'cancellationRenderer' => $this->cancellationEmailRenderer,
+            'emailSender' => $this->emailSender,
+            'ledger' => $this->ledger,
+            'quoteEngine' => $this->quoteEngine,
+        ]);
     }
 }

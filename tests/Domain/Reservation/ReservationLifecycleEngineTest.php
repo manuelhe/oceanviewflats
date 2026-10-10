@@ -673,7 +673,7 @@ final class ReservationLifecycleEngineTest extends TestCase
         $this->assertCount(1, $calls);
         $this->assertSame('pay_online_789', $calls[0]['paymentId']);
         $this->assertSame(2000000.0, $calls[0]['amountCop']);
-        $this->assertStringStartsWith('ref_ovf_cancel_full_2000000_', $calls[0]['idempotencyKey']);
+        $this->assertSame('ref_ovf_cancel_full_2000000', $calls[0]['idempotencyKey']);
 
         // 2. Verify cancellation result
         $this->assertNotNull($result->refundReceipt);

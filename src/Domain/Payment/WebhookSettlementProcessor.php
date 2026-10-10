@@ -16,8 +16,8 @@ use OceanViewFlats\Domain\Reservation\DraftPaymentDetails;
 use OceanViewFlats\Domain\Reservation\InvalidReservationStateException;
 use OceanViewFlats\Domain\Reservation\PrimaryGuest;
 use OceanViewFlats\Domain\Reservation\ReservationDraft;
-use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
 use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
+use OceanViewFlats\Infrastructure\Reservation\ReservationLifecycleEngineFactory;
 use PDO;
 use Throwable;
 
@@ -47,7 +47,7 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
         private readonly string $hostNotificationEmail = 'reservas@oceanviewflats.com',
         ?ReservationLifecycleEngineInterface $lifecycleEngine = null
     ) {
-        $this->lifecycleEngine = $lifecycleEngine ?? ReservationLifecycleEngine::createDefault($this->pdo, [
+        $this->lifecycleEngine = $lifecycleEngine ?? ReservationLifecycleEngineFactory::create($this->pdo, [
             'bookingFulfillment' => $this->fulfillment,
             'cancellationRenderer' => $this->cancellationRenderer,
             'emailSender' => $this->emailSender,
