@@ -304,31 +304,35 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
 
         if ($existing === null) {
             if ($draft->isAirbnb()) {
-                $channelConflict = $this->ledger->findChannelConflict(
-                    $draft->propertyId,
-                    $draft->checkIn,
-                    $draft->checkOut,
-                    absorbingSource: null
-                );
-                if ($channelConflict !== null && strtolower($channelConflict->source) === 'airbnb') {
+                if ($draft->channelBlockUid !== null) {
                     $wasChannelBlockAbsorbed = true;
-                    $absorbedChannelBlockUid = $draft->channelBlockUid ?? $channelConflict->summary;
+                    $absorbedChannelBlockUid = $draft->channelBlockUid;
+                } else {
+                    $channelConflict = $this->ledger->findChannelConflict(
+                        $draft->propertyId,
+                        $draft->checkIn,
+                        $draft->checkOut,
+                        absorbingSource: null
+                    );
+                    if ($channelConflict !== null && strtolower($channelConflict->source) === 'airbnb') {
+                        $wasChannelBlockAbsorbed = true;
+                        $absorbedChannelBlockUid = $channelConflict->summary;
+                    }
                 }
             }
 
-            $conflicts = $this->ledger->getConflictReasons(
-                propertyId: $draft->propertyId,
-                checkIn: $draft->checkIn,
-                checkOut: $draft->checkOut,
-                absorbingSource: $absorbingSource
-            );
-
-            if (count($conflicts) > 0) {
+            if (!$this->ledger->isAvailable($draft->propertyId, $draft->checkIn, $draft->checkOut, null, $absorbingSource)) {
+                $conflicts = $this->ledger->getConflictReasons(
+                    propertyId: $draft->propertyId,
+                    checkIn: $draft->checkIn,
+                    checkOut: $draft->checkOut,
+                    absorbingSource: $absorbingSource
+                );
                 throw ReservationConflictException::forDates(
                     $draft->propertyId,
                     $draft->checkIn,
                     $draft->checkOut,
-                    implode('; ', $conflicts)
+                    !empty($conflicts) ? implode('; ', $conflicts) : 'with an existing reservation or channel block.'
                 );
             }
         } else {

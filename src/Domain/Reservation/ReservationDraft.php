@@ -144,7 +144,7 @@ final class ReservationDraft
     public function isManual(): bool
     {
         $src = strtolower($this->source);
-        return $src === 'manual_override' || $src === 'manual';
+        return in_array($src, ['manual_override', 'manual', 'bank_transfer', 'cash', 'owner_stay'], true);
     }
 
     public function isExternal(): bool
