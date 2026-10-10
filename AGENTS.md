@@ -57,9 +57,9 @@
 - Completely centralize style classes, custom layout flags, imagery arrays, and target endpoints within central config sheets (e.g. `src/constants/theme.ts` or `src/constants/config.ts`).
 - **Rule**: React components must never contain localized dynamic layout ternary operators or hardcoded property-conditional paths. Keep components 100% style-agnostic.
 
-### 🌐 No Hardcoded Client-Side Text (Dynamic DOM Localizer)
-- Client-side Vanilla JS scripts must never embed hardcoded text literals (English or any other language) since they process pre-compiled multilingual static HTML files.
-- **Rule**: Extract all strings into `src/i18n/dict.ts` and bind them to DOM elements as `data-msg-*` attributes. Client scripts must query these attributes at initialization time.
+### 🌐 Multilingual Page Hydration Seam (SSG-to-Client Config)
+- Client-side Vanilla JS scripts must never embed hardcoded text literals, duplicate inline translation dictionaries, or scrape ad-hoc `data-msg-*` attributes from DOM elements.
+- **Rule**: All client translations must be defined in `src/i18n/dict.ts`, scoped in `src/config/pages.ts`, serialized at build time into `<script id="ovf-page-config" type="application/json">`, and accessed at runtime exclusively via `window.t(key, params, fallback)` provided by `public/js/page-config.js`. Authoritative paths and locale metadata (`lang`, `assetPrefix`, `apiBase`) must be accessed via `window.getPageConfig()`.
 
 ### ⚡ Async Lazyloading of Weighty Assets
 - Banish globally loaded third-party scripts/SDKs from the base templates (e.g. `base.ts`) to preserve pristine PageSpeed / Core Web Vitals (FCP, LCP) on static content views.

@@ -178,14 +178,6 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 								<div
 									id="door-code-card"
 									className="bg-gradient-to-br from-amber-500/10 to-amber-600/[0.03] rounded-3xl p-5 md:p-6 border border-amber-500/15 flex flex-col justify-between"
-									data-msg-locked={t.guideCredentialsLocked}
-									data-msg-locked-desc={t.guideCredentialsLockedDesc}
-									data-msg-action-unlock={t.guideActionUnlock}
-									data-msg-verifying={t.guideCredentialsVerifying}
-									data-msg-not-found={t.guideNoReservationFound}
-									data-msg-copied={t.guideCopySuccess}
-									data-msg-concluded={t.guideConcluded}
-									data-msg-concluded-badge={t.guideConcludedBadge}
 								>
 									<div className="space-y-3">
 										<div className="flex justify-between items-center">
@@ -369,7 +361,6 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 						<section
 							id="wifi-card"
 							className="bg-white rounded-3xl p-6 shadow-md border border-slate-100 relative overflow-hidden"
-							data-msg-locked={t.guideCredentialsLocked}
 						>
 							<div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/5 rounded-full blur-xl pointer-events-none"></div>
 
@@ -437,8 +428,6 @@ export default function Guide({ lang, assetPrefix = "../" }: AppProps) {
 						<section
 							id="parking-card"
 							className="bg-white rounded-3xl p-6 shadow-md border border-slate-100 relative overflow-hidden"
-							data-msg-locked={t.guideParkingLockedNotice}
-							data-msg-placeholder={t.guideParkingPlaceholder}
 						>
 							<div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl pointer-events-none"></div>
 

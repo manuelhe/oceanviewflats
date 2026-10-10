@@ -10,6 +10,7 @@ interface TemplateProps {
 	structuredData: string;
 	assetPrefix: string;
 	customScripts?: string[];
+	pageConfig?: Record<string, any>;
 }
 
 const LOCALE_MAP = {
@@ -33,7 +34,28 @@ export const baseTemplate = ({
 	structuredData,
 	assetPrefix,
 	customScripts = [],
-}: TemplateProps) => `<!DOCTYPE html>
+	pageConfig,
+}: TemplateProps) => {
+	const scripts: string[] = [];
+	if (pageConfig) {
+		scripts.push(
+			`<script id="ovf-page-config" type="application/json">${JSON.stringify(pageConfig).replace(/</g, "\\u003c")}</script>`,
+		);
+		scripts.push(`<script src="${assetPrefix}js/page-config.js"></script>`);
+	}
+	for (const src of customScripts) {
+		if (
+			pageConfig &&
+			(src === "js/page-config.js" || src === "page-config.js")
+		) {
+			continue;
+		}
+		scripts.push(`<script src="${assetPrefix}${src}"></script>`);
+	}
+	const scriptsMarkup =
+		scripts.length > 0 ? `\n    ${scripts.join("\n    ")}` : "";
+
+	return `<!DOCTYPE html>
 <html lang="${lang}">
 <head>
     <meta charset="UTF-8">
@@ -90,7 +112,7 @@ ${hrefLangTags}
     </style>
 </head>
 <body>
-    <div id="root">${markup}</div>
-    ${customScripts.map((src) => `<script src="${assetPrefix}${src}"></script>`).join("\n    ")}
+    <div id="root">${markup}</div>${scriptsMarkup}
 </body>
 </html>`;
+};

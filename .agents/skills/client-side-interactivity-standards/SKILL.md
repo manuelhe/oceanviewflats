@@ -26,33 +26,35 @@ When building interactive UI widgets (modals, calendars, galleries, form alerts,
 
 ---
 
-## 🌐 Dynamic Localizations (No Orphan Literals)
+## 🌐 Dynamic Localizations & Hydration Seam (SSG-to-Client Config)
 
-Because script files are shared globally across different localized HTML files, **never hardcode text strings or message outputs directly in JS**.
+Because script files are shared globally across different localized HTML files, **never hardcode text strings or duplicate inline translation dictionaries in JS, nor scrape ad-hoc `data-msg-*` attributes**.
 
-### ❌ The Anti-Pattern:
+### ❌ The Anti-Patterns:
 ```javascript
-// This leaks English text to Spanish, French, and Japanese viewers
+// Anti-Pattern 1: Leaking English literals
 alert("Please select dates first.");
+
+// Anti-Pattern 2: Scraping DOM attributes
+const msg = form.getAttribute('data-msg-success');
+
+// Anti-Pattern 3: Duplicate inline dictionaries inside scripts
+const introTemplates = { en: "Welcome {guestName}", es: "Bienvenido {guestName}" };
 ```
 
-###  The Clean Standard:
-Store all translations in [`src/i18n/dict.ts`](src/i18n/dict.ts) and attach them to DOM nodes as custom `data-msg-*` parameters:
-
-```typescript
-// inside React component:
-<form 
-  id="contact-form"
-  data-msg-success={dict[lang].success_msg}
-  data-msg-error={dict[lang].error_msg}
->
-```
+### ✅ The Clean Standard:
+Store all translations in [`src/i18n/dict.ts`](src/i18n/dict.ts), register needed page keys in [`src/config/pages.ts`](src/config/pages.ts), serialize them via `<script id="ovf-page-config" type="application/json">` in `src/templates/base.ts`, and access them through `window.t(key, params, fallback)` provided by [`public/js/page-config.js`](public/js/page-config.js):
 
 ```javascript
-// inside public/js/main.js:
-const form = document.getElementById('contact-form');
-const successMsg = form.getAttribute('data-msg-success');
-const errorMsg = form.getAttribute('data-msg-error');
+// inside public/js/main.js or any client script:
+const pageConfig = (window.getPageConfig && window.getPageConfig()) || {};
+const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
+
+// Translate with interpolation:
+const welcomeMsg = t('guideWelcomeWithGuest', { guestName: 'John' });
+
+// Authoritative endpoints and paths:
+const apiEndpoint = `${pageConfig.apiBase || 'api/'}contact-processor.php`;
 ```
 
 ---

@@ -1,4 +1,5 @@
 import { IMAGES } from "../constants/config";
+import type { TranslationDict } from "../i18n/dict";
 import BookingFailure from "../pages/BookingFailure";
 import BookingPending from "../pages/BookingPending";
 import BookingSuccess from "../pages/BookingSuccess";
@@ -41,7 +42,71 @@ export interface PageConfig {
 	seoTitle?: (t: any) => string;
 	seoDescription?: (t: any) => string;
 	ogImage?: string;
+	clientI18n?: (t: TranslationDict) => Record<string, string>;
 }
+
+export const getClientDictionaryForPage = (
+	pageId: string,
+	t: TranslationDict,
+): Record<string, string> => {
+	const common: Record<string, string> = {
+		dbVerifying: t.dbVerifying || "",
+		dbSecured: t.dbSecured || "",
+		dbFillFields: t.dbFillFields || "",
+		dbDeclined: t.dbDeclined || "",
+		dbSubmit: t.dbSubmit || "",
+		dbNetworkError: t.dbNetworkError || "",
+		dbGatewayError: t.dbGatewayError || "",
+		contactSuccess: t.contactSuccess || "",
+		contactError: t.contactError || "",
+		contactSubmitting: t.contactSubmitting || "",
+		contactSubmit: t.contactSubmit || "",
+		contactDateError: t.contactDateError || "",
+	};
+
+	if (pageId === "registry") {
+		return {
+			...common,
+			registryTitle: t.registryTitle || "",
+			registrySubtitle: t.registrySubtitle || "",
+			registryLookupLoading: t.registryLookupLoading || "",
+			registryLookupNotFound: t.registryLookupNotFound || "",
+			registryAlreadyCompleted: t.registryAlreadyCompleted || "",
+			registryConcluded: t.registryConcluded || "",
+			registrySubmitting: t.registrySubmitting || "",
+			registryGenericError: t.registryGenericError || "",
+			registryNotSpecified: t.registryNotSpecified || "",
+			registryDefaultProperty: t.registryDefaultProperty || "",
+			registryErrEmail: t.registryErrEmail || "",
+			registryErrPhoneRequired: t.registryErrPhoneRequired || "",
+			registrySuccess: t.registrySuccess || "",
+			registryWarmMsg: t.registryWarmMsg || "",
+			registrySubmit: t.registrySubmit || "",
+			err_guest_email: t.err_guest_email || "",
+			errEmailInvalid: t.errEmailInvalid || "",
+		};
+	}
+
+	if (pageId === "guide") {
+		return {
+			...common,
+			guideCredentialsLocked: t.guideCredentialsLocked || "",
+			guideCredentialsLockedDesc: t.guideCredentialsLockedDesc || "",
+			guideActionUnlock: t.guideActionUnlock || "",
+			guideCredentialsVerifying: t.guideCredentialsVerifying || "",
+			guideNoReservationFound: t.guideNoReservationFound || "",
+			guideCopySuccess: t.guideCopySuccess || "",
+			guideConcluded: t.guideConcluded || "",
+			guideConcludedBadge: t.guideConcludedBadge || "",
+			guideParkingLockedNotice: t.guideParkingLockedNotice || "",
+			guideParkingPlaceholder: t.guideParkingPlaceholder || "",
+			guideWelcomeWithGuest: t.guideWelcomeWithGuest || "",
+			guideWelcomeGeneric: t.guideWelcomeGeneric || "",
+		};
+	}
+
+	return common;
+};
 
 export const pages: PageConfig[] = [
 	{

@@ -26,36 +26,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyAlertText = document.getElementById('copy-alert-text');
     const doorCodeCard = document.getElementById('door-code-card');
 
-    // 2. Language & Localized Strings from DOM Data Attributes (Rule: No hardcoded client JS literals)
-    const lang = document.documentElement.lang || 'en';
-    const msgLocked = doorCodeCard?.getAttribute('data-msg-locked') || 'Access Locked (Registry Required)';
-    const msgLockedDesc = doorCodeCard?.getAttribute('data-msg-locked-desc') || 'Per building security and Colombian regulations, door codes and Wi-Fi credentials are only released after submitting the Guest Registry.';
-    const msgActionUnlock = doorCodeCard?.getAttribute('data-msg-action-unlock') || 'Complete Registry to Unlock';
-    const msgVerifying = doorCodeCard?.getAttribute('data-msg-verifying') || 'Verifying access permissions...';
-    const msgNotFound = doorCodeCard?.getAttribute('data-msg-not-found') || 'Please provide a valid reservation code or link from your confirmation email.';
-    const msgCopied = doorCodeCard?.getAttribute('data-msg-copied') || 'Copied!';
-    const msgConcluded = doorCodeCard?.getAttribute('data-msg-concluded') || 'This reservation has concluded. Property access credentials and guide details are no longer active.';
-    const msgConcludedBadge = doorCodeCard?.getAttribute('data-msg-concluded-badge') || '';
-    const msgParkingPlaceholder = parkingCard?.getAttribute('data-msg-placeholder') || '--';
+    // 2. Language & Localized Strings from Page Config or DOM Data Attributes
+    const pageConfig = (window.getPageConfig && window.getPageConfig()) || {};
+    const lang = pageConfig.lang || document.documentElement.lang || 'en';
+    const assetPrefix = pageConfig.assetPrefix || '../';
+    const apiBase = pageConfig.apiBase || `${assetPrefix}api/`;
+    const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
 
-    const introTemplates = {
-        en: "Welcome to your beachside home, {guestName}! We are absolutely thrilled to host you and hope you have a wonderful, relaxing, and unforgettable stay.",
-        es: "¡Te damos una cálida bienvenida a tu hogar frente al mar, {guestName}! Estamos muy felices de hospedarte y esperamos que tengas una estadía maravillosa, relajante e inolvidable.",
-        fr: "Bienvenue dans votre havre de paix au bord de la mer, {guestName} ! Nous sommes ravis de vous accueillir et vous souhaitons un séjour merveilleux, relaxant et inoubliable.",
-        it: "Benvenuto nella tua casa in riva al mare, {guestName}! Siamo felici di ospitarti e speriamo che tu possa trascorrere un soggiorno meraviglioso, rilassante e indimenticabile.",
-        de: "Herzlich willkommen in Ihrem Zuhause am Meer, {guestName}! Wir freuen uns sehr, Sie als Gast zu haben, und wünschen Ihnen einen wunderbaren, erholsamen und unvergesslichen Aufenthalt.",
-        ja: "{guestName}様、海辺のマイホームへようこそ！ご宿泊いただき大変嬉しく思います。リラックスできる素晴らしい、忘れられない滞在となりますように。"
-    };
-
-    function getGenericGreeting(langCode) {
-        const template = introTemplates[langCode] || introTemplates.en;
-        return template
-            .replace(', {guestName}', '')
-            .replace(' {guestName} !', ' !')
-            .replace('{guestName}様、', '')
-            .replace('{guestName}', '')
-            .trim();
-    }
+    const msgLocked = t('guideCredentialsLocked', {}, 'Access Locked (Registry Required)');
+    const msgLockedDesc = t('guideCredentialsLockedDesc', {}, 'Per building security and Colombian regulations, door codes and Wi-Fi credentials are only released after submitting the Guest Registry.');
+    const msgActionUnlock = t('guideActionUnlock', {}, 'Complete Registry to Unlock');
+    const msgVerifying = t('guideCredentialsVerifying', {}, 'Verifying access permissions...');
+    const msgNotFound = t('guideNoReservationFound', {}, 'Please provide a valid reservation code or link from your confirmation email.');
+    const msgCopied = t('guideCopySuccess', {}, 'Copied!');
+    const msgConcluded = t('guideConcluded', {}, 'This reservation has concluded. Property access credentials and guide details are no longer active.');
+    const msgConcludedBadge = t('guideConcludedBadge', {}, 'Stay Concluded');
+    const msgParkingPlaceholder = t('guideParkingPlaceholder', {}, '--');
 
     function getTodayCotDateString() {
         try {
@@ -82,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawCheckOut = urlParams.get('check_out') || urlParams.get('checkout') || '';
 
     // Relative asset path calculation for endpoints and cross-links (guide views are located in /guide/)
-    const pathPrefix = '../';
     const registryPageName = lang === 'en' ? 'registry/index.html' : `registry/${lang}.html`;
 
     // Safely sanitize URLs before assigning to href
@@ -116,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (rawCheckOut) {
             regParams.set('check_out', rawCheckOut);
         }
-        return `${pathPrefix}${registryPageName}?${regParams.toString()}`;
+        return `${assetPrefix}${registryPageName}?${regParams.toString()}`;
     }
 
     const defaultRegistryUrl = buildRegistryUrl();
@@ -133,9 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (displayCheckOut && checkOut) {
             displayCheckOut.textContent = checkOut;
         }
-        if (greetingBox && name) {
-            const template = introTemplates[lang] || introTemplates.en;
-            greetingBox.textContent = template.replace('{guestName}', name);
+        if (greetingBox) {
+            if (name) {
+                greetingBox.textContent = t('guideWelcomeWithGuest', { guestName: name });
+            } else {
+                greetingBox.textContent = t('guideWelcomeGeneric');
+            }
         }
     }
 
@@ -260,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayConcludedState(message) {
         const doorCard = doorCodeCard;
-        const concludedBadge = (doorCard?.getAttribute('data-msg-concluded-badge') || msgConcludedBadge || '').trim();
+        const concludedBadge = (msgConcludedBadge || '').trim();
         const concludedText = message || msgConcluded;
 
         // Mask/reset stay dates and placeholders to --
@@ -274,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Fall back to generic greeting (suppress prefilling guest name)
         if (greetingBox) {
-            greetingBox.textContent = getGenericGreeting(lang);
+            greetingBox.textContent = t('guideWelcomeGeneric');
         }
 
         // Hide mandatory registry banner
@@ -347,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // No reservation code provided: access remains locked
         setLockedState(defaultRegistryUrl, msgNotFound);
     } else {
-        const apiUrl = `${pathPrefix}api/guide-access.php?code=${encodeURIComponent(reservationCode)}&lang=${encodeURIComponent(lang)}`;
+        const apiUrl = `${apiBase}guide-access.php?code=${encodeURIComponent(reservationCode)}&lang=${encodeURIComponent(lang)}`;
 
         fetch(apiUrl, {
             method: 'GET',
@@ -383,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (data.registry_url.startsWith('http://') || data.registry_url.startsWith('https://')) {
                         dynamicRegUrl = data.registry_url;
                     } else {
-                        dynamicRegUrl = `${pathPrefix}${data.registry_url.replace(/^\//, '')}`;
+                        dynamicRegUrl = `${assetPrefix}${data.registry_url.replace(/^\//, '')}`;
                     }
                 }
                 setLockedState(dynamicRegUrl, data.message || msgLockedDesc);

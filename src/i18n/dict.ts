@@ -305,6 +305,10 @@ export const dict = {
 		guideHeader: "Welcome to OceanViewFlats",
 		guideIntro:
 			"Welcome to your beachside home, {guestName}! We are absolutely thrilled to host you and hope you have a wonderful, relaxing, and unforgettable stay.",
+		guideWelcomeWithGuest:
+			"Welcome to your beachside home, {guestName}! We are absolutely thrilled to host you and hope you have a wonderful, relaxing, and unforgettable stay.",
+		guideWelcomeGeneric:
+			"Welcome to your beachside home! We are absolutely thrilled to host you and hope you have a wonderful, relaxing, and unforgettable stay.",
 		guideFormBtn: "Fill Registry Form",
 		guidePropertyTitle: "Property Details",
 		guideAddressLabel: "Address",
@@ -378,6 +382,13 @@ export const dict = {
 			"A Guest Registry has already been completed for this reservation. You can proceed directly to your Guest Guide.",
 		registryConcluded:
 			"This reservation has concluded. Access to guest registration is no longer active.",
+		registrySubmitting: "Registering...",
+		registryGenericError:
+			"Something went wrong. Please check the fields and try again.",
+		registryNotSpecified: "Not Specified",
+		registryDefaultProperty: "OceanViewFlats (Not Specified)",
+		registryErrEmail:
+			"Please provide a valid email address for the primary guest.",
 		dbTitle: "Direct Booking",
 		dbSubtitle:
 			"Rent directly from the owner and save up to 20% on booking fees",
@@ -402,6 +413,9 @@ export const dict = {
 		dbFillFields: "Please fill in all required fields.",
 		dbDeclined:
 			"Your payment was declined. Please try another payment option or verify your details.",
+		dbNetworkError: "Network error. Please verify connection and try again.",
+		dbGatewayError:
+			"Unable to load the payment gateway. Please check your internet connection or try again.",
 		dbNightsFormat: "{nights} nights",
 		dbSuccessTitle: "Booking Confirmed - OceanViewFlats",
 		dbSuccessHeader: "Booking Confirmed!",
@@ -741,6 +755,10 @@ export const dict = {
 		guideHeader: "Bienvenido a OceanViewFlats",
 		guideIntro:
 			"¡Te damos una cálida bienvenida a tu hogar frente al mar, {guestName}! Estamos muy felices de hospedarte y esperamos que tengas una estadía maravillosa, relajante e inolvidable.",
+		guideWelcomeWithGuest:
+			"¡Te damos una cálida bienvenida a tu hogar frente al mar, {guestName}! Estamos muy felices de hospedarte y esperamos que tengas una estadía maravillosa, relajante e inolvidable.",
+		guideWelcomeGeneric:
+			"¡Te damos una cálida bienvenida a tu hogar frente al mar! Estamos muy felices de hospedarte y esperamos que tengas una estadía maravillosa, relajante e inolvidable.",
 		guideFormBtn: "Llenar Formulario de Registro",
 		guidePropertyTitle: "Detalles de la Propiedad",
 		guideAddressLabel: "Dirección",
@@ -814,6 +832,13 @@ export const dict = {
 			"Ya se completó el registro de huéspedes para esta reserva. Puede ingresar directamente a su Guía del Huésped.",
 		registryConcluded:
 			"Esta reserva ha concluido. El acceso al registro de huéspedes ya no está disponible.",
+		registrySubmitting: "Registrando...",
+		registryGenericError:
+			"Algo salió mal. Por favor, verifique los campos e intente de nuevo.",
+		registryNotSpecified: "No especificado",
+		registryDefaultProperty: "OceanViewFlats (No especificado)",
+		registryErrEmail:
+			"Por favor ingrese un correo electrónico válido para el huésped principal.",
 		dbTitle: "Reserva Directa",
 		dbSubtitle:
 			"Alquila directamente con el propietario y ahorra hasta un 20% en comisiones de plataformas",
@@ -839,6 +864,10 @@ export const dict = {
 		dbFillFields: "Por favor, complete todos los campos obligatorios.",
 		dbDeclined:
 			"Su pago fue rechazado. Por favor, intente con otra opción de pago o verifique sus datos.",
+		dbNetworkError:
+			"Error de red. Por favor verifique su conexión e intente nuevamente.",
+		dbGatewayError:
+			"No se pudo cargar la pasarela de pagos. Por favor verifique su conexión a internet o intente de nuevo.",
 		dbNightsFormat: "{nights} noches",
 		dbSuccessTitle: "Reserva Confirmada - OceanViewFlats",
 		dbSuccessHeader: "¡Reserva Confirmada!",
@@ -1183,6 +1212,10 @@ export const dict = {
 		guideHeader: "Bienvenue à OceanViewFlats",
 		guideIntro:
 			"Bienvenue dans votre havre de paix au bord de la mer, {guestName} ! Nous sommes ravis de vous accueillir et vous souhaitons un séjour merveilleux, relaxant et inoubliable.",
+		guideWelcomeWithGuest:
+			"Bienvenue dans votre havre de paix au bord de la mer, {guestName} ! Nous sommes ravis de vous accueillir et vous souhaitons un séjour merveilleux, relaxant et inoubliable.",
+		guideWelcomeGeneric:
+			"Bienvenue dans votre havre de paix au bord de la mer ! Nous sommes ravis de vous accueillir et vous souhaitons un séjour merveilleux, relaxant et inoubliable.",
 		guideFormBtn: "Remplir le formulaire d'enregistrement",
 		guidePropertyTitle: "Détails de la propriété",
 		guideAddressLabel: "Adresse",
@@ -1256,6 +1289,13 @@ export const dict = {
 			"Le formulaire d'enregistrement a déjà été rempli pour cette réservation. Vous pouvez accéder directement à votre guide.",
 		registryConcluded:
 			"Ce séjour est terminé. L'accès au formulaire d'enregistrement n'est plus actif.",
+		registrySubmitting: "Enregistrement...",
+		registryGenericError:
+			"Une erreur est survenue. Veuillez vérifier les champs et réessayer.",
+		registryNotSpecified: "Non spécifiée",
+		registryDefaultProperty: "OceanViewFlats (Non spécifiée)",
+		registryErrEmail:
+			"Veuillez fournir une adresse e-mail valide pour le client principal.",
 		dbTitle: "Réservation Directe",
 		dbSubtitle:
 			"Louez directement auprès du propriétaire et économisez jusqu'à 20% sur les frais de plateforme",
@@ -1281,6 +1321,10 @@ export const dict = {
 		dbFillFields: "Veuillez remplir tous les champs obligatoires.",
 		dbDeclined:
 			"Votre paiement a été refusé. Veuillez essayer un autre mode de paiement ou vérifier vos coordonnées.",
+		dbNetworkError:
+			"Erreur réseau. Veuillez vérifier votre connexion et réessayer.",
+		dbGatewayError:
+			"Impossible de charger la passerelle de paiement. Veuillez vérifier votre connexion internet ou réessayer.",
 		dbNightsFormat: "{nights} nuits",
 		dbSuccessTitle: "Réservation Confirmée - OceanViewFlats",
 		dbSuccessHeader: "Réservation Confirmée !",
@@ -1617,6 +1661,10 @@ export const dict = {
 		guideHeader: "Benvenuto a OceanViewFlats",
 		guideIntro:
 			"Benvenuto nella tua casa in riva al mare, {guestName}! Siamo felici di ospitarti e speriamo che tu possa trascorrere un soggiorno meraviglioso, rilassante e indimenticabile.",
+		guideWelcomeWithGuest:
+			"Benvenuto nella tua casa in riva al mare, {guestName}! Siamo felici di ospitarti e speriamo che tu possa trascorrere un soggiorno meraviglioso, rilassante e indimenticabile.",
+		guideWelcomeGeneric:
+			"Benvenuto nella tua casa in riva al mare! Siamo felici di ospitarti e speriamo che tu possa trascorrere un soggiorno meraviglioso, rilassante e indimenticabile.",
 		guideFormBtn: "Compila il Modulo di Registrazione",
 		guidePropertyTitle: "Dettagli della Proprietà",
 		guideAddressLabel: "Indirizzo",
@@ -1691,6 +1739,13 @@ export const dict = {
 			"La registrazione degli ospiti è già stata completata per questa prenotazione. Puoi accedere direttamente alla tua Guida per gli Ospiti.",
 		registryConcluded:
 			"Questa prenotazione si è conclusa. L'accesso alla registrazione degli ospiti non è più attivo.",
+		registrySubmitting: "Registrazione...",
+		registryGenericError:
+			"Qualcosa è andato storto. Verificare i campi e riprovare.",
+		registryNotSpecified: "Non specificato",
+		registryDefaultProperty: "OceanViewFlats (Non specificato)",
+		registryErrEmail:
+			"Si prega di fornire un indirizzo email valido per l'ospite principale.",
 		dbTitle: "Prenotazione Diretta",
 		dbSubtitle:
 			"Affitta direttamente dal proprietario e risparmia fino al 20% sulle commissioni delle piattaforme",
@@ -1715,6 +1770,10 @@ export const dict = {
 		dbFillFields: "Si prega di compilare tutti i campi obbligatori.",
 		dbDeclined:
 			"Il pagamento è stato rifiutato. Prova un altro metodo di pagamento o verifica i tuoi dati.",
+		dbNetworkError:
+			"Errore di rete. Si prega di verificare la connessione e riprovare.",
+		dbGatewayError:
+			"Impossibile caricare il gateway di pagamento. Si prega di verificare la connessione a internet o riprovare.",
 		dbNightsFormat: "{nights} notti",
 		dbSuccessTitle: "Prenotazione Confermata - OceanViewFlats",
 		dbSuccessHeader: "Prenotazione Confermata!",
@@ -2055,6 +2114,10 @@ export const dict = {
 		guideHeader: "Willkommen bei OceanViewFlats",
 		guideIntro:
 			"Herzlich willkommen in Ihrem Zuhause am Meer, {guestName}! Wir freuen uns sehr, Sie als Gast zu haben, und wünschen Ihnen einen wunderbaren, erholsamen und unvergesslichen Aufenthalt.",
+		guideWelcomeWithGuest:
+			"Herzlich willkommen in Ihrem Zuhause am Meer, {guestName}! Wir freuen uns sehr, Sie als Gast zu haben, und wünschen Ihnen einen wunderbaren, erholsamen und unvergesslichen Aufenthalt.",
+		guideWelcomeGeneric:
+			"Herzlich willkommen in Ihrem Zuhause am Meer! Wir freuen uns sehr, Sie als Gast zu haben, und wünschen Ihnen einen wunderbaren, erholsamen und unvergesslichen Aufenthalt.",
 		guideFormBtn: "Registrierungsformular ausfüllen",
 		guidePropertyTitle: "Details zur Unterkunft",
 		guideAddressLabel: "Adresse",
@@ -2128,6 +2191,13 @@ export const dict = {
 			"Die Gästeregistrierung für diese Reservierung wurde bereits abgeschlossen. Sie können direkt zum Gästehandbuch wechseln.",
 		registryConcluded:
 			"Diese Reservierung ist abgeschlossen. Der Zugang zur Gästeregistrierung ist nicht mehr aktiv.",
+		registrySubmitting: "Registrierung...",
+		registryGenericError:
+			"Etwas ist schiefgelaufen. Bitte überprüfen Sie die Felder.",
+		registryNotSpecified: "Nicht angegeben",
+		registryDefaultProperty: "OceanViewFlats (Nicht angegeben)",
+		registryErrEmail:
+			"Bitte geben Sie eine gültige E-Mail-Adresse für den Hauptgast an.",
 		dbTitle: "Direktbuchung",
 		dbSubtitle:
 			"Buchen Sie direkt beim Eigentümer und sparen Sie bis zu 20 % an Plattformgebühren",
@@ -2153,6 +2223,10 @@ export const dict = {
 		dbFillFields: "Bitte füllen Sie alle erforderlichen Felder aus.",
 		dbDeclined:
 			"Ihre Zahlung wurde abgelehnt. Bitte versuchen Sie es mit einer anderen Zahlungsoption oder überprüfen Sie Ihre Angaben.",
+		dbNetworkError:
+			"Netzwerkfehler. Bitte überprüfen Sie die Verbindung und versuchen Sie es erneut.",
+		dbGatewayError:
+			"Das Zahlungsgateway konnte nicht geladen werden. Bitte überprüfen Sie Ihre Internetverbindung oder versuchen Sie es erneut.",
 		dbNightsFormat: "{nights} Nächte",
 		dbSuccessTitle: "Buchung Bestätigt - OceanViewFlats",
 		dbSuccessHeader: "Buchung Bestätigt!",
@@ -2491,6 +2565,10 @@ export const dict = {
 		guideHeader: "Welcome to OceanViewFlats",
 		guideIntro:
 			"{guestName}様、海辺のマイホームへようこそ！ご宿泊いただき大変嬉しく思います。リラックスできる素晴らしい、忘れられない滞在となりますように。",
+		guideWelcomeWithGuest:
+			"{guestName}様、海辺のマイホームへようこそ！ご宿泊いただき大変嬉しく思います。リラックスできる素晴らしい、忘れられない滞在となりますように。",
+		guideWelcomeGeneric:
+			"海辺のマイホームへようこそ！ご宿泊いただき大変嬉しく思います。リラックスできる素晴らしい、忘れられない滞在となりますように。",
 		guideFormBtn: "宿泊者名簿登録フォームに入力する",
 		guidePropertyTitle: "物件情報",
 		guideAddressLabel: "住所",
@@ -2564,6 +2642,12 @@ export const dict = {
 			"この予約の宿泊者名簿登録は既に完了しています。ゲストガイドへ直接お進みいただけます。",
 		registryConcluded:
 			"この宿泊予約は終了しました。宿泊者登録はご利用いただけません。",
+		registrySubmitting: "登録中...",
+		registryGenericError:
+			"エラーが発生しました。入力内容を確認してやり直してください。",
+		registryNotSpecified: "未指定",
+		registryDefaultProperty: "OceanViewFlats（未指定）",
+		registryErrEmail: "主ゲストの有効なメールアドレスを入力してください。",
 		dbTitle: "直接予約",
 		dbSubtitle:
 			"ホストから直接予約することで、プラットフォーム手数料を最大20%節約できます",
@@ -2588,6 +2672,10 @@ export const dict = {
 		dbFillFields: "すべての必須項目を入力してください。",
 		dbDeclined:
 			"お支払いが拒否されました。他のお支払い方法をお試しいただくか、入力内容をご確認ください。",
+		dbNetworkError:
+			"ネットワークエラーが発生しました。接続を確認してやり直してください。",
+		dbGatewayError:
+			"決済ゲートウェイを読み込めませんでした。インターネット接続を確認してもう一度お試しください。",
 		dbNightsFormat: "{nights} 泊",
 		dbSuccessTitle: "予約完了 - OceanViewFlats",
 		dbSuccessHeader: "ご予約が完了しました！",
@@ -2608,3 +2696,5 @@ export const dict = {
 		dbPendingHomeBtn: "ホームに戻る",
 	},
 };
+
+export type TranslationDict = typeof dict.en;
