@@ -149,3 +149,47 @@ test("client translation helper interpolates tokens and handles fallbacks", () =
 	cachedConfig = {};
 	assert.equal(t("any_key", {}, "Safe Fallback"), "Safe Fallback");
 });
+
+test("registry.js has excised duplicate dictionaries and uses window.t and apiBase", () => {
+	const registryJsPath = path.join(
+		process.cwd(),
+		"public",
+		"js",
+		"registry.js",
+	);
+	const content = fs.readFileSync(registryJsPath, "utf-8");
+
+	// Ensure duplicate dictionaries are eradicated
+	assert.ok(
+		!content.includes("const errorMsgs ="),
+		"registry.js must not contain duplicate errorMsgs dictionary",
+	);
+	assert.ok(
+		!content.includes("const submittingMsgs ="),
+		"registry.js must not contain duplicate submittingMsgs dictionary",
+	);
+	assert.ok(
+		!content.includes("const defaultDates ="),
+		"registry.js must not contain duplicate defaultDates dictionary",
+	);
+	assert.ok(
+		!content.includes("const defaultProperty ="),
+		"registry.js must not contain duplicate defaultProperty dictionary",
+	);
+
+	// Ensure window.t is invoked
+	assert.ok(
+		content.includes("registrySubmitting"),
+		"registry.js must reference registrySubmitting translation key",
+	);
+	assert.ok(
+		content.includes("registryGenericError"),
+		"registry.js must reference registryGenericError translation key",
+	);
+
+	// Ensure apiBase is used instead of procedural form action replacement
+	assert.ok(
+		content.includes("pageConfig.apiBase"),
+		"registry.js must use pageConfig.apiBase",
+	);
+});

@@ -20,37 +20,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const successTitle = document.getElementById('success-title');
     const successDesc = document.getElementById('success-desc');
 
-    const msgLoading = form.getAttribute('data-msg-loading') || 'Loading...';
-    const msgNotFound = form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.';
-    const msgAlreadyCompleted = form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.';
-    const msgConcluded = form.getAttribute('data-msg-concluded') || 'This reservation has concluded. Access to guest registration is no longer active.';
-    const msgErrEmail = form.getAttribute('data-msg-err-email') || '';
-    const msgErrPhone = form.getAttribute('data-msg-err-phone') || '';
+    const pageConfig = (window.getPageConfig && window.getPageConfig()) || {};
+    const lang = pageConfig.lang || document.documentElement.lang || 'en';
+    const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
+
+    const msgLoading = t('registryLookupLoading', {}, form.getAttribute('data-msg-loading') || 'Loading...');
+    const msgNotFound = t('registryLookupNotFound', {}, form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.');
+    const msgAlreadyCompleted = t('registryAlreadyCompleted', {}, form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.');
+    const msgConcluded = t('registryConcluded', {}, form.getAttribute('data-msg-concluded') || 'This reservation has concluded. Access to guest registration is no longer active.');
+    const msgErrEmail = t('registryErrEmail', {}, form.getAttribute('data-msg-err-email') || '');
+    const msgErrPhone = t('registryErrPhoneRequired', {}, form.getAttribute('data-msg-err-phone') || '');
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');
     const captchaLabel = document.getElementById('captcha-label');
     const captchaChallenge = document.getElementById('captcha-challenge');
     const captchaResponse = document.getElementById('captcha-response');
-
-    // Retrieve localized message attributes or defaults
-    const lang = document.documentElement.lang || 'en';
-    const errorMsgs = {
-        en: "Something went wrong. Please check the fields and try again.",
-        es: "Algo salió mal. Por favor, verifique los campos e intente de nuevo.",
-        fr: "Une erreur est survenue. Veuillez vérifier les champs et réessayer.",
-        it: "Qualcosa è andato storto. Verificare i campi e riprovare.",
-        de: "Etwas ist schiefgelaufen. Bitte überprüfen Sie die Felder.",
-        ja: "エラーが発生しました。入力内容を確認してやり直してください。"
-    };
-    const submittingMsgs = {
-        en: "Registering...",
-        es: "Registrando...",
-        fr: "Enregistrement...",
-        it: "Registrazione...",
-        de: "Registrierung...",
-        ja: "登録中..."
-    };
 
     // Safely sanitize URLs before assigning to href
     function sanitizeUrl(url) {
@@ -70,28 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return '#';
     }
 
-    const defaultErrorMsg = errorMsgs[lang] || errorMsgs.en;
-    const submittingMsg = submittingMsgs[lang] || submittingMsgs.en;
-    const defaultDates = {
-        en: "Not Specified",
-        es: "No especificado",
-        fr: "Non spécifiée",
-        it: "Non specificato",
-        de: "Nicht angegeben",
-        ja: "未指定"
-    };
-
-    const defaultProperty = {
-        en: "OceanViewFlats (Not Specified)",
-        es: "OceanViewFlats (No especificado)",
-        fr: "OceanViewFlats (Non spécifiée)",
-        it: "OceanViewFlats (Non specificato)",
-        de: "OceanViewFlats (Nicht angegeben)",
-        ja: "OceanViewFlats（未指定）"
-    };
-
-    const defaultDateMsg = defaultDates[lang] || defaultDates.en;
-    const defaultPropMsg = defaultProperty[lang] || defaultProperty.en;
+    const defaultErrorMsg = t('registryGenericError', {}, 'Something went wrong. Please check the fields and try again.');
+    const submittingMsg = t('registrySubmitting', {}, 'Registering...');
+    const defaultDateMsg = t('registryNotSpecified', {}, 'Not Specified');
+    const defaultPropMsg = t('registryDefaultProperty', {}, 'OceanViewFlats (Not Specified)');
 
     // 1. Read URL query params and populate stay details
     const urlParams = new URLSearchParams(window.location.search);
@@ -190,9 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function lookupReservation() {
         if (!reservationCodeVal) return;
 
-        const actionPath = form.getAttribute('action') || 'api/registry-processor.php';
-        const processorBase = actionPath.replace('registry-processor.php', '');
-        const lookupUrl = `${processorBase}registry-lookup.php?code=${encodeURIComponent(reservationCodeVal)}&lang=${encodeURIComponent(lang)}`;
+        const apiBase = pageConfig.apiBase || form.getAttribute('action')?.replace('registry-processor.php', '') || 'api/';
+        const lookupUrl = `${apiBase}registry-lookup.php?code=${encodeURIComponent(reservationCodeVal)}&lang=${encodeURIComponent(lang)}`;
 
         try {
             const res = await fetch(lookupUrl, {
@@ -566,7 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Reset submit button state
                 btnSubmit.disabled = false;
-                txtSubmit.textContent = btnSubmit.getAttribute('data-original-text') || "Complete Guest Registration";
+                txtSubmit.textContent = btnSubmit.getAttribute('data-original-text') || t('registrySubmit', {}, 'Complete Guest Registration');
                 btnSubmit.classList.remove('opacity-75', 'cursor-not-allowed');
                 loadCaptcha();
             }
@@ -575,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showMsg(defaultErrorMsg, false);
 
             btnSubmit.disabled = false;
-            txtSubmit.textContent = btnSubmit.getAttribute('data-original-text') || "Complete Guest Registration";
+            txtSubmit.textContent = btnSubmit.getAttribute('data-original-text') || t('registrySubmit', {}, 'Complete Guest Registration');
             btnSubmit.classList.remove('opacity-75', 'cursor-not-allowed');
             loadCaptcha();
         }

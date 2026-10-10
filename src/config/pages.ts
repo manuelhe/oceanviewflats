@@ -80,6 +80,7 @@ export const getClientDictionaryForPage = (
 			registrySuccessSubtitle: t.registrySuccessSubtitle || "",
 			registrySuccessGuideBtn: t.registrySuccessGuideBtn || "",
 			registrySubmitBtn: t.registrySubmitBtn || "",
+			registrySubmit: t.registrySubmit || "",
 			err_guest_email: t.err_guest_email || "",
 			errEmailInvalid: t.errEmailInvalid || "",
 		};
