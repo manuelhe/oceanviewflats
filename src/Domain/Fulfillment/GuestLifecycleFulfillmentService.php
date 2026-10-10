@@ -282,17 +282,7 @@ final class GuestLifecycleFulfillmentService implements GuestLifecycleFulfillmen
         // Condominium clearance synchronization (out-of-band side effect, ADR 0008)
         if ($this->clearanceSync !== null) {
             try {
-                $notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $submission->carModel);
-
-                $this->clearanceSync->sync(
-                    reservationUid: $reservation->reservationUid,
-                    propertyId: $reservation->propertyId,
-                    checkIn: $reservation->checkIn,
-                    checkOut: $reservation->checkOut,
-                    guests: $submission->occupants,
-                    carPlates: $submission->carPlates,
-                    notes: $notes
-                );
+                $clearance = $this->clearanceSync->syncSubmission($reservation, $submission);
             } catch (Throwable $e) {
                 error_log('Condominium clearance synchronization failed for reservation ' . $reservation->reservationUid . ': ' . $e->getMessage());
             }

@@ -39,6 +39,76 @@ final class HuespedManagerClearanceSyncTest extends TestCase
         $this->repository = new PdoCondominiumClearanceRepository($this->pdo);
     }
 
+    private function createSampleReservation(
+        string $uid = 'ovf_res_sync_test',
+        string $propertyId = '1707',
+        string $checkIn = '2026-11-01',
+        string $checkOut = '2026-11-05',
+        ?string $notes = null
+    ): Reservation {
+        return Reservation::create(
+            reservationUid: $uid,
+            propertyId: $propertyId,
+            guestName: 'Carlos Andres Mendoza Perez',
+            guestEmail: 'carlos@example.com',
+            guestPhone: '+34 600 123 456',
+            checkIn: $checkIn,
+            checkOut: $checkOut,
+            totalPrice: 1000.0,
+            status: ReservationStatus::CONFIRMED,
+            notes: $notes
+        );
+    }
+
+    /**
+     * @param array<int, OccupantDetails> $occupants
+     */
+    private function createSampleSubmission(
+        string $uid = 'ovf_res_sync_test',
+        string $propertyId = '1707',
+        string $checkIn = '2026-11-01',
+        string $checkOut = '2026-11-05',
+        array $occupants = [],
+        ?string $carPlates = null,
+        ?string $carModel = null,
+        string $primaryGuestEmail = 'carlos@example.com'
+    ): GuestRegistrySubmission {
+        return new GuestRegistrySubmission(
+            reservationCode: $uid,
+            propertyId: $propertyId,
+            checkIn: $checkIn,
+            checkOut: $checkOut,
+            occupants: $occupants,
+            primaryGuestEmail: $primaryGuestEmail,
+            carPlates: $carPlates,
+            carModel: $carModel
+        );
+    }
+
+    private function createSampleOccupant(
+        int $index = 1,
+        string $name = 'Carlos Perez',
+        string $docType = 'Cédula de Ciudadanía',
+        string $docNum = '12345',
+        string $country = 'Colombia',
+        string $phone = '+57 300 1234567',
+        ?string $firstName = 'Carlos',
+        ?string $lastName = 'Perez'
+    ): OccupantDetails {
+        return new OccupantDetails(
+            index: $index,
+            name: $name,
+            age: 30,
+            docType: $docType,
+            docNum: $docNum,
+            email: $index === 1 ? 'carlos@example.com' : null,
+            firstName: $firstName,
+            lastName: $lastName,
+            phone: $phone,
+            country: $country
+        );
+    }
+
     public function testSuccessfulTwoStepSyncWithCookiePreservation(): void
     {
         $requests = [];
@@ -115,15 +185,23 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             ),
         ];
 
-        $clearance = $adapter->sync(
-            reservationUid: 'ovf_res_sync_test',
+        $res = $this->createSampleReservation(
+            uid: 'ovf_res_sync_test',
             propertyId: '1707',
             checkIn: '2026-11-01',
             checkOut: '2026-11-05',
-            guests: $guests,
-            carPlates: 'XYZ-123',
             notes: 'Late arrival at 6 PM'
         );
+        $sub = $this->createSampleSubmission(
+            uid: 'ovf_res_sync_test',
+            propertyId: '1707',
+            checkIn: '2026-11-01',
+            checkOut: '2026-11-05',
+            occupants: $guests,
+            carPlates: 'XYZ-123'
+        );
+
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isSynced());
         $this->assertSame('495', $clearance->clearanceNumber);
@@ -205,40 +283,56 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $guests = [
-            [
-                'first_name' => 'John',
-                'last_name' => 'Doe',
-                'doc_type' => 'Passport',
-                'doc_number' => 'USA111',
-                'country' => 'United States',
-                'phone' => '+1 305 555 0100',
-            ],
-            [
-                'first_name' => 'Jane',
-                'last_name' => 'Doe',
-                'doc_type' => 'Passport',
-                'doc_number' => 'USA222',
-                'country' => 'United States',
-                'phone' => '', // Empty phone -> inherits
-            ],
-            [
-                'first_name' => 'Bob',
-                'last_name' => 'Smith',
-                'doc_type' => 'Driver License',
-                'doc_number' => 'DL999',
-                'country' => 'Canada',
-                'phone' => '+1 416 555 0200', // Own phone -> retained
-            ],
+        $occupants = [
+            new OccupantDetails(
+                index: 1,
+                name: 'John Doe',
+                firstName: 'John',
+                lastName: 'Doe',
+                docType: 'Passport',
+                docNum: 'USA111',
+                country: 'United States',
+                phone: '+1 305 555 0100',
+                email: 'john@example.com'
+            ),
+            new OccupantDetails(
+                index: 2,
+                name: 'Jane Doe',
+                firstName: 'Jane',
+                lastName: 'Doe',
+                docType: 'Passport',
+                docNum: 'USA222',
+                country: 'United States',
+                phone: '' // Empty phone -> inherits
+            ),
+            new OccupantDetails(
+                index: 3,
+                name: 'Bob Smith',
+                firstName: 'Bob',
+                lastName: 'Smith',
+                docType: 'Driver License',
+                docNum: 'DL999',
+                country: 'Canada',
+                phone: '+1 416 555 0200' // Own phone -> retained
+            ),
         ];
 
-        $clearance = $adapter->sync(
-            reservationUid: 'ovf_res_phones',
+        $res = $this->createSampleReservation(
+            uid: 'ovf_res_phones',
+            propertyId: '1606',
+            checkIn: '2026-12-10',
+            checkOut: '2026-12-15'
+        );
+        $sub = $this->createSampleSubmission(
+            uid: 'ovf_res_phones',
             propertyId: '1606',
             checkIn: '2026-12-10',
             checkOut: '2026-12-15',
-            guests: $guests
+            occupants: $occupants,
+            primaryGuestEmail: 'john@example.com'
         );
+
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isSynced());
         $this->assertSame('777', $clearance->clearanceNumber);
@@ -273,24 +367,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $guests = [
-            [
-                'first_name' => 'Carlos',
-                'last_name' => 'Perez',
-                'doc_type' => 'CC',
-                'doc_number' => '12345',
-                'country' => 'Colombia',
-                'phone' => '3001234567',
-            ],
-        ];
+        $res = $this->createSampleReservation('ovf_res_fail_step1', '1707', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_fail_step1', '1707', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
 
-        $clearance = $adapter->sync(
-            reservationUid: 'ovf_res_fail_step1',
-            propertyId: '1707',
-            checkIn: '2026-11-01',
-            checkOut: '2026-11-05',
-            guests: $guests
-        );
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isFailed());
         $this->assertFalse($clearance->isSynced());
@@ -322,18 +402,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $guests = [
-            [
-                'first_name' => 'Carlos',
-                'last_name' => 'Perez',
-                'doc_type' => 'CC',
-                'doc_number' => '12345',
-                'country' => 'Colombia',
-                'phone' => '3001234567',
-            ],
-        ];
+        $res = $this->createSampleReservation('ovf_res_bad_json', '1707', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_bad_json', '1707', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
 
-        $clearance = $adapter->sync('ovf_res_bad_json', '1707', '2026-11-01', '2026-11-05', $guests);
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isFailed());
         $this->assertStringContainsString("Step 1 response missing valid 'last_id'", $clearance->errorMessage ?? '');
@@ -362,18 +434,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $guests = [
-            [
-                'first_name' => 'Carlos',
-                'last_name' => 'Perez',
-                'doc_type' => 'CC',
-                'doc_number' => '12345',
-                'country' => 'Colombia',
-                'phone' => '3001234567',
-            ],
-        ];
+        $res = $this->createSampleReservation('ovf_res_step2_exc', '1707', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_step2_exc', '1707', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
 
-        $clearance = $adapter->sync('ovf_res_step2_exc', '1707', '2026-11-01', '2026-11-05', $guests);
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isFailed());
         $this->assertStringContainsString('Step 2 transport exception: Connection timed out', $clearance->errorMessage ?? '');
@@ -408,18 +472,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $guests = [
-            [
-                'first_name' => 'Carlos',
-                'last_name' => 'Perez',
-                'doc_type' => 'CC',
-                'doc_number' => '12345',
-                'country' => 'Colombia',
-                'phone' => '3001234567',
-            ],
-        ];
+        $res = $this->createSampleReservation('ovf_res_step2_err', '1707', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_step2_err', '1707', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
 
-        $clearance = $adapter->sync('ovf_res_step2_err', '1707', '2026-11-01', '2026-11-05', $guests);
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isFailed());
         $this->assertStringContainsString('Step 2 redirected to error page: error.php?fallo=doc_duplicate', $clearance->errorMessage ?? '');
@@ -441,9 +497,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $clearance = $adapter->sync('ovf_res_bad_prop', '9999', '2026-11-01', '2026-11-05', [
-            ['first_name' => 'A', 'last_name' => 'B', 'doc_type' => 'CC', 'doc_number' => '1', 'country' => 'CO', 'phone' => '123'],
-        ]);
+        $res = $this->createSampleReservation('ovf_res_bad_prop', '9999', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_bad_prop', '9999', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
+
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isFailed());
         $this->assertStringContainsString('No check token configured for property ID: 9999', $clearance->errorMessage ?? '');
@@ -466,7 +523,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $clearance = $adapter->sync('ovf_res_empty', '1707', '2026-11-01', '2026-11-05', []);
+        $res = $this->createSampleReservation('ovf_res_empty', '1707', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_empty', '1707', '2026-11-01', '2026-11-05', []);
+
+        $clearance = $adapter->syncSubmission($res, $sub);
 
         $this->assertTrue($clearance->isFailed());
         $this->assertStringContainsString('Occupant list is empty', $clearance->errorMessage ?? '');
@@ -509,17 +569,16 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             transport: $mockTransport
         );
 
-        $guests = [
-            ['first_name' => 'Carlos', 'last_name' => 'Perez', 'doc_type' => 'CC', 'doc_number' => '123', 'country' => 'CO', 'phone' => '+57 300 1234567'],
-        ];
+        $res = $this->createSampleReservation('ovf_res_retry', '1707', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_retry', '1707', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
 
         // 1st attempt: fails
-        $c1 = $adapter->sync('ovf_res_retry', '1707', '2026-11-01', '2026-11-05', $guests);
+        $c1 = $adapter->syncSubmission($res, $sub);
         $this->assertTrue($c1->isFailed());
         $this->assertSame(1, $c1->attempts);
 
         // 2nd attempt: succeeds
-        $c2 = $adapter->sync('ovf_res_retry', '1707', '2026-11-01', '2026-11-05', $guests);
+        $c2 = $adapter->syncSubmission($res, $sub);
         $this->assertTrue($c2->isSynced());
         $this->assertSame(2, $c2->attempts);
         $this->assertSame('505', $c2->clearanceNumber);
@@ -547,9 +606,10 @@ final class HuespedManagerClearanceSyncTest extends TestCase
             baseUrl: 'https://salguerosunset.huespedmanager.com.co/propietarios/production/'
         );
 
-        $adapter->sync('ovf_res_norm', '1606', '2026-11-01', '2026-11-05', [
-            ['first_name' => 'Carlos', 'last_name' => 'Perez', 'doc_type' => 'CC', 'doc_number' => '123', 'country' => 'CO', 'phone' => '+57 300 1234567'],
-        ]);
+        $res = $this->createSampleReservation('ovf_res_norm', '1606', '2026-11-01', '2026-11-05');
+        $sub = $this->createSampleSubmission('ovf_res_norm', '1606', '2026-11-01', '2026-11-05', [$this->createSampleOccupant()]);
+
+        $adapter->syncSubmission($res, $sub);
 
         $this->assertCount(2, $requests);
         $this->assertSame(

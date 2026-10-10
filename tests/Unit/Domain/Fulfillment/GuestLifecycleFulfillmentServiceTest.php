@@ -1042,15 +1042,10 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
     {
         $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
         $mockSync->expects($this->once())
-            ->method('sync')
+            ->method('syncSubmission')
             ->with(
-                'ovf_clearance_success',
-                '1606',
-                '2026-11-15',
-                '2026-11-20',
-                $this->isType('array'),
-                'XYZ-123',
-                $this->stringContains('Vehicle: Mazda CX-5')
+                $this->callback(fn (Reservation $r) => $r->reservationUid === 'ovf_clearance_success' && $r->propertyId === '1606'),
+                $this->callback(fn (GuestRegistrySubmission $s) => $s->reservationCode === 'ovf_clearance_success' && $s->carPlates === 'XYZ-123')
             )
             ->willReturn(
                 CondominiumClearance::createPending('ovf_clearance_success', '1606')
@@ -1092,7 +1087,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
     {
         $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
         $mockSync->expects($this->once())
-            ->method('sync')
+            ->method('syncSubmission')
             ->willThrowException(new \RuntimeException('Connection timed out to Huésped Manager'));
 
         $service = new GuestLifecycleFulfillmentService(
@@ -1131,7 +1126,7 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
     {
         $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
         $mockSync->expects($this->once())
-            ->method('sync')
+            ->method('syncSubmission')
             ->willReturn(
                 CondominiumClearance::createPending('ovf_clearance_fails', '1606')
                     ->markFailed('Portal authentication error')

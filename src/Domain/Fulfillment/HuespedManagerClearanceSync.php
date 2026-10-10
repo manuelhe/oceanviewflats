@@ -163,32 +163,6 @@ final class HuespedManagerClearanceSync implements CondominiumClearanceSyncInter
     }
 
     /**
-     * Legacy synchronization entry point.
-     *
-     * @param array<int, OccupantDetails|array<string, mixed>> $guests
-     */
-    public function sync(
-        string $reservationUid,
-        string $propertyId,
-        string $checkIn,
-        string $checkOut,
-        array $guests,
-        ?string $carPlates = null,
-        ?string $notes = null
-    ): CondominiumClearance {
-        return $this->performSync(
-            reservationUid: $reservationUid,
-            propertyId: $propertyId,
-            checkIn: $checkIn,
-            checkOut: $checkOut,
-            guests: $guests,
-            carPlates: $carPlates,
-            notes: $notes,
-            admin: null
-        );
-    }
-
-    /**
      * Encapsulates reception portal synchronization handshake, persistence, and audit logging.
      *
      * @param array<int, OccupantDetails|array<string, mixed>> $guests
