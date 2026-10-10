@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function lookupReservation() {
         if (!reservationCodeVal) return;
 
-        const apiBase = pageConfig.apiBase || form.getAttribute('action')?.replace('registry-processor.php', '') || 'api/';
+        const apiBase = pageConfig.apiBase || `${pageConfig.assetPrefix || ''}api/`;
         const lookupUrl = `${apiBase}registry-lookup.php?code=${encodeURIComponent(reservationCodeVal)}&lang=${encodeURIComponent(lang)}`;
 
         try {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import vm from "node:vm";
 import { baseTemplate } from "../../src/templates/base";
 
 test("baseTemplate escapes script tags inside pageConfig JSON", () => {
@@ -81,7 +82,11 @@ test("SSG output files embed valid #ovf-page-config across locales", () => {
 });
 
 test("client translation helper interpolates tokens and handles fallbacks", () => {
-	// Simulate client environment
+	const pageConfigCode = fs.readFileSync(
+		path.join(process.cwd(), "public/js/page-config.js"),
+		"utf-8",
+	);
+
 	const mockConfig = {
 		pageId: "guide",
 		lang: "en",
@@ -95,31 +100,26 @@ test("client translation helper interpolates tokens and handles fallbacks", () =
 		},
 	};
 
-	let cachedConfig: Record<string, unknown> = mockConfig;
-	const getPageConfig = () => cachedConfig;
-	const t = (
-		key: string,
-		params?: Record<string, string>,
-		fallback?: string,
-	) => {
-		const cfg = getPageConfig();
-		const i18n = cfg.i18n || {};
-		let val =
-			i18n[key] !== undefined && i18n[key] !== null
-				? i18n[key]
-				: fallback !== undefined
-					? fallback
-					: key;
-
-		if (typeof val === "string" && params && typeof params === "object") {
-			for (const placeholder in params) {
-				if (Object.hasOwn(params, placeholder)) {
-					val = val.split(`{${placeholder}}`).join(params[placeholder]);
+	const elContent: string | null = JSON.stringify(mockConfig);
+	const sandbox = {
+		document: {
+			getElementById: (id: string) => {
+				if (id === "ovf-page-config" && elContent) {
+					return { textContent: elContent };
 				}
-			}
-		}
-		return val;
+				return null;
+			},
+		},
+		window: {} as Record<string, any>,
+		console: {
+			error: () => {},
+		},
 	};
+	vm.createContext(sandbox);
+	vm.runInContext(pageConfigCode, sandbox);
+
+	const { getPageConfig, t } = sandbox.window;
+	assert.deepEqual(JSON.parse(JSON.stringify(getPageConfig())), mockConfig);
 
 	// Token interpolation test
 	const interpolated = t("guideWelcomeWithGuest", {
@@ -144,10 +144,6 @@ test("client translation helper interpolates tokens and handles fallbacks", () =
 	// Missing key without fallback
 	const keyResult = t("missing_key");
 	assert.equal(keyResult, "missing_key");
-
-	// Empty config
-	cachedConfig = {};
-	assert.equal(t("any_key", {}, "Safe Fallback"), "Safe Fallback");
 });
 
 test("registry.js has excised duplicate dictionaries and uses window.t and apiBase", () => {

@@ -590,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const msgDeclined = t('dbDeclined', {}, "Your payment was declined. Please try another payment option or verify your details.");
 
         try {
-            const apiBase = pageConfig.apiBase || '/api/';
+            const apiBase = pageConfig.apiBase || `${pageConfig.assetPrefix || ''}api/`;
             const paymentEndpoint = apiBase.endsWith('/') ? `${apiBase}payment.php` : `${apiBase}/payment.php`;
             const response = await fetch(paymentEndpoint, {
                 method: 'POST',
@@ -682,7 +682,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('captcha_signature', bookingCaptchaSignature);
                 formData.append('captcha_response', captchaVal);
 
-                const apiBase = pageConfig.apiBase || '/api/';
+                const apiBase = pageConfig.apiBase || `${pageConfig.assetPrefix || ''}api/`;
                 const bookEndpoint = apiBase.endsWith('/') ? `${apiBase}book-request.php` : `${apiBase}/book-request.php`;
                 const response = await fetch(bookEndpoint, {
                     method: 'POST',
