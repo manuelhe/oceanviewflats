@@ -10,13 +10,16 @@ require_once dirname(__DIR__, 2) . '/vendor/autoload.php';
 require_once __DIR__ . '/utils.php';
 
 use OceanViewFlats\Admin\Audit\AuditLogger;
+use OceanViewFlats\Domain\Fulfillment\AdminContext;
 use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceRepositoryInterface;
 use OceanViewFlats\Domain\Fulfillment\CondominiumClearanceSyncInterface;
 use OceanViewFlats\Domain\Fulfillment\CurlHttpTransport;
+use OceanViewFlats\Domain\Fulfillment\GuestRegistryRequiredException;
 use OceanViewFlats\Domain\Fulfillment\HttpTransportInterface;
 use OceanViewFlats\Domain\Fulfillment\HuespedManagerClearanceSync;
 use OceanViewFlats\Domain\Fulfillment\PdoCondominiumClearanceRepository;
 use OceanViewFlats\Domain\Reservation\PdoReservationRepository;
+use OceanViewFlats\Domain\Reservation\ReservationNotFoundException;
 use OceanViewFlats\Domain\Reservation\Search\PdoReservationSearchAdapter;
 
 // 1. Enforce Security Headers, CORS, and Allowed Methods
@@ -100,64 +103,32 @@ if (isset($GLOBALS['TEST_CLEARANCE_SYNC']) && $GLOBALS['TEST_CLEARANCE_SYNC'] in
         : new CurlHttpTransport();
     $clearanceSync = new HuespedManagerClearanceSync(
         repository: $clearanceRepo,
-        transport: $clearanceTransport
+        reservationRepository: new PdoReservationRepository($pdo),
+        searchAdapter: new PdoReservationSearchAdapter($pdo),
+        transport: $clearanceTransport,
+        auditLogger: new AuditLogger($pdo)
     );
 }
 
-// 7. Verify Reservation Existence
-$reservationRepo = new PdoReservationRepository($pdo);
-$reservation = $reservationRepo->findByUid($reservationUid);
-if ($reservation === null) {
-    http_response_code(404);
-    send_json_response(false, 'Reservation not found.');
-}
-
-// 8. Verify Guest Registry Submission
-$reservationSearch = new PdoReservationSearchAdapter($pdo);
-$registry = $reservationSearch->findGuestRegistry($reservationUid);
-if ($registry === null) {
-    http_response_code(400);
-    send_json_response(false, 'Guest registry must be submitted before condominium clearance can be synced.');
-}
-
-// 9. Prepare Clearance Payload
-$guests = $registry['guests_payload'] ?? [];
-if (is_string($guests)) {
-    $decoded = json_decode($guests, true);
-    $guests = is_array($decoded) ? $decoded : [];
-}
-
-$notes = HuespedManagerClearanceSync::formatClearanceNotes($reservation->notes, $registry['car_model'] ?? null);
-$carPlates = $registry['car_plates'] ?? null;
-
-$existingClearance = $clearanceRepo->findByReservationUid($reservationUid);
-$payloadBefore = $existingClearance?->toArray();
-
-// 10. Execute Condominium Clearance Synchronization
-$clearance = $clearanceSync->sync(
-    reservationUid: $reservation->reservationUid,
-    propertyId: $reservation->propertyId,
-    checkIn: $reservation->checkIn,
-    checkOut: $reservation->checkOut,
-    guests: $guests,
-    carPlates: $carPlates,
-    notes: $notes
-);
-
-// 11. Audit Logging
-$auditLogger = new AuditLogger($pdo);
-$auditLogger->record(
-    action: 'condominium_clearance_retry',
-    entityType: 'reservation',
-    entityId: $reservationUid,
-    before: $payloadBefore,
-    after: $clearance->toArray(),
-    adminUserId: (int) $adminUserId,
+// 7. Execute Condominium Clearance Synchronization
+$currentUser = ['id' => (int) $adminUserId];
+$adminContext = new AdminContext(
+    adminUserId: $currentUser['id'],
     ipAddress: (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
     userAgent: (string) ($_SERVER['HTTP_USER_AGENT'] ?? '')
 );
 
-// 12. Return JSON Response
+try {
+    $clearance = $clearanceSync->syncForReservation($reservationUid, $adminContext);
+} catch (ReservationNotFoundException) {
+    http_response_code(404);
+    send_json_response(false, 'Reservation not found.');
+} catch (GuestRegistryRequiredException) {
+    http_response_code(400);
+    send_json_response(false, 'Guest registry must be submitted before condominium clearance can be synced.');
+}
+
+// 8. Return JSON Response
 send_json_response(
     $clearance->isSynced(),
     $clearance->isSynced() ? 'Condominium clearance synchronization complete.' : ($clearance->errorMessage ?? 'Clearance synchronization failed.'),
