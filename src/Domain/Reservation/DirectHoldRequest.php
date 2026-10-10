@@ -18,7 +18,8 @@ final class DirectHoldRequest
         public readonly ?int $customHoldMinutes = null,
         public readonly ?string $reservationUid = null,
         public readonly ?ActorContext $actor = null,
-        public readonly ?string $notes = null
+        public readonly ?string $notes = null,
+        public readonly ?DraftPaymentDetails $payment = null
     ) {
     }
 
@@ -31,7 +32,8 @@ final class DirectHoldRequest
         ?int $customHoldMinutes = null,
         ?string $reservationUid = null,
         ?ActorContext $actor = null,
-        ?string $notes = null
+        ?string $notes = null,
+        ?DraftPaymentDetails $payment = null
     ): self {
         return new self(
             $propertyId,
@@ -42,7 +44,8 @@ final class DirectHoldRequest
             $customHoldMinutes,
             $reservationUid,
             $actor,
-            $notes
+            $notes,
+            $payment
         );
     }
 }

@@ -11,7 +11,14 @@ use OceanViewFlats\Domain\Fulfillment\CancellationEmailRenderer;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\PhpMailSender;
+use OceanViewFlats\Domain\Reservation\ActorContext;
+use OceanViewFlats\Domain\Reservation\DraftPaymentDetails;
+use OceanViewFlats\Domain\Reservation\InvalidReservationStateException;
+use OceanViewFlats\Domain\Reservation\PrimaryGuest;
 use OceanViewFlats\Domain\Reservation\Reservation;
+use OceanViewFlats\Domain\Reservation\ReservationDraft;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngine;
+use OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface;
 use OceanViewFlats\Domain\Reservation\ReservationStatus;
 use PDO;
 use Throwable;
@@ -30,6 +37,8 @@ use Throwable;
  */
 final class WebhookSettlementProcessor implements WebhookSettlementProcessorInterface
 {
+    private ReservationLifecycleEngineInterface $lifecycleEngine;
+
     public function __construct(
         private readonly PaymentGatewayInterface $gateway,
         private readonly PDO $pdo,
@@ -37,8 +46,14 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
         private readonly CancellationEmailRendererInterface $cancellationRenderer,
         private readonly EmailSenderInterface $emailSender,
         private readonly string $publicSiteUrl = 'https://oceanviewflats.com',
-        private readonly string $hostNotificationEmail = 'reservas@oceanviewflats.com'
+        private readonly string $hostNotificationEmail = 'reservas@oceanviewflats.com',
+        ?ReservationLifecycleEngineInterface $lifecycleEngine = null
     ) {
+        $this->lifecycleEngine = $lifecycleEngine ?? ReservationLifecycleEngine::createDefault($this->pdo, [
+            'bookingFulfillment' => $this->fulfillment,
+            'cancellationRenderer' => $this->cancellationRenderer,
+            'emailSender' => $this->emailSender,
+        ]);
     }
 
     public function getPublicSiteUrl(): string
@@ -100,6 +115,12 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
         /** @var CancellationEmailRendererInterface $cancellationRenderer */
         $cancellationRenderer = $options['cancellation_renderer'] ?? new CancellationEmailRenderer(baseUrl: $publicSiteUrl);
 
+        /** @var ReservationLifecycleEngineInterface|null $lifecycleEngine */
+        $lifecycleEngine = $options['lifecycle_engine'] ?? $options['lifecycleEngine'] ?? null;
+        if ($lifecycleEngine === null && isset($options['engine']) && $options['engine'] instanceof ReservationLifecycleEngineInterface) {
+            $lifecycleEngine = $options['engine'];
+        }
+
         return new self(
             gateway: $gateway,
             pdo: $pdo,
@@ -107,7 +128,8 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
             cancellationRenderer: $cancellationRenderer,
             emailSender: $emailSender,
             publicSiteUrl: $publicSiteUrl,
-            hostNotificationEmail: $hostNotificationEmail
+            hostNotificationEmail: $hostNotificationEmail,
+            lifecycleEngine: $lifecycleEngine
         );
     }
 
@@ -389,49 +411,59 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
                 );
             }
 
-            // Rule 5: Confirmation Fulfillment
             try {
-                $this->pdo->beginTransaction();
-
                 $paymentMethodId = $details->paymentMethodId !== ''
                     ? $details->paymentMethodId
                     : (isset($reservation['payment_method_id']) ? (string) $reservation['payment_method_id'] : null);
 
-                $upStmt = $this->pdo->prepare("
-                    UPDATE reservations 
-                    SET status = 'confirmed', 
-                        payment_status = 'approved', 
-                        mercadopago_payment_id = :pay_id, 
-                        payment_method_id = :pay_method,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE reservation_uid = :uid
-                ");
-                $upStmt->execute([
-                    ':uid' => $externalRef,
-                    ':pay_id' => $cleanPaymentId,
-                    ':pay_method' => $paymentMethodId,
-                ]);
+                $ip = isset($_SERVER['REMOTE_ADDR']) && is_string($_SERVER['REMOTE_ADDR'])
+                    ? $_SERVER['REMOTE_ADDR']
+                    : '127.0.0.1';
+                $ua = isset($_SERVER['HTTP_USER_AGENT']) && is_string($_SERVER['HTTP_USER_AGENT'])
+                    ? $_SERVER['HTTP_USER_AGENT']
+                    : null;
 
-                $this->recordAuditLog(
-                    action: 'payment_approved_webhook',
+                $draft = ReservationDraft::direct(
+                    propertyId: (string) $reservation['property_id'],
+                    checkIn: (string) $reservation['check_in'],
+                    checkOut: (string) $reservation['check_out'],
+                    primaryGuest: PrimaryGuest::create(
+                        name: (string) $reservation['guest_name'],
+                        email: (string) $reservation['guest_email'],
+                        phone: (string) $reservation['guest_phone'],
+                        lang: isset($reservation['lang']) ? (string) $reservation['lang'] : 'en'
+                    ),
+                    payment: DraftPaymentDetails::create(
+                        paymentMethodId: $paymentMethodId,
+                        mercadopagoPaymentId: $cleanPaymentId,
+                        paymentStatus: 'approved'
+                    ),
+                    totalPrice: (float) $reservation['total_price'],
                     reservationUid: $externalRef,
-                    payloadBefore: [
-                        'status' => $resStatus,
-                        'payment_status' => $reservation['payment_status'] ?? null,
-                    ],
-                    payloadAfter: [
-                        'status' => 'confirmed',
-                        'payment_status' => 'approved',
-                        'mercadopago_payment_id' => $cleanPaymentId,
-                        'payment_method_id' => $paymentMethodId,
-                    ]
+                    actor: ActorContext::webhook($ip, $ua),
+                    sendConfirmationEmail: true
                 );
 
-                $this->pdo->commit();
+                $this->lifecycleEngine->confirmOrRecord($draft);
+
+                return WebhookSettlementResult::confirmed(
+                    reservationUid: $externalRef,
+                    data: [
+                        'payment_id' => $cleanPaymentId,
+                        'fulfillment_success' => true,
+                        'fulfillment_errors' => [],
+                    ]
+                );
+            } catch (InvalidReservationStateException $e) {
+                return WebhookSettlementResult::ignoredCancelled(
+                    reservationUid: $externalRef,
+                    data: [
+                        'payment_id' => $cleanPaymentId,
+                        'current_status' => $resStatus,
+                        'reason' => $e->getMessage(),
+                    ]
+                );
             } catch (Throwable $e) {
-                if ($this->pdo->inTransaction()) {
-                    $this->pdo->rollBack();
-                }
                 return WebhookSettlementResult::databaseError(
                     message: 'Failed to confirm reservation: ' . $e->getMessage(),
                     httpStatusCode: 500,
@@ -439,39 +471,6 @@ final class WebhookSettlementProcessor implements WebhookSettlementProcessorInte
                     reservationUid: $externalRef
                 );
             }
-
-            // Post-settlement fulfillment via BookingFulfillmentInterface
-            $confirmedReservation = new Reservation(
-                reservationUid: (string) $reservation['reservation_uid'],
-                propertyId: (string) $reservation['property_id'],
-                guestName: (string) $reservation['guest_name'],
-                guestEmail: (string) $reservation['guest_email'],
-                guestPhone: (string) $reservation['guest_phone'],
-                checkIn: (string) $reservation['check_in'],
-                checkOut: (string) $reservation['check_out'],
-                totalPrice: (float) $reservation['total_price'],
-                status: ReservationStatus::CONFIRMED,
-                paymentMethodId: $paymentMethodId,
-                mercadopagoPaymentId: $cleanPaymentId,
-                paymentStatus: 'approved',
-                lang: isset($reservation['lang']) ? (string) $reservation['lang'] : 'en',
-                createdAt: isset($reservation['created_at']) ? new DateTimeImmutable((string) $reservation['created_at']) : null,
-                doorCode: null // strictly withholding per ADR 0001
-            );
-
-            $fulfillmentResult = $this->fulfillment->fulfillConfirmation($confirmedReservation, [
-                'payment_id' => $cleanPaymentId,
-                'payment_status' => 'approved',
-            ]);
-
-            return WebhookSettlementResult::confirmed(
-                reservationUid: $externalRef,
-                data: [
-                    'payment_id' => $cleanPaymentId,
-                    'fulfillment_success' => $fulfillmentResult->isSuccess(),
-                    'fulfillment_errors' => $fulfillmentResult->errors,
-                ]
-            );
         }
 
         // 6. Default / Unrecognized Status

@@ -35,9 +35,14 @@ if (empty($paymentId)) {
     exit;
 }
 
-$pdo = get_db_connection($config['db']);
+$pdo = isset($pdo) && $pdo instanceof PDO ? $pdo : get_db_connection($config['db']);
 
-$processor = WebhookSettlementProcessor::createDefault($pdo);
+$processorOptions = [];
+if (isset($lifecycleEngine) && $lifecycleEngine instanceof \OceanViewFlats\Domain\Reservation\ReservationLifecycleEngineInterface) {
+    $processorOptions['lifecycleEngine'] = $lifecycleEngine;
+}
+
+$processor = WebhookSettlementProcessor::createDefault($pdo, $processorOptions);
 $result = $processor->settlePayment((string) $paymentId);
 
 http_response_code($result->httpStatusCode);

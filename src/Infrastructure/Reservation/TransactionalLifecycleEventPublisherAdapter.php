@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OceanViewFlats\Infrastructure\Reservation;
 
 use Throwable;
+use OceanViewFlats\Domain\Fulfillment\BookingFulfillmentInterface;
 use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
 use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
 use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
@@ -26,7 +27,8 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
     public function __construct(
         private readonly ?GuestLifecycleFulfillmentServiceInterface $fulfillmentService = null,
         private readonly ?CancellationEmailRendererInterface $cancellationRenderer = null,
-        private readonly ?EmailSenderInterface $emailSender = null
+        private readonly ?EmailSenderInterface $emailSender = null,
+        private readonly ?BookingFulfillmentInterface $bookingFulfillment = null
     ) {
     }
 
@@ -46,8 +48,22 @@ final class TransactionalLifecycleEventPublisherAdapter implements LifecycleEven
     public function publishConfirmed(ReservationConfirmedEvent $event): void
     {
         try {
-            if ($event->sendConfirmationEmail && $this->fulfillmentService !== null) {
-                $this->fulfillmentService->fulfillBookingConfirmation($event->reservation);
+            if ($event->sendConfirmationEmail) {
+                $reservation = $event->reservation->registryCompleted
+                    ? $event->reservation
+                    : $event->reservation->withDoorCode(null);
+
+                if ($this->fulfillmentService !== null) {
+                    $this->fulfillmentService->fulfillBookingConfirmation($reservation);
+                } elseif ($this->bookingFulfillment !== null) {
+                    $this->bookingFulfillment->fulfillConfirmation(
+                        $reservation,
+                        array_filter([
+                            'payment_id' => $reservation->mercadopagoPaymentId,
+                            'payment_status' => $reservation->paymentStatus,
+                        ], fn($v) => $v !== null)
+                    );
+                }
             }
         } catch (Throwable) {
             // Best effort post-commit notification resilience

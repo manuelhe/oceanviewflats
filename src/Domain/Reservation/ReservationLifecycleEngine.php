@@ -7,7 +7,12 @@ namespace OceanViewFlats\Domain\Reservation;
 use DateTimeImmutable;
 use DateTimeZone;
 use InvalidArgumentException;
+use OceanViewFlats\Admin\Service\MercadoPagoRefundClientInterface;
 use OceanViewFlats\Domain\Access\DoorCodeGenerator;
+use OceanViewFlats\Domain\Fulfillment\BookingFulfillmentInterface;
+use OceanViewFlats\Domain\Fulfillment\CancellationEmailRendererInterface;
+use OceanViewFlats\Domain\Fulfillment\EmailSenderInterface;
+use OceanViewFlats\Domain\Fulfillment\GuestLifecycleFulfillmentServiceInterface;
 use OceanViewFlats\Domain\Quote\Quote;
 use OceanViewFlats\Domain\Quote\QuoteEngine;
 use OceanViewFlats\Domain\Quote\QuoteEngineInterface;
@@ -17,6 +22,13 @@ use OceanViewFlats\Domain\Reservation\Port\AuditPort;
 use OceanViewFlats\Domain\Reservation\Port\LifecycleEventPublisherPort;
 use OceanViewFlats\Domain\Reservation\Port\PaymentRefundPort;
 use OceanViewFlats\Domain\Reservation\Port\ReservationPersistencePort;
+use OceanViewFlats\Infrastructure\Reservation\InMemory\InMemoryAuditAdapter;
+use OceanViewFlats\Infrastructure\Reservation\InMemory\InMemoryReservationPersistenceAdapter;
+use OceanViewFlats\Infrastructure\Reservation\MercadoPagoPaymentRefundAdapter;
+use OceanViewFlats\Infrastructure\Reservation\PdoAuditAdapter;
+use OceanViewFlats\Infrastructure\Reservation\PdoReservationPersistenceAdapter;
+use OceanViewFlats\Infrastructure\Reservation\TransactionalLifecycleEventPublisherAdapter;
+use PDO;
 
 /**
  * Authoritative, deep Reservation Lifecycle Engine domain service.
@@ -40,6 +52,88 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
     ) {
         $this->ledger = $ledger ?? ReservationLedger::createDefault();
         $this->quoteEngine = $quoteEngine ?? QuoteEngine::createDefault();
+    }
+
+    /**
+     * Factory to instantiate engine with standard infrastructure adapters and PDO connection.
+     *
+     * @param ?PDO $pdo
+     * @param array<string, mixed> $options
+     */
+    public static function createDefault(?PDO $pdo = null, array $options = []): self
+    {
+        $repository = isset($options['repository']) && $options['repository'] instanceof ReservationRepositoryInterface
+            ? $options['repository']
+            : null;
+
+        $persistence = isset($options['persistencePort']) && $options['persistencePort'] instanceof ReservationPersistencePort
+            ? $options['persistencePort']
+            : ($pdo !== null
+                ? new PdoReservationPersistenceAdapter($pdo, $repository)
+                : new InMemoryReservationPersistenceAdapter([], $repository instanceof InMemoryReservationRepository ? $repository : null));
+
+        $paymentRefund = isset($options['paymentRefundPort']) && $options['paymentRefundPort'] instanceof PaymentRefundPort
+            ? $options['paymentRefundPort']
+            : new MercadoPagoPaymentRefundAdapter(
+                isset($options['mpRefundClient']) && $options['mpRefundClient'] instanceof MercadoPagoRefundClientInterface
+                    ? $options['mpRefundClient']
+                    : null,
+                isset($options['mpAccessToken']) && is_string($options['mpAccessToken'])
+                    ? $options['mpAccessToken']
+                    : null
+            );
+
+        $eventPublisher = isset($options['eventPublisherPort']) && $options['eventPublisherPort'] instanceof LifecycleEventPublisherPort
+            ? $options['eventPublisherPort']
+            : new TransactionalLifecycleEventPublisherAdapter(
+                fulfillmentService: isset($options['fulfillmentService']) && $options['fulfillmentService'] instanceof GuestLifecycleFulfillmentServiceInterface
+                    ? $options['fulfillmentService']
+                    : null,
+                cancellationRenderer: isset($options['cancellationRenderer']) && $options['cancellationRenderer'] instanceof CancellationEmailRendererInterface
+                    ? $options['cancellationRenderer']
+                    : null,
+                emailSender: isset($options['emailSender']) && $options['emailSender'] instanceof EmailSenderInterface
+                    ? $options['emailSender']
+                    : null,
+                bookingFulfillment: isset($options['bookingFulfillment']) && $options['bookingFulfillment'] instanceof BookingFulfillmentInterface
+                    ? $options['bookingFulfillment']
+                    : null
+            );
+
+        $audit = isset($options['auditPort']) && $options['auditPort'] instanceof AuditPort
+            ? $options['auditPort']
+            : ($pdo !== null
+                ? new PdoAuditAdapter($pdo)
+                : new InMemoryAuditAdapter());
+
+        $cacheDir = isset($options['cacheDir']) && is_string($options['cacheDir']) ? $options['cacheDir'] : null;
+        $maintenanceSource = isset($options['maintenanceBlockSource']) && $options['maintenanceBlockSource'] instanceof MaintenanceBlockSourceInterface
+            ? $options['maintenanceBlockSource']
+            : null;
+
+        $ledger = isset($options['ledger']) && $options['ledger'] instanceof ReservationLedgerInterface
+            ? $options['ledger']
+            : ReservationLedger::createDefault(
+                pdo: $pdo,
+                cacheDir: $cacheDir,
+                maintenanceBlockSource: $maintenanceSource,
+                repository: $repository
+            );
+
+        $quoteEngine = isset($options['quoteEngine']) && $options['quoteEngine'] instanceof QuoteEngineInterface
+            ? $options['quoteEngine']
+            : QuoteEngine::createDefault(
+                csvPath: isset($options['csvPath']) && is_string($options['csvPath']) ? $options['csvPath'] : null
+            );
+
+        return new self(
+            persistencePort: $persistence,
+            paymentRefundPort: $paymentRefund,
+            eventPublisherPort: $eventPublisher,
+            auditPort: $audit,
+            ledger: $ledger,
+            quoteEngine: $quoteEngine
+        );
     }
 
     /**
@@ -72,7 +166,14 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
         // 3. Compute hold duration and expiration (ADR 0003)
         $tz = new DateTimeZone('America/Bogota');
         $now = new DateTimeImmutable('now', $tz);
-        $isEfecty = $request->paymentMethodId !== null && strtolower($request->paymentMethodId) === 'efecty';
+        $payment = $request->payment;
+        $paymentMethodId = $payment !== null ? $payment->paymentMethodId : $request->paymentMethodId;
+        $mercadopagoPreferenceId = $payment?->mercadopagoPreferenceId;
+        $mercadopagoPaymentId = $payment?->mercadopagoPaymentId;
+        $paymentStatus = $payment?->paymentStatus;
+        $paymentDetail = $payment?->paymentDetail;
+
+        $isEfecty = $paymentMethodId !== null && strtolower($paymentMethodId) === 'efecty';
 
         if ($isEfecty) {
             $holdExpiresAt = $now->modify('+' . Reservation::DEFAULT_VOUCHER_HOLD_HOURS . ' hours');
@@ -94,7 +195,11 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
             checkOut: $request->checkOut,
             totalPrice: $quote->totalCop(),
             status: ReservationStatus::PENDING_PAYMENT,
-            paymentMethodId: $request->paymentMethodId,
+            paymentMethodId: $paymentMethodId,
+            mercadopagoPreferenceId: $mercadopagoPreferenceId,
+            mercadopagoPaymentId: $mercadopagoPaymentId,
+            paymentStatus: $paymentStatus,
+            paymentDetail: $paymentDetail,
             lang: $request->primaryGuest->lang,
             createdAt: $now,
             registryCompleted: false,
@@ -118,6 +223,8 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
                 'check_out' => $persisted->checkOut,
                 'total_price' => $persisted->totalPrice,
                 'payment_method_id' => $persisted->paymentMethodId,
+                'mercadopago_payment_id' => $persisted->mercadopagoPaymentId,
+                'payment_status' => $persisted->paymentStatus,
                 'hold_expires_at' => $holdExpiresAt->format('c'),
             ],
             actor: $request->actor ?? ActorContext::guest()
@@ -162,14 +269,23 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
         // 2. Authoritative Quote Calculation and Price Resolution
         $quote = null;
         if ($draft->isDirect()) {
-            $quote = $this->quoteEngine->quote($draft->propertyId, $draft->checkIn, $draft->checkOut);
-            if (!$quote->isValid()) {
-                throw ReservationValidationException::minimumStayViolated(
-                    $quote->minimumStayRequired(),
-                    $quote->nightsCount()
-                );
+            if ($existing === null) {
+                $quote = $this->quoteEngine->quote($draft->propertyId, $draft->checkIn, $draft->checkOut);
+                if (!$quote->isValid()) {
+                    throw ReservationValidationException::minimumStayViolated(
+                        $quote->minimumStayRequired(),
+                        $quote->nightsCount()
+                    );
+                }
+                $totalPrice = $draft->totalPrice ?? $quote->totalCop();
+            } else {
+                $totalPrice = $draft->totalPrice ?? $existing->totalPrice;
+                try {
+                    $quote = $this->quoteEngine->quote($draft->propertyId, $draft->checkIn, $draft->checkOut);
+                } catch (\Throwable) {
+                    $quote = null;
+                }
             }
-            $totalPrice = $draft->totalPrice ?? $quote->totalCop();
         } elseif ($draft->totalPrice !== null) {
             $totalPrice = $draft->totalPrice;
         } else {
@@ -186,43 +302,50 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
         $absorbedChannelBlockUid = null;
         $absorbingSource = $draft->isAirbnb() ? 'airbnb' : null;
 
-        if ($draft->isAirbnb()) {
-            $channelConflict = $this->ledger->findChannelConflict(
-                $draft->propertyId,
-                $draft->checkIn,
-                $draft->checkOut,
-                absorbingSource: null
-            );
-            if ($channelConflict !== null && strtolower($channelConflict->source) === 'airbnb') {
-                $wasChannelBlockAbsorbed = true;
-                $absorbedChannelBlockUid = $draft->channelBlockUid ?? $channelConflict->summary;
+        if ($existing === null) {
+            if ($draft->isAirbnb()) {
+                $channelConflict = $this->ledger->findChannelConflict(
+                    $draft->propertyId,
+                    $draft->checkIn,
+                    $draft->checkOut,
+                    absorbingSource: null
+                );
+                if ($channelConflict !== null && strtolower($channelConflict->source) === 'airbnb') {
+                    $wasChannelBlockAbsorbed = true;
+                    $absorbedChannelBlockUid = $draft->channelBlockUid ?? $channelConflict->summary;
+                }
             }
-        }
 
-        $conflicts = $this->ledger->getConflictReasons(
-            propertyId: $draft->propertyId,
-            checkIn: $draft->checkIn,
-            checkOut: $draft->checkOut,
-            absorbingSource: $absorbingSource
-        );
-
-        // Disregard self-conflict when transitioning an existing reservation
-        if ($draft->reservationUid !== null) {
-            $conflicts = array_values(
-                array_filter(
-                    $conflicts,
-                    fn(string $reason) => !str_contains($reason, $draft->reservationUid)
-                )
+            $conflicts = $this->ledger->getConflictReasons(
+                propertyId: $draft->propertyId,
+                checkIn: $draft->checkIn,
+                checkOut: $draft->checkOut,
+                absorbingSource: $absorbingSource
             );
-        }
 
-        if (count($conflicts) > 0) {
-            throw ReservationConflictException::forDates(
+            if (count($conflicts) > 0) {
+                throw ReservationConflictException::forDates(
+                    $draft->propertyId,
+                    $draft->checkIn,
+                    $draft->checkOut,
+                    implode('; ', $conflicts)
+                );
+            }
+        } else {
+            // Disregard self-conflict when transitioning an existing reservation
+            $otherConflict = $this->ledger->findReservationConflict(
                 $draft->propertyId,
                 $draft->checkIn,
-                $draft->checkOut,
-                implode('; ', $conflicts)
+                $draft->checkOut
             );
+            if ($otherConflict !== null && $otherConflict->reservationUid !== $existing->reservationUid) {
+                throw ReservationConflictException::forDates(
+                    $draft->propertyId,
+                    $draft->checkIn,
+                    $draft->checkOut,
+                    sprintf('Dates overlap active direct reservation %s (%s to %s)', $otherConflict->reservationUid, $otherConflict->checkIn, $otherConflict->checkOut)
+                );
+            }
         }
 
         // 4. UID and Smart Lock Access PIN Generation (ADR 0001)
@@ -278,6 +401,7 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
             $saved = $this->persistencePort->save($reservation);
 
             $action = match (true) {
+                $draft->actor?->source === 'webhook' => 'payment_approved_webhook',
                 $draft->isAirbnb() => 'airbnb_reservation_created',
                 $draft->isManual() => 'manual_reservation_created',
                 default => 'reservation_confirmed',
@@ -422,10 +546,13 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
         $receipt = null;
         $mpRefundId = null;
 
-        if ($isOnlinePayment && $refundAmount > 0.0) {
+        $dispatchGatewayRefund = $request->dispatchGatewayRefund;
+        if ($isOnlinePayment && $refundAmount > 0.0 && $dispatchGatewayRefund) {
             $idempotencyKey = sprintf('ref_%s_%d_%d', $reservationUid, (int) $refundAmount, time());
             $receipt = $this->paymentRefundPort->issueRefund((string) $mpPaymentId, $refundAmount, $idempotencyKey);
             $mpRefundId = $receipt->refundId;
+        } elseif (!$dispatchGatewayRefund && $request->externalRefundId !== null) {
+            $mpRefundId = $request->externalRefundId;
         }
 
         // 4. Database Transaction for Local State Mutation
@@ -479,7 +606,12 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
 
             $saved = $this->persistencePort->save($cancelledReservation);
 
-            $source = $isOnlinePayment ? 'admin_pms' : 'admin_manual';
+            $isWebhook = $request->actor?->source === 'webhook';
+            $source = match (true) {
+                $isWebhook => 'mercadopago_webhook',
+                $isOnlinePayment => 'admin_pms',
+                default => 'admin_manual',
+            };
             if ($refundAmount > 0.0) {
                 $this->persistencePort->recordRefund([
                     'reservation_uid' => $reservationUid,
@@ -493,8 +625,10 @@ final class ReservationLifecycleEngine implements ReservationLifecycleEngineInte
                 ]);
             }
 
+            $auditAction = $isWebhook ? 'refund_cancellation' : 'reservation_cancelled';
+
             $auditLogId = $this->auditPort->record(
-                action: 'reservation_cancelled',
+                action: $auditAction,
                 entityType: 'reservation',
                 entityId: $reservationUid,
                 payloadBefore: [

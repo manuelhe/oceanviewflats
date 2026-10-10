@@ -24,25 +24,32 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
      */
     public function getBlocks(string $propertyId): array
     {
-        $stmt = $this->pdo->prepare('
-            SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
-                   u.name AS created_by_name
-            FROM calendar_blocks cb
-            LEFT JOIN admin_users u ON cb.created_by = u.id
-            WHERE cb.property_id = :property_id
-            ORDER BY cb.start_date ASC
-        ');
-        $stmt->execute(['property_id' => $propertyId]);
+        try {
+            $stmt = $this->pdo->prepare('
+                SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
+                       u.name AS created_by_name
+                FROM calendar_blocks cb
+                LEFT JOIN admin_users u ON cb.created_by = u.id
+                WHERE cb.property_id = :property_id
+                ORDER BY cb.start_date ASC
+            ');
+            $stmt->execute(['property_id' => $propertyId]);
 
-        /** @var list<array<string, mixed>> $rows */
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            /** @var list<array<string, mixed>> $rows */
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $blocks = [];
-        foreach ($rows as $row) {
-            $blocks[] = $this->hydrateRow($row);
+            $blocks = [];
+            foreach ($rows as $row) {
+                $blocks[] = $this->hydrateRow($row);
+            }
+
+            return $blocks;
+        } catch (PDOException $e) {
+            if (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
+                return [];
+            }
+            throw $e;
         }
-
-        return $blocks;
     }
 
     /**
@@ -64,23 +71,30 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
 
     public function findById(int $id): ?MaintenanceBlock
     {
-        $stmt = $this->pdo->prepare('
-            SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
-                   u.name AS created_by_name
-            FROM calendar_blocks cb
-            LEFT JOIN admin_users u ON cb.created_by = u.id
-            WHERE cb.id = :id
-            LIMIT 1
-        ');
-        $stmt->execute(['id' => $id]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->pdo->prepare('
+                SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at,
+                       u.name AS created_by_name
+                FROM calendar_blocks cb
+                LEFT JOIN admin_users u ON cb.created_by = u.id
+                WHERE cb.id = :id
+                LIMIT 1
+            ');
+            $stmt->execute(['id' => $id]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($row === false) {
-            return null;
+            if ($row === false) {
+                return null;
+            }
+
+            /** @var array<string, mixed> $row */
+            return $this->hydrateRow($row);
+        } catch (PDOException $e) {
+            if (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
+                return null;
+            }
+            throw $e;
         }
-
-        /** @var array<string, mixed> $row */
-        return $this->hydrateRow($row);
     }
 
     /**
@@ -218,18 +232,25 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
         }
 
         $sql = 'SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at, u.name AS created_by_name ' . $baseSql;
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
 
-        /** @var list<array<string, mixed>> $rows */
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            /** @var list<array<string, mixed>> $rows */
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $blocks = [];
-        foreach ($rows as $row) {
-            $blocks[] = $this->hydrateRow($row);
+            $blocks = [];
+            foreach ($rows as $row) {
+                $blocks[] = $this->hydrateRow($row);
+            }
+
+            return $blocks;
+        } catch (PDOException $e) {
+            if (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
+                return [];
+            }
+            throw $e;
         }
-
-        return $blocks;
     }
 
     /**
@@ -262,18 +283,25 @@ class PdoMaintenanceBlockRepository implements MaintenanceBlockRepositoryInterfa
         $baseSql .= ' ORDER BY cb.start_date ASC';
 
         $sql = 'SELECT cb.id, cb.property_id, cb.start_date, cb.end_date, cb.reason, cb.created_by, cb.created_at, u.name AS created_by_name ' . $baseSql;
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute($params);
 
-        /** @var list<array<string, mixed>> $rows */
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            /** @var list<array<string, mixed>> $rows */
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $blocks = [];
-        foreach ($rows as $row) {
-            $blocks[] = $this->hydrateRow($row);
+            $blocks = [];
+            foreach ($rows as $row) {
+                $blocks[] = $this->hydrateRow($row);
+            }
+
+            return $blocks;
+        } catch (PDOException $e) {
+            if (str_contains($e->getMessage(), 'no such table') || str_contains($e->getMessage(), "doesn't exist")) {
+                return [];
+            }
+            throw $e;
         }
-
-        return $blocks;
     }
 
     /**

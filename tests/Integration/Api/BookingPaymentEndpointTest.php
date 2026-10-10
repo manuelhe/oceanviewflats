@@ -187,7 +187,7 @@ final class BookingPaymentEndpointTest extends TestCase
         $this->assertSame('pay_card_approved_101', $stmt->fetchColumn());
 
         // Verify audit log
-        $auditCount = (int) $this->pdo->query('SELECT COUNT(*) FROM admin_audit_logs WHERE action = "reservation_created_confirmed"')->fetchColumn();
+        $auditCount = (int) $this->pdo->query('SELECT COUNT(*) FROM admin_audit_logs WHERE action = "reservation_confirmed"')->fetchColumn();
         $this->assertSame(1, $auditCount);
 
         // Verify emails were sent (guest + host)
@@ -263,7 +263,7 @@ final class BookingPaymentEndpointTest extends TestCase
         $this->assertStringContainsString('https://mercadopago.com/pse/redirect/202', $guestEmail['htmlBody']);
 
         // Verify audit log
-        $auditCount = (int) $this->pdo->query('SELECT COUNT(*) FROM admin_audit_logs WHERE action = "reservation_created_pending"')->fetchColumn();
+        $auditCount = (int) $this->pdo->query('SELECT COUNT(*) FROM admin_audit_logs WHERE action = "direct_hold_created"')->fetchColumn();
         $this->assertSame(1, $auditCount);
     }
 

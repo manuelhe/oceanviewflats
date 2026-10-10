@@ -38,4 +38,20 @@ final class DraftPaymentDetails
             $paymentDetail
         );
     }
+
+    public static function direct(
+        ?string $paymentMethodId = null,
+        ?string $mercadopagoPaymentId = null,
+        ?string $paymentStatus = null,
+        ?string $mercadopagoPreferenceId = null,
+        ?string $paymentDetail = null
+    ): self {
+        return self::create(
+            paymentMethodId: $paymentMethodId,
+            mercadopagoPaymentId: $mercadopagoPaymentId,
+            paymentStatus: $paymentStatus,
+            mercadopagoPreferenceId: $mercadopagoPreferenceId,
+            paymentDetail: $paymentDetail
+        );
+    }
 }

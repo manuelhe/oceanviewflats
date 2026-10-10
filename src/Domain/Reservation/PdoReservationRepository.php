@@ -48,10 +48,47 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             'notes',
         ];
 
+        $updatableColumns = [
+            'guest_name',
+            'guest_email',
+            'guest_phone',
+            'total_price',
+            'refunded_amount',
+            'source',
+            'external_confirmation_code',
+            'channel_block_uid',
+            'status',
+            'payment_method_id',
+            'mercadopago_preference_id',
+            'mercadopago_payment_id',
+            'payment_status',
+            'payment_detail',
+            'lang',
+            'registry_completed',
+            'registry_completed_at',
+            'door_code',
+            'notes',
+        ];
+
+        if ($driver === 'sqlite') {
+            try {
+                $colsStmt = $this->pdo->query("PRAGMA table_info(`reservations`)");
+                if ($colsStmt !== false) {
+                    $existingCols = [];
+                    foreach ($colsStmt->fetchAll(PDO::FETCH_ASSOC) as $colInfo) {
+                        $existingCols[(string) $colInfo['name']] = true;
+                    }
+                    $columns = array_values(array_filter($columns, fn($col) => isset($existingCols[$col])));
+                    $updatableColumns = array_values(array_filter($updatableColumns, fn($col) => isset($existingCols[$col])));
+                }
+            } catch (\Throwable) {
+            }
+        }
+
         $colList = '`' . implode('`, `', $columns) . '`';
         $valList = ':' . implode(', :', $columns);
 
-        $params = [
+        $allParams = [
             ':reservation_uid' => $reservation->reservationUid,
             ':property_id' => $reservation->propertyId,
             ':guest_name' => $reservation->guestName,
@@ -77,27 +114,10 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
             ':notes' => $reservation->notes,
         ];
 
-        $updatableColumns = [
-            'guest_name',
-            'guest_email',
-            'guest_phone',
-            'total_price',
-            'refunded_amount',
-            'source',
-            'external_confirmation_code',
-            'channel_block_uid',
-            'status',
-            'payment_method_id',
-            'mercadopago_preference_id',
-            'mercadopago_payment_id',
-            'payment_status',
-            'payment_detail',
-            'lang',
-            'registry_completed',
-            'registry_completed_at',
-            'door_code',
-            'notes',
-        ];
+        $params = [];
+        foreach ($columns as $col) {
+            $params[':' . $col] = $allParams[':' . $col] ?? null;
+        }
 
         if ($driver === 'sqlite') {
             $updateAssignments = [];
@@ -208,7 +228,7 @@ final class PdoReservationRepository implements ReservationRepositoryInterface
                   )
               )
               AND (`check_in` < :check_out AND `check_out` > :check_in)
-            ORDER BY `check_in` ASC" . ($forUpdate ? ' FOR UPDATE' : '');
+            ORDER BY `check_in` ASC" . (($forUpdate && (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'sqlite') ? ' FOR UPDATE' : '');
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
