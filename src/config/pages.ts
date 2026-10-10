@@ -1,4 +1,5 @@
 import { IMAGES } from "../constants/config";
+import type { TranslationDict } from "../i18n/dict";
 import BookingFailure from "../pages/BookingFailure";
 import BookingPending from "../pages/BookingPending";
 import BookingSuccess from "../pages/BookingSuccess";
@@ -41,12 +42,12 @@ export interface PageConfig {
 	seoTitle?: (t: any) => string;
 	seoDescription?: (t: any) => string;
 	ogImage?: string;
-	clientI18n?: (t: any) => Record<string, string>;
+	clientI18n?: (t: TranslationDict) => Record<string, string>;
 }
 
 export const getClientDictionaryForPage = (
 	pageId: string,
-	t: any,
+	t: TranslationDict,
 ): Record<string, string> => {
 	const common: Record<string, string> = {
 		dbVerifying: t.dbVerifying || "",
@@ -78,10 +79,8 @@ export const getClientDictionaryForPage = (
 			registryDefaultProperty: t.registryDefaultProperty || "",
 			registryErrEmail: t.registryErrEmail || "",
 			registryErrPhoneRequired: t.registryErrPhoneRequired || "",
-			registrySuccessTitle: t.registrySuccessTitle || "",
-			registrySuccessSubtitle: t.registrySuccessSubtitle || "",
-			registrySuccessGuideBtn: t.registrySuccessGuideBtn || "",
-			registrySubmitBtn: t.registrySubmitBtn || "",
+			registrySuccess: t.registrySuccess || "",
+			registryWarmMsg: t.registryWarmMsg || "",
 			registrySubmit: t.registrySubmit || "",
 			err_guest_email: t.err_guest_email || "",
 			errEmailInvalid: t.errEmailInvalid || "",

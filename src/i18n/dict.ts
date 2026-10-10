@@ -2696,3 +2696,5 @@ export const dict = {
 		dbPendingHomeBtn: "ホームに戻る",
 	},
 };
+
+export type TranslationDict = typeof dict.en;
