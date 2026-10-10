@@ -604,6 +604,93 @@ final class GuestLifecycleFulfillmentServiceTest extends TestCase
         $this->assertStringContainsString('Database transaction failed', $result->errors[0]);
     }
 
+    public function testCompleteRegistryManuallyTriggersCondominiumClearanceSync(): void
+    {
+        $this->createSampleReservation('ovf_manual_clearance');
+        $admin = new AdminContext(adminUserId: 12, ipAddress: '192.168.1.10', userAgent: 'Chrome/Admin');
+
+        $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('syncForReservation')
+            ->with('ovf_manual_clearance', $admin)
+            ->willReturn(
+                new CondominiumClearance(
+                    reservationUid: 'ovf_manual_clearance',
+                    propertyId: '1606',
+                    status: CondominiumClearance::STATUS_SYNCED,
+                    clearanceNumber: 'CLEAR-777',
+                    syncedAt: '2026-10-09 12:00:00'
+                )
+            );
+
+        $service = new GuestLifecycleFulfillmentService(
+            pdo: $this->pdo,
+            reservationRepository: $this->reservationRepository,
+            hostRegistryRenderer: $this->hostRegistryRenderer,
+            emailSender: $this->emailSender,
+            spreadsheetSync: $this->spreadsheetSync,
+            confirmationEmailRenderer: $this->confirmationEmailRenderer,
+            clearanceSync: $mockSync
+        );
+
+        $result = $service->completeRegistryManually('ovf_manual_clearance', $admin);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->doorCode);
+        $this->assertNotNull($result->reservation);
+        $this->assertTrue($result->reservation->registryCompleted);
+    }
+
+    public function testCompleteRegistryManuallySucceedsWhenCondominiumClearanceSyncThrowsException(): void
+    {
+        $this->createSampleReservation('ovf_manual_clearance_fail');
+        $admin = new AdminContext(adminUserId: 12, ipAddress: '192.168.1.10', userAgent: 'Chrome/Admin');
+
+        $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
+        $mockSync->expects($this->once())
+            ->method('syncForReservation')
+            ->with('ovf_manual_clearance_fail', $admin)
+            ->willThrowException(new \RuntimeException('Connection timed out to Huésped Manager'));
+
+        $service = new GuestLifecycleFulfillmentService(
+            pdo: $this->pdo,
+            reservationRepository: $this->reservationRepository,
+            hostRegistryRenderer: $this->hostRegistryRenderer,
+            emailSender: $this->emailSender,
+            spreadsheetSync: $this->spreadsheetSync,
+            confirmationEmailRenderer: $this->confirmationEmailRenderer,
+            clearanceSync: $mockSync
+        );
+
+        // ADR 0001 & ADR 0008: External clearance synchronization failure must not block manual registry completion
+        $result = $service->completeRegistryManually('ovf_manual_clearance_fail', $admin);
+
+        $this->assertTrue($result->success);
+        $this->assertNotNull($result->doorCode);
+        $this->assertNotNull($result->reservation);
+        $this->assertTrue($result->reservation->registryCompleted);
+
+        // Verify DB update succeeded despite clearance exception
+        $res = $this->reservationRepository->findByUid('ovf_manual_clearance_fail');
+        $this->assertNotNull($res);
+        $this->assertTrue($res->registryCompleted);
+    }
+
+    public function testCreateDefaultAcceptsClearanceSyncOption(): void
+    {
+        $mockSync = $this->createMock(CondominiumClearanceSyncInterface::class);
+
+        $service = GuestLifecycleFulfillmentService::createDefault($this->pdo, [
+            'clearance_sync' => $mockSync,
+        ]);
+
+        $reflection = new \ReflectionClass($service);
+        $property = $reflection->getProperty('clearanceSync');
+        $property->setAccessible(true);
+
+        $this->assertSame($mockSync, $property->getValue($service));
+    }
+
     // ==========================================
     // 3. overrideDoorCode Tests
     // ==========================================
