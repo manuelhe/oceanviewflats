@@ -33,15 +33,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiBase = pageConfig.apiBase || `${assetPrefix}api/`;
     const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
 
-    const msgLocked = t('guideCredentialsLocked', {}, doorCodeCard?.getAttribute('data-msg-locked') || 'Access Locked (Registry Required)');
-    const msgLockedDesc = t('guideCredentialsLockedDesc', {}, doorCodeCard?.getAttribute('data-msg-locked-desc') || 'Per building security and Colombian regulations, door codes and Wi-Fi credentials are only released after submitting the Guest Registry.');
-    const msgActionUnlock = t('guideActionUnlock', {}, doorCodeCard?.getAttribute('data-msg-action-unlock') || 'Complete Registry to Unlock');
-    const msgVerifying = t('guideCredentialsVerifying', {}, doorCodeCard?.getAttribute('data-msg-verifying') || 'Verifying access permissions...');
-    const msgNotFound = t('guideNoReservationFound', {}, doorCodeCard?.getAttribute('data-msg-not-found') || 'Please provide a valid reservation code or link from your confirmation email.');
-    const msgCopied = t('guideCopySuccess', {}, doorCodeCard?.getAttribute('data-msg-copied') || 'Copied!');
-    const msgConcluded = t('guideConcluded', {}, doorCodeCard?.getAttribute('data-msg-concluded') || 'This reservation has concluded. Property access credentials and guide details are no longer active.');
-    const msgConcludedBadge = t('guideConcludedBadge', {}, doorCodeCard?.getAttribute('data-msg-concluded-badge') || 'Stay Concluded');
-    const msgParkingPlaceholder = t('guideParkingPlaceholder', {}, parkingCard?.getAttribute('data-msg-placeholder') || '--');
+    const msgLocked = t('guideCredentialsLocked', {}, 'Access Locked (Registry Required)');
+    const msgLockedDesc = t('guideCredentialsLockedDesc', {}, 'Per building security and Colombian regulations, door codes and Wi-Fi credentials are only released after submitting the Guest Registry.');
+    const msgActionUnlock = t('guideActionUnlock', {}, 'Complete Registry to Unlock');
+    const msgVerifying = t('guideCredentialsVerifying', {}, 'Verifying access permissions...');
+    const msgNotFound = t('guideNoReservationFound', {}, 'Please provide a valid reservation code or link from your confirmation email.');
+    const msgCopied = t('guideCopySuccess', {}, 'Copied!');
+    const msgConcluded = t('guideConcluded', {}, 'This reservation has concluded. Property access credentials and guide details are no longer active.');
+    const msgConcludedBadge = t('guideConcludedBadge', {}, 'Stay Concluded');
+    const msgParkingPlaceholder = t('guideParkingPlaceholder', {}, '--');
 
     function getTodayCotDateString() {
         try {
@@ -248,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayConcludedState(message) {
         const doorCard = doorCodeCard;
-        const concludedBadge = (doorCard?.getAttribute('data-msg-concluded-badge') || msgConcludedBadge || '').trim();
+        const concludedBadge = (msgConcludedBadge || '').trim();
         const concludedText = message || msgConcluded;
 
         // Mask/reset stay dates and placeholders to --

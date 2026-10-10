@@ -112,12 +112,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const widget = document.getElementById('calendar-widget');
     if (!widget) return;
 
+    const pageConfig = (window.getPageConfig && window.getPageConfig()) || {};
+    const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
+
     let currentDate = new Date();
     let checkIn = null;
     let checkOut = null;
     let blockedDates = []; // Array of YYYY-MM-DD strings of booked dates
     
-    const lang = widget.getAttribute('data-lang');
+    const lang = pageConfig.lang || widget.getAttribute('data-lang');
     const monthNames = JSON.parse(widget.getAttribute('data-month-names'));
     const dayNames = JSON.parse(widget.getAttribute('data-day-names'));
 
@@ -484,13 +487,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error("Failed to load MercadoPago SDK:", err);
                 const msgBox = document.getElementById('booking-form-message');
                 if (msgBox) {
-                    msgBox.textContent = "Unable to load the payment gateway. Please check your internet connection or try again.";
+                    msgBox.textContent = t('dbGatewayError', {}, "Unable to load the payment gateway. Please check your internet connection or try again.");
                     msgBox.className = "p-3 rounded-xl text-sm font-semibold mb-4 bg-red-50 text-red-800 border border-red-200 block";
                 }
                 const btnSubmit = document.getElementById('btn-direct-submit');
                 const btnSubmitText = document.getElementById('btn-direct-submit-text');
                 const formEl = document.getElementById('direct-booking-form');
-                const msgSubmitDefault = formEl ? formEl.getAttribute('data-msg-submit-default') : "Enviar Solicitud / Send Inquiry";
+                const msgSubmitDefault = t('dbSubmit', {}, "Send Booking Request");
                 if (btnSubmit) btnSubmit.disabled = false;
                 if (btnSubmitText) btnSubmitText.textContent = msgSubmitDefault;
                 return;
@@ -584,10 +587,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const msgBox = document.getElementById('booking-form-message');
         const formEl = document.getElementById('direct-booking-form');
-        const msgDeclined = formEl ? formEl.getAttribute('data-msg-declined') : "Your payment was declined. Please try another payment option or verify your details.";
+        const msgDeclined = t('dbDeclined', {}, "Your payment was declined. Please try another payment option or verify your details.");
 
         try {
-            const response = await fetch('/api/payment.php', {
+            const apiBase = pageConfig.apiBase || '/api/';
+            const paymentEndpoint = apiBase.endsWith('/') ? `${apiBase}payment.php` : `${apiBase}/payment.php`;
+            const response = await fetch(paymentEndpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -649,11 +654,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const btnSubmitText = document.getElementById('btn-direct-submit-text');
             const msgBox = document.getElementById('booking-form-message');
 
-            const msgVerifying = directFormElement.getAttribute('data-msg-verifying') || "Verifying details...";
-            const msgSecured = directFormElement.getAttribute('data-msg-secured') || "Booking secured! Please select your payment method below to guarantee your reservation.";
-            const msgFillFields = directFormElement.getAttribute('data-msg-fill-fields') || "Please fill in all required fields.";
-            const msgSubmitDefault = directFormElement.getAttribute('data-msg-submit-default') || "Enviar Solicitud / Send Inquiry";
-            const msgNetworkError = directFormElement.getAttribute('data-msg-network-error') || "Network error. Please verify connection and try again.";
+            const msgVerifying = t('dbVerifying', {}, "Verifying details...");
+            const msgSecured = t('dbSecured', {}, "Booking secured! Please select your payment method below to guarantee your reservation.");
+            const msgFillFields = t('dbFillFields', {}, "Please fill in all required fields.");
+            const msgSubmitDefault = t('dbSubmit', {}, "Send Booking Request");
+            const msgNetworkError = t('dbNetworkError', {}, "Network error. Please verify connection and try again.");
 
             const name = document.getElementById('booking-guest-name').value.trim();
             const email = document.getElementById('booking-guest-email').value.trim();
@@ -677,7 +682,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append('captcha_signature', bookingCaptchaSignature);
                 formData.append('captcha_response', captchaVal);
 
-                const response = await fetch('/api/book-request.php', {
+                const apiBase = pageConfig.apiBase || '/api/';
+                const bookEndpoint = apiBase.endsWith('/') ? `${apiBase}book-request.php` : `${apiBase}/book-request.php`;
+                const response = await fetch(bookEndpoint, {
                     method: 'POST',
                     body: formData
                 });
@@ -760,6 +767,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('contact-form');
     if (!form) return;
 
+    const pageConfig = (window.getPageConfig && window.getPageConfig()) || {};
+    const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
+
     // Matomo Tracking for WhatsApp Sidebar Link (Goal 4)
     const whatsappContactLink = document.getElementById('whatsapp-contact-link');
     if (whatsappContactLink) {
@@ -780,12 +790,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const captchaChallenge = document.getElementById('captcha-challenge');
     const captchaResponse = document.getElementById('captcha-response');
 
-    // Retrieve localized messages from form data attributes
-    const msgSuccess = form.getAttribute('data-msg-success') || 'Thank you! Your message has been sent successfully.';
-    const msgError = form.getAttribute('data-msg-error') || 'Something went wrong. Please check the fields and try again.';
-    const msgSubmitting = form.getAttribute('data-msg-submitting') || 'Sending...';
-    const msgDefaultSubmit = form.getAttribute('data-msg-submit') || 'Send Inquiry';
-    const msgDateError = form.getAttribute('data-msg-date-error') || 'Check-out date must be after check-in date.';
+    // Retrieve localized messages via window.t
+    const msgSuccess = t('contactSuccess', {}, 'Thank you! Your message has been sent successfully.');
+    const msgError = t('contactError', {}, 'Something went wrong. Please check the fields and try again.');
+    const msgSubmitting = t('contactSubmitting', {}, 'Sending...');
+    const msgDefaultSubmit = t('contactSubmit', {}, 'Send Inquiry');
+    const msgDateError = t('contactDateError', {}, 'Check-out date must be after check-in date.');
 
     // Check URL query parameters for success/error redirect state (traditional post fallback)
     const urlParams = new URLSearchParams(window.location.search);

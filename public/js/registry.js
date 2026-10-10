@@ -24,12 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const lang = pageConfig.lang || document.documentElement.lang || 'en';
     const t = (key, params, fallback) => (window.t ? window.t(key, params, fallback) : (fallback !== undefined ? fallback : key));
 
-    const msgLoading = t('registryLookupLoading', {}, form.getAttribute('data-msg-loading') || 'Loading...');
-    const msgNotFound = t('registryLookupNotFound', {}, form.getAttribute('data-msg-not-found') || 'No reservation found matching this code.');
-    const msgAlreadyCompleted = t('registryAlreadyCompleted', {}, form.getAttribute('data-msg-already-completed') || 'A Guest Registry has already been completed for this reservation.');
-    const msgConcluded = t('registryConcluded', {}, form.getAttribute('data-msg-concluded') || 'This reservation has concluded. Access to guest registration is no longer active.');
-    const msgErrEmail = t('registryErrEmail', {}, form.getAttribute('data-msg-err-email') || '');
-    const msgErrPhone = t('registryErrPhoneRequired', {}, form.getAttribute('data-msg-err-phone') || '');
+    const msgLoading = t('registryLookupLoading', {}, 'Loading...');
+    const msgNotFound = t('registryLookupNotFound', {}, 'No reservation found matching this code.');
+    const msgAlreadyCompleted = t('registryAlreadyCompleted', {}, 'A Guest Registry has already been completed for this reservation.');
+    const msgConcluded = t('registryConcluded', {}, 'This reservation has concluded. Access to guest registration is no longer active.');
+    const msgErrEmail = t('registryErrEmail', {}, '');
+    const msgErrPhone = t('registryErrPhoneRequired', {}, '');
 
     const addGuestBtn = document.getElementById('add-guest-button');
     const guestCountInput = document.getElementById('guest-count-input');

@@ -413,6 +413,9 @@ export const dict = {
 		dbFillFields: "Please fill in all required fields.",
 		dbDeclined:
 			"Your payment was declined. Please try another payment option or verify your details.",
+		dbNetworkError: "Network error. Please verify connection and try again.",
+		dbGatewayError:
+			"Unable to load the payment gateway. Please check your internet connection or try again.",
 		dbNightsFormat: "{nights} nights",
 		dbSuccessTitle: "Booking Confirmed - OceanViewFlats",
 		dbSuccessHeader: "Booking Confirmed!",
@@ -861,6 +864,10 @@ export const dict = {
 		dbFillFields: "Por favor, complete todos los campos obligatorios.",
 		dbDeclined:
 			"Su pago fue rechazado. Por favor, intente con otra opción de pago o verifique sus datos.",
+		dbNetworkError:
+			"Error de red. Por favor verifique su conexión e intente nuevamente.",
+		dbGatewayError:
+			"No se pudo cargar la pasarela de pagos. Por favor verifique su conexión a internet o intente de nuevo.",
 		dbNightsFormat: "{nights} noches",
 		dbSuccessTitle: "Reserva Confirmada - OceanViewFlats",
 		dbSuccessHeader: "¡Reserva Confirmada!",
@@ -1314,6 +1321,10 @@ export const dict = {
 		dbFillFields: "Veuillez remplir tous les champs obligatoires.",
 		dbDeclined:
 			"Votre paiement a été refusé. Veuillez essayer un autre mode de paiement ou vérifier vos coordonnées.",
+		dbNetworkError:
+			"Erreur réseau. Veuillez vérifier votre connexion et réessayer.",
+		dbGatewayError:
+			"Impossible de charger la passerelle de paiement. Veuillez vérifier votre connexion internet ou réessayer.",
 		dbNightsFormat: "{nights} nuits",
 		dbSuccessTitle: "Réservation Confirmée - OceanViewFlats",
 		dbSuccessHeader: "Réservation Confirmée !",
@@ -1759,6 +1770,10 @@ export const dict = {
 		dbFillFields: "Si prega di compilare tutti i campi obbligatori.",
 		dbDeclined:
 			"Il pagamento è stato rifiutato. Prova un altro metodo di pagamento o verifica i tuoi dati.",
+		dbNetworkError:
+			"Errore di rete. Si prega di verificare la connessione e riprovare.",
+		dbGatewayError:
+			"Impossibile caricare il gateway di pagamento. Si prega di verificare la connessione a internet o riprovare.",
 		dbNightsFormat: "{nights} notti",
 		dbSuccessTitle: "Prenotazione Confermata - OceanViewFlats",
 		dbSuccessHeader: "Prenotazione Confermata!",
@@ -2208,6 +2223,10 @@ export const dict = {
 		dbFillFields: "Bitte füllen Sie alle erforderlichen Felder aus.",
 		dbDeclined:
 			"Ihre Zahlung wurde abgelehnt. Bitte versuchen Sie es mit einer anderen Zahlungsoption oder überprüfen Sie Ihre Angaben.",
+		dbNetworkError:
+			"Netzwerkfehler. Bitte überprüfen Sie die Verbindung und versuchen Sie es erneut.",
+		dbGatewayError:
+			"Das Zahlungsgateway konnte nicht geladen werden. Bitte überprüfen Sie Ihre Internetverbindung oder versuchen Sie es erneut.",
 		dbNightsFormat: "{nights} Nächte",
 		dbSuccessTitle: "Buchung Bestätigt - OceanViewFlats",
 		dbSuccessHeader: "Buchung Bestätigt!",
@@ -2653,6 +2672,10 @@ export const dict = {
 		dbFillFields: "すべての必須項目を入力してください。",
 		dbDeclined:
 			"お支払いが拒否されました。他のお支払い方法をお試しいただくか、入力内容をご確認ください。",
+		dbNetworkError:
+			"ネットワークエラーが発生しました。接続を確認してやり直してください。",
+		dbGatewayError:
+			"決済ゲートウェイを読み込めませんでした。インターネット接続を確認してもう一度お試しください。",
 		dbNightsFormat: "{nights} 泊",
 		dbSuccessTitle: "予約完了 - OceanViewFlats",
 		dbSuccessHeader: "ご予約が完了しました！",

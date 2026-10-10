@@ -199,12 +199,6 @@ export const BookingSection = ({
 							<form
 								id="direct-booking-form"
 								data-mp-public-key={MERCADOPAGO_PUBLIC_KEY}
-								data-msg-verifying={t.dbVerifying}
-								data-msg-secured={t.dbSecured}
-								data-msg-fill-fields={t.dbFillFields}
-								data-msg-declined={t.dbDeclined}
-								data-msg-submit-default={t.dbSubmit}
-								data-msg-network-error={t.contactError}
 								className="hidden space-y-4 mb-6 transition-all duration-300"
 							>
 								<h4

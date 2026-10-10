@@ -228,3 +228,82 @@ test("guide.js has excised introTemplates and uses canonical greeting separation
 		"guide.js must use pageConfig.apiBase",
 	);
 });
+
+test("main.js uses window.t and pageConfig for booking and contact flows", () => {
+	const mainJsPath = path.join(process.cwd(), "public", "js", "main.js");
+	const content = fs.readFileSync(mainJsPath, "utf-8");
+
+	// Ensure booking keys are referenced via t()
+	assert.ok(
+		content.includes("dbGatewayError"),
+		"main.js must reference dbGatewayError",
+	);
+	assert.ok(content.includes("dbSubmit"), "main.js must reference dbSubmit");
+	assert.ok(
+		content.includes("dbDeclined"),
+		"main.js must reference dbDeclined",
+	);
+	assert.ok(
+		content.includes("dbVerifying"),
+		"main.js must reference dbVerifying",
+	);
+	assert.ok(content.includes("dbSecured"), "main.js must reference dbSecured");
+	assert.ok(
+		content.includes("dbFillFields"),
+		"main.js must reference dbFillFields",
+	);
+	assert.ok(
+		content.includes("dbNetworkError"),
+		"main.js must reference dbNetworkError",
+	);
+
+	// Ensure contact keys are referenced via t()
+	assert.ok(
+		content.includes("contactSuccess"),
+		"main.js must reference contactSuccess",
+	);
+	assert.ok(
+		content.includes("contactError"),
+		"main.js must reference contactError",
+	);
+	assert.ok(
+		content.includes("contactSubmitting"),
+		"main.js must reference contactSubmitting",
+	);
+	assert.ok(
+		content.includes("contactSubmit"),
+		"main.js must reference contactSubmit",
+	);
+	assert.ok(
+		content.includes("contactDateError"),
+		"main.js must reference contactDateError",
+	);
+
+	// Ensure apiBase is used for payments and bookings
+	assert.ok(
+		content.includes("pageConfig.apiBase"),
+		"main.js must reference pageConfig.apiBase",
+	);
+});
+
+test("obsolete data-msg-* attributes are completely excised across src and public/js", () => {
+	const checkDir = (dir: string) => {
+		const entries = fs.readdirSync(dir, { withFileTypes: true });
+		for (const entry of entries) {
+			const fullPath = path.join(dir, entry.name);
+			if (entry.isDirectory()) {
+				checkDir(fullPath);
+			} else if (/\.(tsx?|jsx?|html)$/.test(entry.name)) {
+				const content = fs.readFileSync(fullPath, "utf-8");
+				assert.ok(
+					!content.includes("data-msg-"),
+					`File ${fullPath} must not contain deprecated data-msg-* attribute`,
+				);
+			}
+		}
+	};
+
+	checkDir(path.join(process.cwd(), "src", "components"));
+	checkDir(path.join(process.cwd(), "src", "pages"));
+	checkDir(path.join(process.cwd(), "public", "js"));
+});

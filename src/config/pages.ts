@@ -54,6 +54,8 @@ export const getClientDictionaryForPage = (
 		dbFillFields: t.dbFillFields || "",
 		dbDeclined: t.dbDeclined || "",
 		dbSubmit: t.dbSubmit || "",
+		dbNetworkError: t.dbNetworkError || "",
+		dbGatewayError: t.dbGatewayError || "",
 		contactSuccess: t.contactSuccess || "",
 		contactError: t.contactError || "",
 		contactSubmitting: t.contactSubmitting || "",

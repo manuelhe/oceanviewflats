@@ -157,11 +157,6 @@ export default function Contact({ lang, assetPrefix = "../" }: AppProps) {
 							method="POST"
 							className="space-y-6"
 							noValidate
-							data-msg-success={t.contactSuccess}
-							data-msg-error={t.contactError}
-							data-msg-submitting={t.contactSubmitting}
-							data-msg-submit={t.contactSubmit}
-							data-msg-date-error={t.contactDateError}
 						>
 							{/* Anti-spam Honeypot field (hidden from users) */}
 							<div className="sr-only">
